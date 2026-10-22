@@ -128,9 +128,9 @@ export function buildReport(f: DoctorFacts): Probe[] {
     level: 'recommended',
     ok: sessionStartReaches(f),
     why:
-      'Claude Code started this session, but no SessionStart event reached the mods. A plugin that runs before them, for example the built-in security plugin of Claude Code or an organisation plugin, can pass the event on past them. The mods then miss the reset after /clear and /resume. If you only just installed Groundwork, restart Claude Code and check again.',
+      'Claude Code started this session, but no SessionStart event reached the mods. Where an organisation manages Claude Code, these events skip the plugins you install, and only the managed settings can change that. The mods lose only the reset after /clear and /resume; the agent policy keeps working. If you only just installed Groundwork, restart Claude Code and check again.',
     fix: '/plugin',
-    fixWhere: 'Inside Claude Code: look for a managed or security plugin, and ask whoever manages it whether it passes events on to user plugins',
+    fixWhere: 'Inside Claude Code: the Errors tab names each plugin that was skipped. You cannot fix this by installing something; only whoever manages Claude Code can change it',
   })
   out.push({
     id: 'fullscreen',

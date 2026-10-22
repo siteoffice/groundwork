@@ -3,6 +3,14 @@
 All notable changes. The version is one clock for the whole repository: `groundwork`,
 `groundwork-mods` and the marketplace move together.
 
+## 0.1.6
+
+- **The Doctor names the real cause of the skipped session-start row.** Claude Code skips the
+  `classic.SessionStart` hooks of installed plugins where an organisation manages it; only managed
+  settings can change that. The row says so, says what is lost (the reset after `/clear` and
+  `/resume`) and what is not (the agent policy), and no longer sends you looking for a plugin to
+  remove. The README known limit says the same.
+
 ## 0.1.5
 
 - **`siteoffice-git` now works from a fresh install.** Its engine (`git_flow.py`, `git_ops.py`,

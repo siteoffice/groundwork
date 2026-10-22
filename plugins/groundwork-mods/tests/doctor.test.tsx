@@ -58,6 +58,8 @@ describe('checks', () => {
     expect(probe?.ok).toBe(false)
     expect(probe?.level).toBe('recommended')
     expect(probe?.why).toContain('no SessionStart event reached the mods')
+    expect(probe?.why).toContain('an organisation manages Claude Code')
+    expect(probe?.why).toContain('the agent policy keeps working')
     expect(summary(skipped)).toEqual({ required: 0, recommended: 1 })
   })
 

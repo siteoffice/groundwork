@@ -14,14 +14,14 @@
       "displayName": "Groundwork",
       "source": "./plugins/groundwork",
       "description": "Folder structure, one loop skill from idea to close, and a read-only board for work done with AI agents.",
-      "version": "0.1.5"
+      "version": "0.1.6"
     },
     {
       "name": "groundwork-mods",
       "displayName": "Groundwork Mods",
       "source": "./plugins/groundwork-mods",
       "description": "Setup Doctor and an agent policy pack: read-only by default, drafts allowed, sends blocked, writes logged.",
-      "version": "0.1.5"
+      "version": "0.1.6"
     }
   ]
 }

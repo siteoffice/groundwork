@@ -114,8 +114,10 @@ default. See the [issue list](https://github.com/siteoffice/groundwork/issues).
   lands a change with `git push` and a pull request. The policy blocks every push, in work mode
   too, so you run the push or the merge yourself. The skill's own engine ships in
   `plugins\groundwork\engine\sync`.
-- **A plugin that runs before the mods can skip their session-start hook.** The Setup Doctor
-  says when that happened. Claude Code's built-in security plugin is one such plugin.
+- **Where an organisation manages Claude Code, session-start hooks of plugins you install are
+  skipped.** Claude Code says so under `/plugin`, Errors. The Setup Doctor names it as a
+  recommended row. The mods then miss the reset after `/clear` and `/resume`; the agent policy
+  hooks tool calls and keeps working. Only the organisation's managed settings can change this.
 - **Cowork shows a warning about `groundwork-mods`.** It names an unknown `types` key in
   `plugin.json`. Safe to ignore: the key is the type contract Claude Code uses for the Setup
   Doctor, and Cowork does not run mods.
