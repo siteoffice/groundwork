@@ -3,6 +3,14 @@
 All notable changes. The version is one clock for the whole repository: `groundwork`,
 `groundwork-mods` and the marketplace move together.
 
+## 0.1.3
+
+- **`siteoffice-migrate` loads with its description.** The description held `Modes: audit ...`;
+  a colon followed by a space ends a plain YAML value, so the skill loaded with no description and
+  never triggered by name or phrase. It now reads `Modes are audit ...`. Found by installing into
+  an empty Claude config and running `claude plugin validate` on the installed copy.
+- **A test parses every skill's frontmatter** (`tests\test_skills.py`), so this cannot recur.
+
 ## 0.1.2
 
 Patch for the agent policy: the read-only check had gaps that the 0.1.1 review found.
