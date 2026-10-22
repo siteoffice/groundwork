@@ -34,9 +34,10 @@ makes the agent read-only until you say otherwise.
 What it costs you: the gates are slower than letting an agent run. That is on purpose. If you
 want a machine that ships without asking you, this is the wrong tool.
 
-I measured what I claim here by running it. The engine carries 987 passing tests, the board 185
-and the mods 23, all green on Windows at this release. Claude Code wrote most of the code and text
-of this release. I set the scope and I decide what ships.
+I measured what I claim here by running it. The engine carries 987 passing tests, the board 185,
+the mods 25 and the `siteoffice-git` engine 448, all green on Windows at this release. That last
+suite builds real git repositories and takes about 25 minutes. Claude Code wrote most of the code
+and text of this release. I set the scope and I decide what ships.
 
 ## 3. Screenshots
 
@@ -66,6 +67,9 @@ The full steps for Windows and macOS are in [docs/setup-guide.md](docs/setup-gui
 /plugin install groundwork@groundwork
 /plugin install groundwork-mods@groundwork
 ```
+
+Choose user scope, or add `--scope user` to `claude plugin install`. A project-scope install loads
+only in that folder.
 
 Build and test from source:
 
@@ -106,6 +110,10 @@ default. See the [issue list](https://github.com/siteoffice/groundwork/issues).
 - **The agent policy is a guardrail, not a lock.** It cannot see a link that leads out of a
   folder, and in work mode it cannot judge a command it does not know.
 - **The work step runs in your session.** The engine ships no sprint runner.
+- **`siteoffice-git` and the agent policy disagree on pushing.** The skill saves, proposes and
+  lands a change with `git push` and a pull request. The policy blocks every push, in work mode
+  too, so you run the push or the merge yourself. The skill's own engine ships in
+  `plugins\groundwork\engine\sync`.
 - **A plugin that runs before the mods can skip their session-start hook.** The Setup Doctor
   says when that happened. Claude Code's built-in security plugin is one such plugin.
 - **Cowork shows a warning about `groundwork-mods`.** It names an unknown `types` key in

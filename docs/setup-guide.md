@@ -52,6 +52,10 @@ then Add marketplace, and paste `siteoffice/groundwork`. Install `groundwork`. I
 /plugin install groundwork-mods@groundwork
 ```
 
+Pick **user scope** when Claude Code asks where to install, or add `--scope user` to
+`claude plugin install` in a terminal. A project-scope install loads only in the folder you were
+in, so `/setup-doctor` is "unknown" everywhere else.
+
 Restart Claude Code after the install. The mods load at the start of a session.
 
 ## Check it

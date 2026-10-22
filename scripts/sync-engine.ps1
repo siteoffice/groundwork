@@ -22,7 +22,7 @@
 [CmdletBinding()]
 param(
     [string]$SiteofficeRoot = (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'siteoffice'),
-    [ValidateSet('engine', 'board', 'all')]
+    [ValidateSet('engine', 'board', 'sync', 'all')]
     [string]$Component = 'all',
     [switch]$Apply,
     [switch]$Verify
@@ -81,6 +81,15 @@ $components = @{
         SkipNames = @('test_drag_drop.py', 'test_sync_buttons.py', 'test_as_of.py')   # need the Siteoffice sync helper or git history, not shipped
         Tests = 'board'
     }
+    sync = @{
+        # The siteoffice-git engine: git_flow.py with git_ops.py and owner_check.py, stdlib only.
+        Source = (Join-Path $SiteofficeRoot 'sync')
+        Dest = (Join-Path $pluginDir 'engine\sync')
+        Receipt = (Join-Path $pluginDir 'engine\sync\SYNCED_FROM.json')
+        SkipTop = @('helper.py', 'scan_tree.py', 'owner.local.json', 'secret_scan_baseline.json')   # the helper server and local state, not the engine
+        SkipNames = @('test_cli.py', 'test_http_server.py', 'test_scan_tree.py')                      # test the helper, not shipped
+        Tests = 'sync'
+    }
 }
 
 $skipDirs = '__pycache__', '.pytest_cache'
@@ -90,7 +99,7 @@ $utf8 = New-Object System.Text.UTF8Encoding($false)
 
 if (-not $Apply) { Write-Host 'DRY RUN. Nothing will be written. Add -Apply.' -ForegroundColor Yellow }
 
-$names = if ($Component -eq 'all') { @('engine', 'board') } else { @($Component) }
+$names = if ($Component -eq 'all') { @('engine', 'board', 'sync') } else { @($Component) }
 foreach ($name in $names) {
     $c = $components[$name]
     $src = (Resolve-Path -LiteralPath $c.Source).Path
@@ -144,6 +153,9 @@ if ($Apply -and $Verify) {
         if ($name -eq 'engine') {
             Push-Location (Join-Path $pluginDir 'engine')
             try { py -3 -m pytest foreman groundwork -q -p no:cacheprovider } finally { Pop-Location }
+        } elseif ($name -eq 'sync') {
+            Push-Location (Join-Path $pluginDir 'engine')
+            try { py -3 -m pytest sync -q -p no:cacheprovider } finally { Pop-Location }
         } else {
             Push-Location $pluginDir
             try { py -3 -m pytest board -q -p no:cacheprovider } finally { Pop-Location }

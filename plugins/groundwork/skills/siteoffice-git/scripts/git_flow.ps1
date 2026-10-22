@@ -49,11 +49,13 @@ try {
 }
 
 $engine = $null
-foreach ($candidate in @($env:SITEOFFICE_SYNC_DIR, $manifestEngine, (Join-Path $root 'sync\git_flow.py'))) {
+# Last candidate: the engine the Groundwork plugin ships (engine\sync, three folders up from here).
+$bundled = Join-Path $PSScriptRoot '..\..\..\engine\sync\git_flow.py'
+foreach ($candidate in @($env:SITEOFFICE_SYNC_DIR, $manifestEngine, (Join-Path $root 'sync\git_flow.py'), $bundled)) {
     $engine = Resolve-Engine $candidate
     if ($engine) { break }
 }
-if (-not $engine) { Stop-Refused 'Engine not found: set SITEOFFICE_SYNC_DIR or settings.git.engine.' }
+if (-not $engine) { Stop-Refused 'Engine not found: set SITEOFFICE_SYNC_DIR or settings.git.engine, or install the groundwork plugin, which ships one.' }
 
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) { Stop-Refused 'python was not found on PATH: install Python 3.8 or newer.' }
 

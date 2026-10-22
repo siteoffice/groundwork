@@ -31,6 +31,23 @@ async function run($: EngineInterface, argv: string[], cwd?: string) {
   }
 }
 
+// The siteoffice-git engine the Groundwork plugin ships. Installed, the two plugins sit side by
+// side in one cache folder, one folder per version; in a checkout they are siblings under plugins.
+async function bundledEngine($: EngineInterface): Promise<boolean> {
+  const root = $.plugin.root.replace(/\\/g, '/').replace(/\/+$/, '')
+  const up = (p: string) => p.replace(/\/[^/]*$/, '')
+  if (await $.fs.exists(up(root) + '/groundwork/engine/sync/git_flow.py')) return true
+  const versions = up(up(root)) + '/groundwork'
+  try {
+    for (const e of await $.fs.list(versions)) {
+      if (await $.fs.exists(versions + '/' + e.name + '/engine/sync/git_flow.py')) return true
+    }
+  } catch {
+    return false
+  }
+  return false
+}
+
 // Gathers every fact the checks need. Nothing here changes anything.
 async function gather($: EngineInterface): Promise<DoctorFacts> {
   const cwd = await $.session.cwd()
@@ -71,6 +88,7 @@ async function gather($: EngineInterface): Promise<DoctorFacts> {
           break
         }
       }
+      if (!manifest.engineOk) manifest.engineOk = await bundledEngine($)
     } catch {
       manifest.valid = false
     }

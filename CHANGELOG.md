@@ -3,6 +3,18 @@
 All notable changes. The version is one clock for the whole repository: `groundwork`,
 `groundwork-mods` and the marketplace move together.
 
+## 0.1.5
+
+- **`siteoffice-git` now works from a fresh install.** Its engine (`git_flow.py`, `git_ops.py`,
+  `owner_check.py`, standard library only) was missing from the plugin, so the skill stopped at
+  "Engine not found". The engine ships in `plugins\groundwork\engine\sync`, the launcher finds it
+  last of its four places, and the Setup Doctor counts it as found.
+- **Install scope documented.** A project-scope install loads only in that folder; the guide and
+  README say to choose user scope.
+- **README known limit:** `siteoffice-git` pushes, and the agent policy blocks pushes.
+- 25 mod tests pass. The vendored engine suite passes 448 tests in about 25 minutes on Windows; five
+  more check the Siteoffice repository's own layout and are skipped here (`engine\conftest.py`).
+
 ## 0.1.4
 
 - **README:** the known limits now explain the Cowork warning about an unknown `types` key in the
