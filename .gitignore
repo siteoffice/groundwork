@@ -1,0 +1,7 @@
+.claude/
+__pycache__/
+*.pyc
+.pytest_cache/
+_board/
+.claude-plugin/types/
+.playwright-mcp/

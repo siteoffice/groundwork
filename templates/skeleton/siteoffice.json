@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 2,
+  "type": "project",
+  "name": "my-project",
+  "parent": "",
+  "children": [],
+  "language": "en",
+  "approver": "To be filled",
+  "instructionFile": "AGENTS.md",
+  "setup": "structure-only",
+  "settings": {
+    "planningHorizonWeeks": 2,
+    "languages": ["en"],
+    "timeRegistration": false
+  },
+  "labels": {},
+  "display_name": "my-project",
+  "profiles": {}
+}

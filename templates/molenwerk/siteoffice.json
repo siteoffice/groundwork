@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 2,
+  "type": "company",
+  "name": "Molenwerk BV",
+  "parent": "",
+  "children": [],
+  "language": "en",
+  "approver": "Femke Molenaar",
+  "instructionFile": "AGENTS.md",
+  "setup": "filled",
+  "settings": {
+    "planningHorizonWeeks": 2,
+    "languages": ["en", "nl"],
+    "timeRegistration": true
+  }
+}

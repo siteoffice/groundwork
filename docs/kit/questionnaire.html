@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Groundwork Questionnaire</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+(function(){
+  var t = null;
+  try { t = localStorage.getItem('so-theme'); } catch(e){}
+  if (t !== 'dark' && t !== 'light') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  document.documentElement.dataset.theme = t;
+  var l = 'en';
+  try { l = localStorage.getItem('so-lang') || 'en'; } catch(e){}
+  if (l !== 'nl') l = 'en';
+  document.documentElement.dataset.lang = l;
+  document.documentElement.lang = l;
+})();
+</script>
+<style>
+:root, :root[data-theme="light"]{
+  --bg:#F6F8FA; --surface:#FFFFFF; --surface2:#EDF1F6; --band:#E9EEF4;
+  --text:#0A1422; --muted:#4A5A70; --accent:#0B6B5B; --accent-strong:#0E5C4E;
+  --on-accent:#FFFFFF; --accent-soft:rgba(11,107,91,0.10); --accent-border:rgba(11,107,91,0.35);
+  --line:rgba(10,20,34,0.12); --line-strong:rgba(10,20,34,0.22); --nav-bg:rgba(246,248,250,0.88);
+}
+:root[data-theme="dark"]{
+  --bg:#0A1422; --surface:#112038; --surface2:#152235; --band:#0E1B2E;
+  --text:#EAF1F8; --muted:#8A9CB5; --accent:#3EDCB0; --accent-strong:#5CEBC2;
+  --on-accent:#0A1422; --accent-soft:rgba(62,220,176,0.14); --accent-border:rgba(62,220,176,0.45);
+  --line:rgba(138,156,181,0.15); --line-strong:rgba(138,156,181,0.30); --nav-bg:rgba(10,20,34,0.88);
+}
+*{box-sizing:border-box}
+body{margin:0; background:var(--bg); color:var(--text);
+  font-family:"Inter",system-ui,sans-serif; font-size:16px; line-height:1.6}
+html[data-lang="en"] .nl{display:none !important}
+html[data-lang="nl"] .en{display:none !important}
+a{color:var(--accent); text-decoration:none}
+a:hover{text-decoration:underline}
+p{margin:0 0 14px 0}
+h1,h2,h3{font-family:"Space Grotesk",sans-serif; letter-spacing:-0.02em; line-height:1.15}
+h1{font-size:clamp(26px,4vw,38px); font-weight:700; margin:0 0 12px 0}
+h2{font-size:22px; font-weight:600; margin:30px 0 10px 0}
+.eyebrow{font-family:"JetBrains Mono",monospace; font-size:12px; letter-spacing:0.14em;
+  text-transform:uppercase; color:var(--accent); margin-bottom:10px}
+.wrap{max-width:860px; margin:0 auto; padding:0 24px}
+.topbar{position:sticky; top:0; z-index:50; background:var(--nav-bg); backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line)}
+.topbar .wrap{display:flex; align-items:center; gap:14px; height:60px; max-width:1000px}
+.mast{display:flex; align-items:center; gap:9px; cursor:pointer; user-select:none}
+.tile{width:30px; height:30px; border-radius:7px; background:#0A1422; color:#FFF; flex:0 0 auto;
+  font-family:"JetBrains Mono",monospace; font-weight:600; font-size:15px; line-height:30px;
+  text-align:center; letter-spacing:-0.05em; border:1px solid rgba(255,255,255,0.08)}
+.tile i{color:#3EDCB0; font-style:normal}
+.wordmark{font-family:"Space Grotesk",sans-serif; font-weight:600; font-size:17px; letter-spacing:-0.02em; white-space:nowrap}
+.wordmark span{color:var(--muted)}
+nav.pages{display:flex; gap:2px; margin-left:8px}
+nav.pages a{padding:6px 11px; border-radius:8px; font-size:13.5px; font-weight:500; color:var(--muted)}
+nav.pages a:hover{text-decoration:none; color:var(--text); background:var(--accent-soft)}
+nav.pages a.active{color:var(--accent); background:var(--accent-soft)}
+.spacer{flex:1}
+.ctrl{display:flex; gap:8px; align-items:center}
+.btn-ctrl{border:1px solid var(--line-strong); background:var(--surface); color:var(--text);
+  border-radius:8px; height:32px; padding:0 10px; font:500 13px "JetBrains Mono",monospace;
+  cursor:pointer; display:flex; align-items:center; gap:6px}
+.btn-ctrl:hover{border-color:var(--accent-border)}
+main{min-height:70vh; padding:36px 0 80px 0}
+.page{display:none}
+.page.visible{display:block}
+.q{background:var(--surface); border:1px solid var(--line); border-radius:14px;
+  padding:22px 24px 18px 24px; margin:0 0 18px 0}
+.q .qn{font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--accent); font-weight:500; margin-bottom:4px}
+.q .qt{font-family:"Inter"; font-weight:600; font-size:17px; line-height:1.4; margin:0 0 12px 0}
+.q label.f{display:block; font-size:12.5px; font-family:"JetBrains Mono",monospace;
+  letter-spacing:0.06em; text-transform:uppercase; color:var(--muted); margin:12px 0 6px 0}
+select, textarea, input[type=text]{width:100%; background:var(--bg); color:var(--text);
+  border:1px solid var(--line-strong); border-radius:9px; padding:10px 12px;
+  font:400 15px "Inter",sans-serif; line-height:1.5}
+select:focus, textarea:focus, input[type=text]:focus{outline:2px solid var(--accent-border); border-color:transparent}
+textarea{min-height:84px; resize:vertical}
+.opts{display:flex; flex-wrap:wrap; gap:8px}
+.opt{display:flex; align-items:center; gap:8px; border:1px solid var(--line-strong);
+  border-radius:9px; padding:8px 12px; cursor:pointer; font-size:14.5px; user-select:none; background:var(--bg)}
+.opt:hover{border-color:var(--accent-border)}
+.opt input{accent-color:var(--accent-strong); width:16px; height:16px; margin:0}
+.opt.on{background:var(--accent-soft); border-color:var(--accent-border)}
+.meta-grid{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:20px}
+@media (max-width:620px){ .meta-grid{grid-template-columns:1fr} }
+.statusbar{position:sticky; bottom:0; background:var(--nav-bg); backdrop-filter:blur(10px);
+  border-top:1px solid var(--line); padding:12px 0}
+.statusbar .wrap{display:flex; align-items:center; gap:14px; flex-wrap:wrap}
+.progress{flex:1; min-width:160px; height:8px; background:var(--surface2); border-radius:5px; overflow:hidden}
+.progress i{display:block; height:100%; background:var(--accent-strong); width:0%; transition:width .2s}
+.pcount{font:500 12.5px "JetBrains Mono",monospace; color:var(--muted); white-space:nowrap}
+.btn{border:0; background:var(--accent-strong); color:var(--on-accent); border-radius:9px;
+  height:38px; padding:0 16px; font:600 14px "Inter",sans-serif; cursor:pointer}
+.btn:hover{filter:brightness(1.06)}
+.btn.ghost{background:var(--surface); color:var(--text); border:1px solid var(--line-strong)}
+.saved{font:500 12px "JetBrains Mono",monospace; color:var(--accent); min-width:70px}
+.note{border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:10px;
+  background:var(--accent-soft); padding:14px 18px 4px 18px; margin:22px 0}
+.note .h{font-family:"JetBrains Mono",monospace; font-size:11px; letter-spacing:0.12em;
+  text-transform:uppercase; color:var(--accent); margin-bottom:6px}
+ol.steps{padding-left:22px} ol.steps li{margin-bottom:9px}
+ol.steps li::marker{color:var(--accent); font-family:"JetBrains Mono",monospace; font-weight:500}
+.footer{border-top:1px solid var(--line); padding:20px 0 40px 0; color:var(--muted); font-size:13px}
+.small{font-size:13.5px} .muted{color:var(--muted)}
+</style>
+</head>
+<body>
+
+<header class="topbar"><div class="wrap">
+  <div class="mast" onclick="location.hash='#form'">
+    <div class="tile"><i>0</i>N</div>
+    <div class="wordmark">ZeroNonsense<span>.dev</span></div>
+  </div>
+  <nav class="pages" id="topnav">
+    <a href="#form" data-p="form"><span class="en">Questionnaire</span><span class="nl">Vragenlijst</span></a>
+    <a href="#how" data-p="how"><span class="en">How this works</span><span class="nl">Zo werkt dit</span></a>
+  </nav>
+  <div class="spacer"></div>
+  <div class="ctrl">
+    <button class="btn-ctrl" id="langBtn" onclick="toggleLang()" title="Taal / Language">EN</button>
+    <button class="btn-ctrl" id="themeBtn" onclick="toggleTheme()" title="Theme">&#9679;</button>
+  </div>
+</div></header>
+
+<main>
+<section class="page" id="page-form"><div class="wrap">
+  <div class="eyebrow">Groundwork</div>
+  <h1><span class="en">Ten questions before anything gets built</span><span class="nl">Tien vragen voordat er iets gebouwd wordt</span></h1>
+  <p class="muted"><span class="en">About fifteen minutes. There are no wrong answers: shooting down a candidate answer is the most useful thing you can do. Your answers are saved in this browser as you type, so you can stop and come back. When done, press Export and send the file to info@zerononsense.dev.</span>
+  <span class="nl">Ongeveer een kwartier. Er zijn geen foute antwoorden: een kandidaat-antwoord afschieten is het nuttigste wat je kunt doen. Je antwoorden worden tijdens het typen in deze browser bewaard, dus je kunt stoppen en terugkomen. Klaar? Druk op Exporteer en stuur het bestand naar info@zerononsense.dev.</span></p>
+  <div class="meta-grid">
+    <div><label class="f" for="r-name"><span class="en">Your name</span><span class="nl">Je naam</span></label>
+    <input type="text" id="r-name" data-k="name"></div>
+    <div><label class="f" for="r-org"><span class="en">Company</span><span class="nl">Bedrijf</span></label>
+    <input type="text" id="r-org" data-k="org"></div>
+  </div>
+  <div id="questions"></div>
+  <div class="note"><div class="h"><span class="en">The open floor</span><span class="nl">Vrije ruimte</span></div>
+  <p><span class="en">Beyond these ten questions: describe your ideal solution and the features you want, in whatever format works for you. Text, a voice memo, a video, a sketch, a screen recording, all fine; send it however you like. If you can, mark each feature <b>Must have</b>, <b>Should have</b> or <b>Nice to have</b> (MoSCoW): that ordering decides what gets built first.</span>
+  <span class="nl">Naast deze tien vragen: beschrijf je ideale oplossing en de features die je wilt, in de vorm die jou past. Tekst, een spraakmemo, een video, een schets, een schermopname, alles mag; stuur het zoals je wilt. Markeer features als het kan met <b>Must have</b>, <b>Should have</b> of <b>Nice to have</b> (MoSCoW): die volgorde bepaalt wat eerst gebouwd wordt.</span></p></div>
+</div></section>
+
+<section class="page" id="page-how"><div class="wrap">
+  <div class="eyebrow"><span class="en">How this works</span><span class="nl">Zo werkt dit</span></div>
+  <h1><span class="en">Answer in steps, export once</span><span class="nl">Antwoord in stappen, exporteer een keer</span></h1>
+  <ol class="steps">
+    <li><span class="en"><b>Answer what you can.</b> Every question carries the candidate answers already worked out; pick one, pick several, or pick none and write your own. The free text field under each question is always there.</span><span class="nl"><b>Beantwoord wat je kunt.</b> Elke vraag draagt de kandidaat-antwoorden die al bedacht zijn; kies er een, meerdere, of geen en schrijf je eigen antwoord. Het vrije tekstveld onder elke vraag is er altijd.</span></li>
+    <li><span class="en"><b>Stop whenever you like.</b> Everything is saved automatically in this browser, on this computer. Nothing is sent anywhere while you type. Come back tomorrow and it is still here (same browser, same machine).</span><span class="nl"><b>Stop wanneer je wilt.</b> Alles wordt automatisch bewaard in deze browser, op deze computer. Er wordt niets verstuurd terwijl je typt. Kom morgen terug en het staat er nog (zelfde browser, zelfde machine).</span></li>
+    <li><span class="en"><b>Export when done.</b> The Export button creates a small markdown (.md) text file with your answers. Mail it to info@zerononsense.dev, or hand it to whoever coordinates. If the download does not work, use Copy and paste it into a mail.</span><span class="nl"><b>Exporteer als je klaar bent.</b> De Exporteer-knop maakt een klein markdown (.md) tekstbestand met je antwoorden. Mail het naar info@zerononsense.dev, of geef het aan wie het verzamelt. Werkt de download niet, gebruik dan Kopieer en plak het in een mail.</span></li>
+    <li><span class="en"><b>Add anything, in any format.</b> Ideas and features that do not fit the questions: send text, audio, video, a sketch, whatever works. MoSCoW markers (Must, Should, Nice) help decide build order.</span><span class="nl"><b>Vul aan, in elk formaat.</b> Ideeen en features die niet in de vragen passen: stuur tekst, audio, video, een schets, wat werkt. MoSCoW-markering (Must, Should, Nice) helpt de bouwvolgorde bepalen.</span></li>
+  </ol>
+  <p class="small muted"><span class="en">Why markdown: your answers arrive as a plain, readable file that can be analysed and compared directly, without retyping. The honest limit: answers live only in this browser until you export, so clearing browser data before exporting loses them.</span>
+  <span class="nl">Waarom markdown: je antwoorden komen aan als een leesbaar, plat bestand dat direct geanalyseerd en vergeleken kan worden, zonder overtypen. De eerlijke grens: antwoorden staan alleen in deze browser tot je exporteert, dus browserdata wissen voor het exporteren gooit ze weg.</span></p>
+</div></section>
+</main>
+
+<div class="statusbar"><div class="wrap">
+  <span class="pcount" id="pcount"></span>
+  <div class="progress"><i id="pbar"></i></div>
+  <span class="saved" id="saved"></span>
+  <button class="btn ghost" onclick="copyMd()" title="Copy answers to clipboard"><span class="en">Copy</span><span class="nl">Kopieer</span></button>
+  <button class="btn" onclick="exportMd()" title="Export answers to md file"><span class="en">Export .md</span><span class="nl">Exporteer .md</span></button>
+</div></div>
+
+<footer class="footer"><div class="wrap">
+  <span style="font-family:'JetBrains Mono',monospace">ZeroNonsense.dev &#183; Groundwork Questionnaire &#183; 30-08-2026</span><br>
+  <span class="en">Answers stay in this browser until you export. Questions: info@zerononsense.dev</span>
+  <span class="nl">Antwoorden blijven in deze browser tot je exporteert. Vragen: info@zerononsense.dev</span>
+</div></footer>
+
+<script>
+/* Customer agnostic on purpose: the sponsor is whoever brought this in. */
+var LSKEY = 'gwq-v1';
+
+/* type: 'text' (free only), 'single' (dropdown), 'multi' (checkboxes). Every question also gets a free text field. */
+var Q = [
+ {n:1, type:'text',
+  en:'Which task from your own week would you most like to hand to an AI agent?',
+  nl:'Welke taak uit je eigen week zou je het liefst aan een AI-agent geven?',
+  hint_en:'Just write it down, however small.', hint_nl:'Gewoon opschrijven, hoe klein ook.'},
+ {n:2, type:'single',
+  en:'What do you need to see before you use an agent’s result without redoing it yourself?',
+  nl:'Wat moet je zien voordat je een resultaat van een agent gebruikt zonder het zelf over te doen?',
+  opts:[
+   {en:'(a) every step can be read back', nl:'(a) elke stap is terug te lezen'},
+   {en:'(b) the sponsor approved it', nl:'(b) de sponsor heeft het goedgekeurd'},
+   {en:'(c) the system shows what it was not allowed to do and did not do', nl:'(c) het systeem laat zien wat het niet mocht en niet deed'},
+   {en:'(d) something else (explain below)', nl:'(d) iets anders (licht hieronder toe)'}]},
+ {n:3, type:'multi',
+  en:'How do you want to operate this? More than one is fine.',
+  nl:'Hoe wil je dit bedienen? Meerdere mag.',
+  opts:[
+   {en:'(a) a dashboard in the browser', nl:'(a) een dashboard in de browser'},
+   {en:'(b) a chat conversation', nl:'(b) een chatgesprek'},
+   {en:'(c) through the sponsor, I do not need to be in it myself', nl:'(c) via de sponsor, ik hoef er zelf niet in'},
+   {en:'(d) on my phone', nl:'(d) op de telefoon'}]},
+ {n:4, type:'single',
+  en:'What do you refuse?',
+  nl:'Wat weiger je?',
+  opts:[
+   {en:'(a) typing commands', nl:'(a) commando’s typen'},
+   {en:'(b) seeing code', nl:'(b) code zien'},
+   {en:'(c) putting files in folders', nl:'(c) bestanden in mappen zetten'},
+   {en:'(d) none of these, as long as someone shows me once', nl:'(d) niets van dit alles, zolang iemand het een keer voordoet'}]},
+ {n:5, type:'multi',
+  en:'What has to be on the overview screen? Tick what matters, add what is missing below.',
+  nl:'Wat moet er op het overzichtsscherm staan? Vink aan wat telt, vul hieronder aan wat mist.',
+  opts:[
+   {en:'projects with status', nl:'projecten met status'},
+   {en:'which agent is working on what', nl:'welke agent waarmee bezig is'},
+   {en:'decisions waiting on you', nl:'beslissingen die op jou wachten'},
+   {en:'cost per month', nl:'kosten per maand'}]},
+ {n:6, type:'multi',
+  en:'Which decisions stay yours, always? Tick, and add more (or less) below.',
+  nl:'Welke beslissingen blijven van jou, altijd? Vink aan, en vul hieronder aan (of schrap).',
+  opts:[
+   {en:'everything that costs money', nl:'alles wat geld kost'},
+   {en:'everything that goes to a customer', nl:'alles wat naar een klant gaat'},
+   {en:'everything that gets published', nl:'alles wat gepubliceerd wordt'}]},
+ {n:7, type:'single',
+  en:'Suppose this works the way the sponsor describes it. What is that worth per month, per company, on top of the Claude subscriptions you already have? A rough guess is fine.',
+  nl:'Stel dat dit werkt zoals de sponsor het schetst. Wat is dat per maand waard, per bedrijf, naast de Claude-abonnementen die je al hebt? Schat gerust ruw.',
+  opts:[
+   {en:'(a) under 50 euro', nl:'(a) minder dan 50 euro'},
+   {en:'(b) 50 to 150', nl:'(b) 50 tot 150'},
+   {en:'(c) 150 to 500', nl:'(c) 150 tot 500'},
+   {en:'(d) more', nl:'(d) meer'}]},
+ {n:8, type:'single',
+  en:'Which fits you better?',
+  nl:'Wat past beter bij jou?',
+  opts:[
+   {en:'(a) a subscription with updates and new expertise packs', nl:'(a) een abonnement met updates en nieuwe expertise-packs'},
+   {en:'(b) a one-time setup plus paid guidance when needed', nl:'(b) eenmalig neerzetten plus betaalde begeleiding wanneer nodig'},
+   {en:'(c) I will know after the test period', nl:'(c) weet ik pas na de testperiode'}]},
+ {n:9, type:'multi',
+  en:'What would hold you back?',
+  nl:'Wat zou je tegenhouden?',
+  opts:[
+   {en:'(a) confidentiality of your data', nl:'(a) vertrouwelijkheid van je data'},
+   {en:'(b) dependence on one person (the maker)', nl:'(b) afhankelijkheid van een persoon (de maker)'},
+   {en:'(c) the learning curve', nl:'(c) de leercurve'},
+   {en:'(d) cost', nl:'(d) kosten'},
+   {en:'(e) something else (explain below)', nl:'(e) iets anders (licht hieronder toe)'}]},
+ {n:10, type:'text',
+  en:'Which question should I have asked and did not?',
+  nl:'Welke vraag had ik moeten stellen en heb ik niet gesteld?'}
+];
+
+var state = {};
+try { state = JSON.parse(localStorage.getItem(LSKEY) || '{}'); } catch(e){ state = {}; }
+
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function render(){
+  var host = document.getElementById('questions');
+  var h = '';
+  Q.forEach(function(q){
+    var qs = state['q'+q.n] || {};
+    h += '<div class="q" id="q'+q.n+'">';
+    h += '<div class="qn">'+ (q.n<10?'0':'') + q.n +' / 10</div>';
+    h += '<div class="qt"><span class="en">'+esc(q.en)+'</span><span class="nl">'+esc(q.nl)+'</span></div>';
+    if (q.hint_en) h += '<p class="small muted" style="margin-top:-6px"><span class="en">'+esc(q.hint_en)+'</span><span class="nl">'+esc(q.hint_nl)+'</span></p>';
+    if (q.type === 'single'){
+      h += '<label class="f"><span class="en">Pick a candidate answer</span><span class="nl">Kies een kandidaat-antwoord</span></label>';
+      h += '<select data-q="'+q.n+'" data-t="choice">';
+      h += '<option value="">...</option>';
+      q.opts.forEach(function(o,i){
+        h += '<option value="'+i+'"'+(qs.choice===String(i)?' selected':'')+' class="optlang" data-en="'+esc(o.en)+'" data-nl="'+esc(o.nl)+'"></option>';
+      });
+      h += '</select>';
+    }
+    if (q.type === 'multi'){
+      h += '<label class="f"><span class="en">Tick all that apply</span><span class="nl">Vink aan wat past</span></label><div class="opts">';
+      q.opts.forEach(function(o,i){
+        var on = (qs.multi||[]).indexOf(i) >= 0;
+        h += '<label class="opt'+(on?' on':'')+'"><input type="checkbox" data-q="'+q.n+'" data-t="multi" data-i="'+i+'"'+(on?' checked':'')+'>';
+        h += '<span class="en">'+esc(o.en)+'</span><span class="nl">'+esc(o.nl)+'</span></label>';
+      });
+      h += '</div>';
+    }
+    h += '<label class="f"><span class="en">Your answer / notes</span><span class="nl">Je antwoord / toelichting</span></label>';
+    h += '<textarea data-q="'+q.n+'" data-t="text">'+esc(qs.text||'')+'</textarea>';
+    h += '</div>';
+  });
+  host.innerHTML = h;
+  paintSelectLabels();
+  document.getElementById('r-name').value = state.name || '';
+  document.getElementById('r-org').value = state.org || '';
+  host.addEventListener('input', onInput);
+  host.addEventListener('change', onInput);
+  document.getElementById('r-name').addEventListener('input', onMeta);
+  document.getElementById('r-org').addEventListener('input', onMeta);
+  paintProgress();
+}
+
+function paintSelectLabels(){
+  var lang = document.documentElement.dataset.lang;
+  document.querySelectorAll('option.optlang').forEach(function(o){
+    o.textContent = o.dataset[lang];
+  });
+}
+
+function onMeta(e){
+  state[e.target.dataset.k] = e.target.value;
+  save();
+}
+function onInput(e){
+  var el = e.target, qn = el.dataset.q, t = el.dataset.t;
+  if (!qn) return;
+  var qs = state['q'+qn] = state['q'+qn] || {};
+  if (t === 'text') qs.text = el.value;
+  if (t === 'choice') qs.choice = el.value;
+  if (t === 'multi'){
+    var arr = qs.multi = qs.multi || [];
+    var i = parseInt(el.dataset.i, 10);
+    if (el.checked && arr.indexOf(i) < 0) arr.push(i);
+    if (!el.checked) qs.multi = arr.filter(function(x){ return x !== i; });
+    el.closest('.opt').classList.toggle('on', el.checked);
+  }
+  save();
+  paintProgress();
+}
+var saveT;
+function save(){
+  try { localStorage.setItem(LSKEY, JSON.stringify(state)); } catch(e){}
+  var s = document.getElementById('saved');
+  var lang = document.documentElement.dataset.lang;
+  s.textContent = lang === 'nl' ? 'bewaard' : 'saved';
+  clearTimeout(saveT);
+  saveT = setTimeout(function(){ s.textContent = ''; }, 1500);
+}
+function answered(q){
+  var qs = state['q'+q.n] || {};
+  return !!(qs.text && qs.text.trim()) || !!qs.choice || (qs.multi && qs.multi.length);
+}
+function paintProgress(){
+  var n = Q.filter(answered).length;
+  document.getElementById('pbar').style.width = (n*10) + '%';
+  var lang = document.documentElement.dataset.lang;
+  document.getElementById('pcount').textContent = n + ' / 10 ' + (lang==='nl' ? 'beantwoord' : 'answered');
+}
+function buildMd(){
+  var lang = document.documentElement.dataset.lang;
+  var L = function(o){ return lang === 'nl' ? o.nl : o.en; };
+  var d = new Date().toISOString().slice(0,10);
+  var md = '# Groundwork questionnaire answers\n\n';
+  md += 'Respondent: ' + (state.name || '-') + '\n';
+  md += 'Company: ' + (state.org || '-') + '\n';
+  md += 'Date: ' + d + '\nLanguage: ' + lang + '\n';
+  Q.forEach(function(q){
+    var qs = state['q'+q.n] || {};
+    md += '\n## ' + q.n + '. ' + (lang==='nl' ? q.nl : q.en) + '\n';
+    if (q.type === 'single')
+      md += 'Choice: ' + (qs.choice !== undefined && qs.choice !== '' && q.opts[qs.choice] ? L(q.opts[qs.choice]) : '-') + '\n';
+    if (q.type === 'multi')
+      md += 'Choices: ' + ((qs.multi||[]).length ? qs.multi.map(function(i){ return L(q.opts[i]); }).join('; ') : '-') + '\n';
+    md += 'Answer: ' + ((qs.text||'').trim() || '-') + '\n';
+  });
+  md += '\n## Open floor\n';
+  md += (lang === 'nl'
+    ? 'Ideale oplossing en features volgen apart, in elk formaat (tekst, audio, video, schets), met MoSCoW waar mogelijk.\n'
+    : 'Ideal solution and features follow separately, in any format (text, audio, video, sketch), with MoSCoW where possible.\n');
+  return md;
+}
+function fileName(){
+  var n = (state.name || 'answers').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  return 'groundwork_' + n + '_' + new Date().toISOString().slice(0,10) + '.md';
+}
+function exportMd(){
+  var blob = new Blob([buildMd()], {type: 'text/markdown;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = fileName();
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+function copyMd(){
+  var t = buildMd();
+  function done(ok){
+    var s = document.getElementById('saved');
+    s.textContent = ok ? (document.documentElement.dataset.lang==='nl'?'gekopieerd':'copied') : 'error';
+    setTimeout(function(){ s.textContent=''; }, 1500);
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText)
+    navigator.clipboard.writeText(t).then(function(){ done(true); }, function(){ done(false); });
+  else {
+    var ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta);
+    ta.select(); try { done(document.execCommand('copy')); } catch(e){ done(false); } ta.remove();
+  }
+}
+/* routing + toggles */
+function route(){
+  var p = (location.hash || '#form').slice(1);
+  if (!document.getElementById('page-' + p)) p = 'form';
+  document.querySelectorAll('.page').forEach(function(x){ x.classList.remove('visible'); });
+  document.getElementById('page-' + p).classList.add('visible');
+  document.querySelectorAll('#topnav a').forEach(function(a){ a.classList.toggle('active', a.dataset.p === p); });
+  window.scrollTo(0,0);
+}
+window.addEventListener('hashchange', route);
+function toggleTheme(){
+  var next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem('so-theme', next); } catch(e){}
+  paintCtrls();
+}
+function toggleLang(){
+  var next = document.documentElement.dataset.lang === 'en' ? 'nl' : 'en';
+  document.documentElement.dataset.lang = next;
+  document.documentElement.lang = next;
+  try { localStorage.setItem('so-lang', next); } catch(e){}
+  paintCtrls(); paintSelectLabels(); paintProgress();
+}
+function paintCtrls(){
+  document.getElementById('langBtn').textContent = document.documentElement.dataset.lang.toUpperCase();
+  document.getElementById('themeBtn').innerHTML = document.documentElement.dataset.theme === 'dark' ? '&#9790;' : '&#9728;';
+}
+try {
+  if (!localStorage.getItem('so-theme')) {
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e){
+      document.documentElement.dataset.theme = e.matches ? 'dark' : 'light'; paintCtrls();
+    });
+  }
+} catch(e){}
+render(); route(); paintCtrls();
+</script>
+</body>
+</html>

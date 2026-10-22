@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Siteoffice Groundwork Kit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+(function(){
+  var t = null;
+  try { t = localStorage.getItem('so-theme'); } catch(e){}
+  if (t !== 'dark' && t !== 'light') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  document.documentElement.dataset.theme = t;
+  var l = 'en';
+  try { l = localStorage.getItem('so-lang') || 'en'; } catch(e){}
+  if (l !== 'nl') l = 'en';
+  document.documentElement.dataset.lang = l;
+  document.documentElement.lang = l;
+})();
+</script>
+<style>
+:root, :root[data-theme="light"]{
+  --bg:#F6F8FA; --surface:#FFFFFF; --surface2:#EDF1F6; --band:#E9EEF4;
+  --text:#0A1422; --muted:#4A5A70; --accent:#0B6B5B; --accent-strong:#0E5C4E;
+  --on-accent:#FFFFFF; --accent-soft:rgba(11,107,91,0.10); --accent-border:rgba(11,107,91,0.35);
+  --line:rgba(10,20,34,0.12); --line-strong:rgba(10,20,34,0.22); --nav-bg:rgba(246,248,250,0.88);
+  --hero-bg:#0A1422; --hero-text:#FFFFFF; --hero-soft:rgba(255,255,255,0.82); --hero-accent:#3EDCB0;
+  --fig-mint:#0B6B5B;
+}
+:root[data-theme="dark"]{
+  --bg:#0A1422; --surface:#112038; --surface2:#152235; --band:#0E1B2E;
+  --text:#EAF1F8; --muted:#8A9CB5; --accent:#3EDCB0; --accent-strong:#5CEBC2;
+  --on-accent:#0A1422; --accent-soft:rgba(62,220,176,0.14); --accent-border:rgba(62,220,176,0.45);
+  --line:rgba(138,156,181,0.15); --line-strong:rgba(138,156,181,0.30); --nav-bg:rgba(10,20,34,0.88);
+  --hero-bg:#0A1422; --hero-text:#FFFFFF; --hero-soft:rgba(255,255,255,0.82); --hero-accent:#3EDCB0;
+  --fig-mint:#3EDCB0;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0; background:var(--bg); color:var(--text);
+  font-family:"Inter",system-ui,sans-serif; font-size:16px; line-height:1.6}
+html[data-lang="en"] .nl{display:none !important}
+html[data-lang="nl"] .en{display:none !important}
+a{color:var(--accent); text-decoration:none}
+a:hover{text-decoration:underline}
+p{margin:0 0 14px 0}
+code{font-family:"JetBrains Mono",monospace; font-size:0.86em; background:var(--surface2);
+  border-radius:5px; padding:1px 6px}
+pre{font-family:"JetBrains Mono",monospace; font-size:13px; line-height:1.55;
+  background:var(--surface2); border:1px solid var(--line); border-radius:10px;
+  padding:16px 18px; overflow-x:auto; margin:0 0 16px 0}
+pre code{background:none; padding:0}
+h1,h2,h3{font-family:"Space Grotesk",sans-serif; letter-spacing:-0.02em; line-height:1.15}
+h1{font-size:clamp(30px,4.6vw,44px); font-weight:700; margin:0 0 14px 0}
+h2{font-size:clamp(22px,3vw,28px); font-weight:600; margin:34px 0 12px 0}
+h3{font-size:18px; font-weight:600; margin:24px 0 8px 0}
+.eyebrow{font-family:"JetBrains Mono",monospace; font-size:12px; letter-spacing:0.14em;
+  text-transform:uppercase; color:var(--accent); margin-bottom:10px}
+.wrap{max-width:980px; margin:0 auto; padding:0 24px}
+/* top bar */
+.topbar{position:sticky; top:0; z-index:50; background:var(--nav-bg); backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line)}
+.topbar .wrap{display:flex; align-items:center; gap:14px; height:60px; max-width:1120px}
+.mast{display:flex; align-items:center; gap:9px; cursor:pointer; user-select:none}
+.tile{width:30px; height:30px; border-radius:7px; background:#0A1422; color:#FFF; flex:0 0 auto;
+  font-family:"JetBrains Mono",monospace; font-weight:600; font-size:15px; line-height:30px;
+  text-align:center; letter-spacing:-0.05em; border:1px solid rgba(255,255,255,0.08)}
+.tile i{color:#3EDCB0; font-style:normal}
+.wordmark{font-family:"Space Grotesk",sans-serif; font-weight:600; font-size:17px; letter-spacing:-0.02em; white-space:nowrap}
+.wordmark span{color:var(--muted)}
+nav.pages{display:flex; gap:2px; flex-wrap:wrap; align-items:center; margin-left:10px}
+nav.pages a{padding:6px 11px; border-radius:8px; font-size:13.5px; font-weight:500; color:var(--muted)}
+nav.pages a:hover{text-decoration:none; color:var(--text); background:var(--accent-soft)}
+nav.pages a.active{color:var(--accent); background:var(--accent-soft)}
+.dd{position:relative}
+.dd-btn{padding:6px 11px; border-radius:8px; font-size:13.5px; font-weight:500; color:var(--muted);
+  background:none; border:none; cursor:pointer; font-family:"Inter",system-ui,sans-serif;
+  line-height:1.6; display:flex; align-items:center; gap:5px}
+.dd-btn:hover{color:var(--text); background:var(--accent-soft)}
+.dd-btn.active{color:var(--accent); background:var(--accent-soft)}
+.dd-btn .caret{font-size:10px}
+.dd-menu{display:none; position:absolute; top:calc(100% + 4px); left:0; background:var(--surface);
+  border:1px solid var(--line-strong); border-radius:10px; padding:6px; min-width:230px;
+  box-shadow:0 10px 28px rgba(10,20,34,0.18); z-index:60}
+.dd:hover .dd-menu, .dd.open .dd-menu, .dd:focus-within .dd-menu{display:block}
+.dd.closed .dd-menu{display:none !important}
+.dd-menu a{display:block; padding:7px 11px; border-radius:7px; font-size:13.5px; font-weight:500; color:var(--muted)}
+.dd-menu a:hover{text-decoration:none; color:var(--text); background:var(--accent-soft)}
+.dd-menu a.active{color:var(--accent); background:var(--accent-soft)}
+.spacer{flex:1}
+.ctrl{display:flex; gap:8px; align-items:center}
+.btn-ctrl{border:1px solid var(--line-strong); background:var(--surface); color:var(--text);
+  border-radius:8px; height:32px; padding:0 10px; font:500 13px "JetBrains Mono",monospace;
+  cursor:pointer; display:flex; align-items:center; gap:6px}
+.btn-ctrl:hover{border-color:var(--accent-border)}
+/* sections/pages */
+main{min-height:70vh}
+.page{display:none; padding:36px 0 70px 0}
+.page.visible{display:block}
+.hero{background:var(--hero-bg); color:var(--hero-text); padding:54px 0 10px 0; margin:0 0 34px 0}
+.hero .eyebrow{color:var(--hero-accent)}
+.hero h1{color:var(--hero-text)}
+.hero p.lead{font-size:18.5px; line-height:1.55; color:var(--hero-soft); max-width:46em; margin-bottom:26px}
+.hero .figwrap{margin:8px 0 0 0; padding-bottom:44px}
+.card-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:16px; margin:20px 0 8px 0}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:20px 20px 14px 20px;
+  display:block; color:var(--text); transition:border-color .15s, transform .15s}
+.card:hover{text-decoration:none; border-color:var(--accent-border); transform:translateY(-2px)}
+.card .k{font-family:"JetBrains Mono",monospace; font-size:11px; letter-spacing:0.12em;
+  text-transform:uppercase; color:var(--accent); margin-bottom:6px}
+.card h3{margin:0 0 6px 0; font-size:16.5px}
+.card p{font-size:14px; color:var(--muted); margin-bottom:8px}
+.band{background:var(--band); border-radius:14px; padding:22px 24px 10px 24px; margin:18px 0}
+.note{border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:10px;
+  background:var(--accent-soft); padding:14px 18px 4px 18px; margin:18px 0}
+.note .h{font-family:"JetBrains Mono",monospace; font-size:11px; letter-spacing:0.12em;
+  text-transform:uppercase; color:var(--accent); margin-bottom:6px}
+ol.steps{padding-left:22px; margin:0 0 16px 0}
+ol.steps li, ul.list li{margin-bottom:9px}
+ul.list{padding-left:22px; margin:0 0 16px 0}
+ol.steps li::marker{color:var(--accent); font-family:"JetBrains Mono",monospace; font-weight:500}
+table{width:100%; border-collapse:collapse; font-size:14.5px; margin:6px 0 20px 0}
+th{text-align:left; font-family:"JetBrains Mono",monospace; font-size:11px; font-weight:500;
+  letter-spacing:0.09em; text-transform:uppercase; color:var(--accent);
+  border-bottom:2px solid var(--accent-strong); padding:0 12px 8px 0}
+td{border-bottom:1px solid var(--line); padding:9px 12px 9px 0; vertical-align:top}
+td.k{font-weight:600; white-space:nowrap; font-size:13.5px}
+.fig{margin:10px 0 22px 0}
+.fig svg{width:100%; height:auto; display:block}
+.muted{color:var(--muted)}
+.small{font-size:13.5px}
+.footer{border-top:1px solid var(--line); padding:22px 0 40px 0; color:var(--muted); font-size:13px}
+.footer .mono{font-family:"JetBrains Mono",monospace}
+.pagenav{display:flex; justify-content:space-between; gap:14px; margin-top:44px; border-top:1px solid var(--line); padding-top:18px}
+.pagenav a{font-size:14px; font-weight:500}
+@media (max-width:760px){ nav.pages{display:none} }
+</style>
+</head>
+<body>
+
+<header class="topbar"><div class="wrap">
+  <div class="mast" onclick="go('home')">
+    <div class="tile"><i>0</i>N</div>
+    <div class="wordmark">ZeroNonsense<span>.dev</span></div>
+  </div>
+  <nav class="pages" id="topnav">
+    <a href="#home" data-p="home"><span class="en">Home</span><span class="nl">Home</span></a>
+    <a href="#structure" data-p="structure"><span class="en">Structure</span><span class="nl">Structuur</span></a>
+    <a href="#start" data-p="start"><span class="en">Getting started</span><span class="nl">Aan de slag</span></a>
+    <div class="dd" id="skillsDD">
+      <button class="dd-btn" id="ddBtn" onclick="document.getElementById('skillsDD').classList.toggle('open')">Skills <span class="caret">&#9662;</span></button>
+      <div class="dd-menu">
+        <a href="#skill-siteoffice" data-p="skill-siteoffice">siteoffice-setup</a>
+        <a href="#skill-handover" data-p="skill-handover">handover</a>
+      </div>
+    </div>
+  </nav>
+  <div class="spacer"></div>
+  <div class="ctrl">
+    <button class="btn-ctrl" id="langBtn" onclick="toggleLang()" title="Taal / Language">EN</button>
+    <button class="btn-ctrl" id="themeBtn" onclick="toggleTheme()" title="Theme">&#9679;</button>
+  </div>
+</div></header>
+
+<main id="main">
+<section class="page" id="page-home">
+  <div class="hero"><div class="wrap">
+    <div class="eyebrow">Groundwork</div>
+    <h1><span class="en">Run your company like a development site</span><span class="nl">Run je bedrijf als een bouwplaats</span></h1>
+    <p class="lead">
+      <span class="en">Siteoffice is the site, your companies and/or projects are the buildings: all structured via folders and plain files that hold the plans, decisions and the record. Foreman is the supervisor with AI agents that build fast, a human signs every permit, and nothing reaches the real system on its own.</span>
+      <span class="nl">Siteoffice is de bouwplaats, je bedrijven en projecten zijn de gebouwen: alles in mappen en gewone bestanden, met daarin de plannen, de besluiten en het logboek. Foreman is de uitvoerder: AI-agents bouwen snel, een mens tekent elke vergunning, en niets bereikt het echte systeem op eigen houtje.</span>
+    </p>
+    <div class="figwrap"><div class="fig">
+    <svg viewBox="0 0 960 360" xmlns="http://www.w3.org/2000/svg" font-family="Inter,sans-serif">
+      <!-- site boundary -->
+      <rect x="16" y="14" width="928" height="304" rx="12" fill="none" stroke="rgba(255,255,255,0.35)" stroke-dasharray="6,5"/>
+      <text x="36" y="42" font-family="JetBrains Mono,monospace" font-size="13" fill="#3EDCB0">SITEOFFICE</text>
+      <text x="924" y="42" text-anchor="end" font-size="12" fill="rgba(255,255,255,0.55)"><tspan class="en">the site: one structure, everything on it</tspan><tspan class="nl">de bouwplaats: één structuur, alles erop</tspan></text>
+
+      <!-- building: Company A -->
+      <rect x="40" y="62" width="200" height="176" rx="8" fill="#112038" stroke="rgba(138,156,181,0.45)"/>
+      <text x="56" y="88" font-family="Space Grotesk,sans-serif" font-weight="600" font-size="15" fill="#FFFFFF"><tspan class="en">Company A</tspan><tspan class="nl">Bedrijf A</tspan></text>
+      <rect x="56" y="100" width="168" height="36" rx="6" fill="#0E1B2E" stroke="rgba(138,156,181,0.35)"/>
+      <text x="68" y="123" font-size="12" fill="rgba(255,255,255,0.85)"><tspan class="en">Department</tspan><tspan class="nl">Afdeling</tspan></text>
+      <rect x="56" y="144" width="168" height="36" rx="6" fill="#0E1B2E" stroke="rgba(138,156,181,0.35)"/>
+      <text x="68" y="167" font-size="12" fill="rgba(255,255,255,0.85)">Project 1</text>
+      <rect x="56" y="188" width="168" height="36" rx="6" fill="#0E1B2E" stroke="rgba(138,156,181,0.35)"/>
+      <text x="68" y="211" font-size="12" fill="rgba(255,255,255,0.85)">Project 2</text>
+
+      <!-- building: Company B -->
+      <rect x="262" y="98" width="160" height="140" rx="8" fill="#112038" stroke="rgba(138,156,181,0.45)"/>
+      <text x="278" y="124" font-family="Space Grotesk,sans-serif" font-weight="600" font-size="15" fill="#FFFFFF"><tspan class="en">Company B</tspan><tspan class="nl">Bedrijf B</tspan></text>
+      <rect x="278" y="138" width="128" height="36" rx="6" fill="#0E1B2E" stroke="rgba(138,156,181,0.35)"/>
+      <text x="290" y="161" font-size="12" fill="rgba(255,255,255,0.85)">Project 3</text>
+      <rect x="278" y="182" width="128" height="36" rx="6" fill="#0E1B2E" stroke="rgba(138,156,181,0.35)"/>
+      <text x="290" y="205" font-size="12" fill="rgba(255,255,255,0.85)">Project 4</text>
+
+      <!-- building: standalone project -->
+      <rect x="444" y="150" width="118" height="88" rx="8" fill="#112038" stroke="rgba(138,156,181,0.45)"/>
+      <text x="458" y="176" font-family="Space Grotesk,sans-serif" font-weight="600" font-size="14" fill="#FFFFFF">Project 5</text>
+      <text x="458" y="194" font-size="10.5" fill="rgba(255,255,255,0.6)"><tspan class="en">stands on its own,</tspan><tspan class="nl">staat op zichzelf,</tspan></text>
+      <text x="458" y="208" font-size="10.5" fill="rgba(255,255,255,0.6)"><tspan class="en">no company needed</tspan><tspan class="nl">geen bedrijf nodig</tspan></text>
+
+      <!-- fence with gate -->
+      <line x1="590" y1="62" x2="590" y2="130" stroke="rgba(255,255,255,0.5)" stroke-width="2" stroke-dasharray="2,4"/>
+      <line x1="590" y1="196" x2="590" y2="238" stroke="rgba(255,255,255,0.5)" stroke-width="2" stroke-dasharray="2,4"/>
+      <rect x="584" y="130" width="12" height="12" rx="3" fill="#3EDCB0"/>
+      <rect x="584" y="184" width="12" height="12" rx="3" fill="#3EDCB0"/>
+      <text x="590" y="158" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9.5" fill="#3EDCB0">GATE</text>
+      <text x="590" y="172" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.7)"><tspan class="en">you sign</tspan><tspan class="nl">jij tekent</tspan></text>
+
+      <!-- build zone: foreman controlling AI agents -->
+      <rect x="616" y="62" width="312" height="176" rx="10" fill="#112038" stroke="#3EDCB0" stroke-width="1.6"/>
+      <text x="634" y="88" font-family="Space Grotesk,sans-serif" font-weight="600" font-size="15" fill="#FFFFFF"><tspan class="en">Build zone</tspan><tspan class="nl">Bouwzone</tspan></text>
+      <text x="634" y="104" font-size="10.5" fill="rgba(255,255,255,0.6)"><tspan class="en">a sealed copy, never the real system</tspan><tspan class="nl">een afgesloten kopie, nooit het echte systeem</tspan></text>
+      <!-- foreman figure -->
+      <circle cx="872" cy="92" r="10" fill="#FFFFFF"/>
+      <rect x="863" y="105" width="18" height="26" rx="6" fill="#FFFFFF"/>
+      <text x="872" y="146" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#3EDCB0">FOREMAN</text>
+      <!-- control lines -->
+      <g stroke="#3EDCB0" stroke-width="1.2" fill="none" opacity="0.8">
+        <path d="M863 118 C 780 130, 700 150, 668 178"/>
+        <path d="M863 122 C 800 140, 762 158, 748 178"/>
+        <path d="M866 131 C 850 150, 836 164, 828 178"/>
+      </g>
+      <!-- agents -->
+      <rect x="640" y="178" width="56" height="38" rx="7" fill="#3EDCB0"/>
+      <text x="668" y="202" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="#0A1422">AI</text>
+      <rect x="720" y="178" width="56" height="38" rx="7" fill="#3EDCB0"/>
+      <text x="748" y="202" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="#0A1422">AI</text>
+      <rect x="800" y="178" width="56" height="38" rx="7" fill="#3EDCB0"/>
+      <text x="828" y="202" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="#0A1422">AI</text>
+      <text x="640" y="230" font-size="10" fill="rgba(255,255,255,0.6)"><tspan class="en">agents build and test, the foreman directs and inspects</tspan><tspan class="nl">agents bouwen en testen, de uitvoerder stuurt en keurt</tspan></text>
+
+      <!-- record bar: the site office -->
+      <rect x="40" y="256" width="888" height="40" rx="8" fill="#3EDCB0"/>
+      <text x="58" y="281" font-family="Space Grotesk,sans-serif" font-weight="700" font-size="13.5" fill="#0A1422"><tspan class="en">Site office: plans and the record</tspan><tspan class="nl">Bouwkeet: plannen en het logboek</tspan></text>
+      <text x="910" y="281" text-anchor="end" font-family="JetBrains Mono,monospace" font-size="10.5" fill="#0A1422" opacity="0.85">STATUS &#183; DEADLINES &#183; decisions &#183; roadmap &#183; log</text>
+
+      <!-- flow -->
+      <g font-size="12" fill="rgba(255,255,255,0.85)">
+        <text x="60" y="344"><tspan class="en">idea</tspan><tspan class="nl">idee</tspan></text>
+        <text x="220" y="344"><tspan class="en">permit: you approve</tspan><tspan class="nl">vergunning: jij keurt goed</tspan></text>
+        <text x="460" y="344"><tspan class="en">build + test in a sealed copy</tspan><tspan class="nl">bouwen + testen in een afgesloten kopie</tspan></text>
+        <text x="790" y="344"><tspan class="en">you review, you ship</tspan><tspan class="nl">jij beoordeelt, jij levert op</tspan></text>
+        <g stroke="#3EDCB0" stroke-width="1.6" fill="#3EDCB0">
+          <line x1="105" y1="339" x2="205" y2="339"/><path d="M205 339 l-7 -3.5 v7 z"/>
+          <line x1="380" y1="339" x2="445" y2="339"/><path d="M445 339 l-7 -3.5 v7 z"/>
+          <line x1="700" y1="339" x2="775" y2="339"/><path d="M775 339 l-7 -3.5 v7 z"/>
+        </g>
+      </g>
+    </svg>
+    </div></div>
+  </div></div>
+
+  <div class="wrap">
+    <div class="eyebrow"><span class="en">Why</span><span class="nl">Waarom</span></div>
+    <h2 style="margin-top:0"><span class="en">The bigger goal</span><span class="nl">Het grotere doel</span></h2>
+    <p><span class="en">AI produces confident, plausible, wrong work fast. The missing piece is not a better model; it is the management around the model: who approves what, what the machine may never decide on its own, and where the record lives when someone asks "why did we do this?" six weeks later. That management layer is what we are building. I run my own company on it today; nothing here is a whiteboard idea.</span>
+    <span class="nl">AI levert in hoog tempo werk af dat zelfverzekerd klinkt, aannemelijk oogt en fout is. Wat ontbreekt is geen beter model, maar het management eromheen: wie keurt wat goed, wat mag de machine nooit zelf beslissen, en waar staat het logboek als iemand zes weken later vraagt "waarom hebben we dit gedaan?". Die managementlaag bouwen we hier. Ik draai er vandaag mijn eigen bedrijf op; niets hiervan komt van een whiteboard.</span></p>
+
+    <div class="note"><div class="h"><span class="en">Not only projects</span><span class="nl">Niet alleen projecten</span></div>
+    <p><span class="en">Run your holding and your companies on this structure too, not only the projects. The same skeleton at every level means the AI always finds status, deadlines and decisions in the same place, so every chat starts smart instead of starting over. That is the whole trade: better outcome, lower cost, and context that carries over from week to week instead of dying with each chat window.</span>
+    <span class="nl">Zet ook je holding en je bedrijven op deze structuur, niet alleen de projecten. Met hetzelfde skelet op elk niveau vindt de AI status, deadlines en besluiten altijd op dezelfde plek, dus elke chat begint met kennis in plaats van bij nul. Dat is de hele winst: beter resultaat, lagere kosten, en context die van week tot week meegaat in plaats van te verdwijnen zodra het chatvenster dichtgaat.</span></p></div>
+
+    <h2><span class="en">How, high over</span><span class="nl">Hoe, op hoofdlijnen</span></h2>
+    <ol class="steps">
+      <li><span class="en"><b>The permit.</b> No work starts before a named person approves the plan. An idea becomes a design and a step list, you sign off, or it stops.</span><span class="nl"><b>De vergunning.</b> Er start geen werk voordat iemand met naam en toenaam het plan heeft goedgekeurd. Een idee wordt een ontwerp met een stappenlijst, jij tekent, of het stopt.</span></li>
+      <li><span class="en"><b>The inspection, per step.</b> The AI clarifies until the step is clear, builds and tests in a sealed copy with limited attempts, and reports what actually broke.</span><span class="nl"><b>De keuring, per stap.</b> De AI vraagt door tot de stap echt helder is, bouwt en test in een afgesloten kopie met een beperkt aantal pogingen, en meldt wat er werkelijk kapot ging.</span></li>
+      <li><span class="en"><b>Only a human ships.</b> Approved work waits in the copy until a person reads it and moves it in by hand. Money, customer sends and publishing always stay human.</span><span class="nl"><b>Alleen een mens levert op.</b> Goedgekeurd werk wacht in de kopie tot een persoon het leest en zelf overzet. Geld, klantcontact en publicatie blijven altijd mensenwerk.</span></li>
+    </ol>
+
+    <h2><span class="en">What, high over</span><span class="nl">Wat, op hoofdlijnen</span></h2>
+    <p><span class="en">Three names, three jobs. <b>Siteoffice</b> is the structure: folders and plain markdown files, one source of truth per fact, readable by every AI vendor and every human. <b>Foreman</b> is the process that runs on it: permit, inspection, human ships. <b>Groundwork</b> is what you lay first: these pages, the skills, the one loop and the board.</span>
+    <span class="nl">Drie namen, drie taken. <b>Siteoffice</b> is de structuur: mappen en gewone markdown-bestanden, één bron van waarheid per feit, leesbaar voor elke AI-leverancier en elk mens. <b>Foreman</b> is het proces dat erop draait: vergunning, keuring, mens levert op. <b>Groundwork</b> is het fundament dat je eerst legt: deze pagina's, de skills, de ene lus en het bord.</span></p>
+
+    <h2><span class="en">The pieces</span><span class="nl">De onderdelen</span></h2>
+    <div class="card-grid">
+      <a class="card" href="#structure"><div class="k"><span class="en">Structure</span><span class="nl">Structuur</span></div><h3><span class="en">Folders and files</span><span class="nl">Mappen en bestanden</span></h3><p><span class="en">One skeleton for holding, company, department and project, and what every file is for.</span><span class="nl">Eén skelet voor holding, bedrijf, afdeling en project, en waar elk bestand voor is.</span></p></a>
+      <a class="card" href="#start"><div class="k"><span class="en">Guide</span><span class="nl">Gids</span></div><h3><span class="en">Getting started</span><span class="nl">Aan de slag</span></h3><p><span class="en">The whole kit in order: one plugin install, then a fixed order of conversations.</span><span class="nl">De hele kit in volgorde: één plugin-installatie, daarna een vaste volgorde van gesprekken.</span></p></a>
+      <a class="card" href="#skill-siteoffice"><div class="k">Skill</div><h3>siteoffice-setup</h3><p><span class="en">One conversation builds your whole structure and the Claude Desktop projects on top.</span><span class="nl">Eén gesprek bouwt je hele structuur en de Claude Desktop projecten erbovenop.</span></p></a>
+      <a class="card" href="#skill-handover"><div class="k">Skill</div><h3>handover</h3><p><span class="en">End a chat with a handover document; the next chat starts fresh, cheap, nothing lost.</span><span class="nl">Sluit een chat af met een handover-document; de volgende chat begint schoon en goedkoop, zonder iets kwijt te raken.</span></p></a>
+    </div>
+
+    <h2><span class="en">From idea to project, with statuses</span><span class="nl">Van idee naar project, met statussen</span></h2>
+    <p><span class="en">Ideas are cheap and chat windows eat them. In Siteoffice an idea is a dated file, and it moves through named statuses: <b>idea</b>, <b>shortlisted</b>, <b>permit</b> (you approved a plan), <b>building</b>, <b>testing</b>, and then <b>shipped</b> or <b>parked</b>. Parked is a clean outcome, not a failure. The board shows exactly this pipeline.</span>
+    <span class="nl">Ideeën zijn goedkoop en chatvensters eten ze op. In Siteoffice is een idee een gedateerd bestand, en het schuift door vaste statussen: <b>idee</b>, <b>shortlist</b>, <b>vergunning</b> (jij hebt een plan goedgekeurd), <b>bouwen</b>, <b>testen</b>, en dan <b>opgeleverd</b> of <b>geparkeerd</b>. Geparkeerd is een nette uitkomst, geen mislukking. Het bord laat precies deze pijplijn zien.</span></p>
+
+    <div class="band"><p class="small"><span class="en"><b>The honest limit.</b> The gates cost speed by design, and the concept is young: the structure and the process are proven on my own projects, the always-on platform with a shared dashboard is where this is heading, not what you install today. If you want a machine that ships without asking you, this is the wrong system, and better to know now.</span>
+    <span class="nl"><b>De eerlijke grens.</b> De poorten kosten snelheid, en dat is de bedoeling. Het concept is jong: de structuur en het proces hebben zich bewezen op mijn eigen projecten; het always-on platform met een gedeeld dashboard is waar dit heengaat, niet wat je vandaag installeert. Wil je een machine die oplevert zonder jou iets te vragen, dan is dit het verkeerde systeem, en dat zeg ik liever nu.</span></p></div>
+  </div>
+</section>
+
+<section class="page" id="page-start"><div class="wrap">
+  <div class="eyebrow"><span class="en">Getting started</span><span class="nl">Aan de slag</span></div>
+  <h1><span class="en">Set everything up, step by step</span><span class="nl">Alles opzetten, stap voor stap</span></h1>
+  <p><span class="en">One plugin install brings the skills; the rest is a series of conversations. The order below is deliberate: every step makes the next one better. Count on an afternoon for the setup; the habits after it are the real work.</span>
+  <span class="nl">Eén plugin-installatie brengt de skills mee; de rest is een reeks gesprekken. De volgorde hieronder is bewust: elke stap maakt de volgende beter. Reken op een middag voor de inrichting; de gewoontes daarna zijn het echte werk.</span></p>
+  <div class="note"><div class="h"><span class="en">First: install the plugin, once</span><span class="nl">Eerst: installeer de plugin, één keer</span></div>
+  <p><span class="en"><b>Claude Desktop:</b> click your name (bottom left), then Settings, then Plugins, then Add marketplace, and paste <code>siteoffice/groundwork</code>. Install the <code>groundwork</code> plugin. The skills land in one go (one-loop, siteoffice-setup, siteoffice-migrate, siteoffice-cleanup, siteoffice-checkup, siteoffice-git, handover) and future updates arrive the same way. Install <code>groundwork-mods</code> too if you want the Setup Doctor and the agent policy.<br><br><b>OpenAI Codex:</b> copy the folders under <code>plugins/groundwork/skills/</code> from the marketplace repository into <code>~/.agents/skills/</code>; Codex picks them up by itself.</span>
+  <span class="nl"><b>Claude Desktop:</b> klik op je naam (linksonder), dan Settings, dan Plugins, dan Add marketplace, en plak <code>siteoffice/groundwork</code>. Installeer de <code>groundwork</code> plugin. De skills komen in één keer mee (one-loop, siteoffice-setup, siteoffice-migrate, siteoffice-cleanup, siteoffice-checkup, siteoffice-git, handover) en toekomstige updates komen op dezelfde manier binnen. Installeer ook <code>groundwork-mods</code> voor de Setup Doctor en het agentbeleid.<br><br><b>OpenAI Codex:</b> kopieer de mappen onder <code>plugins/groundwork/skills/</code> uit de marketplace-repository naar <code>~/.agents/skills/</code>; Codex ziet ze vanzelf.</span></p></div>
+  <h2><span class="en">Then, in this order</span><span class="nl">Daarna, in deze volgorde</span></h2>
+  <ol class="steps">
+    <li><span class="en"><b>Build the structure: siteoffice-setup.</b> Say "set up my company hub". One conversation builds the folder tree for your holding, companies and projects, plus the paste-ready Claude Desktop project texts. This is the foundation; everything else lands in it.</span><span class="nl"><b>Bouw de structuur: siteoffice-setup.</b> Zeg "zet een hub op". Eén gesprek bouwt de mappenboom voor je holding, bedrijven en projecten, plus de teksten voor de Claude Desktop projecten. Dit is het fundament; al het andere landt hierin.</span></li>
+    <li><span class="en"><b>Run one loop: one-loop.</b> Say "start a flow" and give it one real idea. It walks the idea through a plan, a spec, the work and a review, and you decide at each gate. When you accept the result you get a receipt, self-issued and not signed.</span><span class="nl"><b>Draai één lus: one-loop.</b> Zeg "start een flow" en geef een echt idee. Het gaat via plan, spec, werk en review, en jij beslist bij elke poort. Neem je het resultaat aan, dan krijg je een bon, zelf uitgegeven en niet ondertekend.</span></li>
+    <li><span class="en"><b>Settle into the rhythm.</b> One chat, one topic. Close a finished topic with "handover". The steps above are the setup; this one is the work.</span><span class="nl"><b>Val in het ritme.</b> Eén chat, één onderwerp. Sluit een afgerond onderwerp af met "handover". De stappen hierboven zijn de inrichting; deze is het werk.</span></li>
+  </ol>
+  <p class="small muted"><span class="en">The honest limit: this order is advice, not law. Only the install blocks the rest; if you want to build today, do step 1 and catch up on the others later. What does not work is skipping everything and expecting one loose skill to make the difference: the gain is in the combination.</span>
+  <span class="nl">De eerlijke grens: deze volgorde is advies, geen wet. Alleen de installatie blokkeert de rest; wil je vandaag bouwen, doe dan stap 1 en haal de rest later in. Wat niet werkt is alles overslaan en verwachten dat één losse skill het verschil maakt: de winst zit in de combinatie.</span></p>
+  <div class="pagenav"><a href="#structure"><span class="en">&#8592; Structure</span><span class="nl">&#8592; Structuur</span></a><a href="#skill-siteoffice">siteoffice-setup &#8594;</a></div>
+</div></section>
+
+<section class="page" id="page-structure"><div class="wrap">
+  <div class="eyebrow"><span class="en">Structure</span><span class="nl">Structuur</span></div>
+  <h1><span class="en">Folders and files: one skeleton</span><span class="nl">Mappen en bestanden: één skelet</span></h1>
+  <p><span class="en">Every unit, from a holding above several companies down to a single project, gets the identical set of files. Only the nesting differs. Whoever opens any folder, human or AI, knows where everything is without learning a new layout, and a fact lives in exactly one file, so two documents cannot quietly disagree.</span>
+  <span class="nl">Elke eenheid, van een holding boven meerdere bedrijven tot een los project, krijgt exact dezelfde set bestanden. Alleen de diepte verschilt. Wie een map opent, mens of AI, weet waar alles staat zonder een nieuwe indeling te leren, en elk feit staat in precies één bestand, zodat twee documenten elkaar niet ongemerkt kunnen tegenspreken.</span></p>
+<pre><code>MyCompany\
+  AGENTS.md           <span class="en">instructions: what this is, rules, source-of-truth table</span><span class="nl">instructies: wat dit is, regels, bron-van-waarheid tabel</span>
+  STATUS.md           <span class="en">what is true now, one screen</span><span class="nl">wat nu waar is, één scherm</span>
+  DEADLINES.md        <span class="en">hard dates only, most imminent on top</span><span class="nl">alleen harde datums, meest urgente bovenaan</span>
+  SESSION_LOG.md      <span class="en">one paragraph per work session, newest on top</span><span class="nl">één alinea per werksessie, nieuwste bovenaan</span>
+  00_context\         <span class="en">brief.md: what this part is, who owns it, who approves</span><span class="nl">brief.md: wat dit deel is, van wie het is, wie goedkeurt</span>
+  01_projects\        <span class="en">one file per child part: goal, state, owner</span><span class="nl">één bestand per onderdeel: doel, status, eigenaar</span>
+  02_roadmap\         <span class="en">priority order, dated plans</span><span class="nl">prioriteitsvolgorde, gedateerde plannen</span>
+  03_logs\            <span class="en">decisions.md with the why, newest on top</span><span class="nl">decisions.md met het waarom, nieuwste bovenaan</span>
+  04_assets\          <span class="en">briefs, drafts, handovers, date-prefixed</span><span class="nl">briefings, concepten, handovers, met datumprefix</span></code></pre>
+  <h2><span class="en">The rules that keep it working</span><span class="nl">De regels die het werkend houden</span></h2>
+  <ul class="list">
+    <li><span class="en"><b>One source of truth per fact.</b> Priority order lives only in the roadmap, dates only in DEADLINES, state only in STATUS. Everything else links.</span><span class="nl"><b>Eén bron van waarheid per feit.</b> Prioriteit staat alleen in de roadmap, datums alleen in DEADLINES, status alleen in STATUS. Al het andere verwijst.</span></li>
+    <li><span class="en"><b>Live files say what is true now.</b> Old reasoning moves to an archive with a pointer, instead of piling up in the live file.</span><span class="nl"><b>Live bestanden zeggen wat nu waar is.</b> Oude redeneringen verhuizen naar een archief, met een verwijzing erheen, in plaats van zich op te stapelen.</span></li>
+    <li><span class="en"><b>Every durable file gets a date prefix</b> and lands in the right subfolder, never in the root.</span><span class="nl"><b>Elk blijvend bestand krijgt een datumprefix</b> en landt in de juiste submap, nooit in de root.</span></li>
+    <li><span class="en"><b>A decision without its why written down will be taken again.</b></span><span class="nl"><b>Een besluit zonder opgeschreven waarom wordt opnieuw genomen.</b></span></li>
+  </ul>
+  <h2><span class="en">Why plain files</span><span class="nl">Waarom gewone bestanden</span></h2>
+  <p><span class="en">Folders and markdown are readable by any AI vendor, any tool and any human, today and in ten years. If the vendor changes, the company record does not. That is a design choice, not luck. The limit to know: a shared folder has no referee, so keep one writer per file at a time and let the decisions log settle disagreements.</span>
+  <span class="nl">Mappen en markdown zijn leesbaar voor elke AI-leverancier, elke tool en elk mens, vandaag en over tien jaar. Wisselt de leverancier, dan blijft het bedrijfsarchief staan. Dat is een ontwerpkeuze, geen geluk. De grens die je moet kennen: een gedeelde map heeft geen scheidsrechter, dus houd het op één schrijver per bestand tegelijk en laat het besluitenlog meningsverschillen beslechten.</span></p>
+  <div class="pagenav"><a href="#home">&#8592; Home</a><a href="#start"><span class="en">Getting started &#8594;</span><span class="nl">Aan de slag &#8594;</span></a></div>
+</div></section>
+
+<section class="page" id="page-skill-siteoffice"><div class="wrap">
+  <div class="eyebrow">Skill</div>
+  <h1>siteoffice-setup</h1>
+  <p><span class="en">One conversation builds your whole structure: it asks six questions, creates the folders and starter files on your disk, and hands you the paste-ready texts for Claude Desktop. Holding, company, department or project: the same skeleton every time.</span>
+  <span class="nl">Eén gesprek bouwt je hele structuur: het stelt zes vragen, maakt de mappen en startbestanden op je schijf, en geeft je de teksten die je zo in Claude Desktop plakt. Holding, bedrijf, afdeling of project: elke keer hetzelfde skelet.</span></p>
+  <h2><span class="en">Three ways to run it</span><span class="nl">Drie manieren om het te draaien</span></h2>
+  <ul class="list">
+    <li><span class="en"><b>Create</b>: nothing exists yet. Say "set up my company hub" (or a holding, a department, a project, or sketch a whole tree). The skill asks the structure questions, builds the skeleton, then interviews you: what this part does, what must never go wrong, priorities, hard dates, what runs today, what stays human. Your answers land in the files; nothing is filled with invented text.</span><span class="nl"><b>Create</b>: er is nog niets. Zeg "zet een hub op" (of een holding, afdeling, project, of schets een hele boom). De skill stelt de structuurvragen, bouwt het skelet, en interviewt je daarna: wat dit deel doet, wat nooit fout mag gaan, prioriteiten, harde datums, wat er nu loopt, wat mensenwerk blijft. Je antwoorden landen in de bestanden; niets wordt met verzonnen tekst gevuld.</span></li>
+    <li><span class="en"><b>Extend</b>: the tree exists and gets a new part. Say "add a department to Company A" or "add a project to my hub". Only the new part is built and filled; nothing else is touched.</span><span class="nl"><b>Extend</b>: de boom bestaat en krijgt een nieuw deel. Zeg "voeg een afdeling toe aan Bedrijf A" of "voeg een project toe aan mijn hub". Alleen het nieuwe deel wordt gebouwd en gevuld; de rest blijft ongemoeid.</span></li>
+    <li><span class="en"><b>Improve</b>: the files exist but are thin or stale. Say "improve my hub files". The skill reads what is there, lists what is missing or contradictory, asks only about those gaps, and shows every edit before applying it.</span><span class="nl"><b>Improve</b>: de bestanden bestaan maar zijn dun of verouderd. Zeg "verbeter mijn hub". De skill leest wat er staat, benoemt wat mist of elkaar tegenspreekt, vraagt alleen naar die gaten, en laat elke wijziging zien voordat hij wordt doorgevoerd.</span></li>
+  </ul>
+  <p class="small muted"><span class="en">You can stop after any part; progress is recorded in each part's manifest file, so the next chat offers to continue where you stopped.</span><span class="nl">Je kunt na elk deel stoppen; de voortgang staat in het manifestbestand van elk deel, dus de volgende chat stelt voor om verder te gaan waar je was gebleven.</span></p>
+  <h2><span class="en">What you answer</span><span class="nl">Wat jij beantwoordt</span></h2>
+  <ol class="steps">
+    <li><span class="en">What are you setting up: a holding, a company, a department, a project, or a whole tree at once?</span><span class="nl">Wat zet je op: een holding, een bedrijf, een afdeling, een project, of een hele boom in één keer?</span></li>
+    <li><span class="en">What is each part called?</span><span class="nl">Hoe heet elk deel?</span></li>
+    <li><span class="en">Where on disk should it live?</span><span class="nl">Waar op de schijf moet het staan?</span></li>
+    <li><span class="en">Who approves decisions?</span><span class="nl">Wie keurt besluiten goed?</span></li>
+    <li><span class="en">Which language for the files?</span><span class="nl">Welke taal voor de bestanden?</span></li>
+    <li><span class="en">New, or extending something that exists? Existing files are never overwritten.</span><span class="nl">Nieuw, of uitbreiden wat er al staat? Bestaande bestanden worden nooit overschreven.</span></li>
+  </ol>
+  <h2><span class="en">What you get</span><span class="nl">Wat je krijgt</span></h2>
+  <p><span class="en">The folder tree on your own disk, every file with starter content, and for each part you will work in: a paste-ready project name, description and instruction text for Claude Desktop. Four clicks remain, and the skill lists them. The same folder works unchanged in other tools such as OpenAI Codex and Claude Code, because the instruction file (AGENTS.md) is a plain open standard, not a Claude feature.</span>
+  <span class="nl">De mappenboom op je eigen schijf, elk bestand met startinhoud, en voor elk deel waarin je gaat werken: projectnaam, beschrijving en instructietekst, klaar om in Claude Desktop te plakken. Er blijven vier klikken over, en de skill somt ze op. Dezelfde map werkt ongewijzigd in andere tools zoals OpenAI Codex en Claude Code, omdat het instructiebestand (AGENTS.md) een open standaard is, geen Claude-functie.</span></p>
+  <p class="small muted"><span class="en">Install: one plugin brings the skills; see <a href="#start">Getting started</a>.</span><span class="nl">Installatie: één plugin brengt de skills mee; zie <a href="#start">Aan de slag</a>.</span></p>
+  <div class="pagenav"><a href="#start"><span class="en">&#8592; Getting started</span><span class="nl">&#8592; Aan de slag</span></a><a href="#skill-handover">handover &#8594;</a></div>
+</div></section>
+
+<section class="page" id="page-skill-handover"><div class="wrap">
+  <div class="eyebrow">Skill</div>
+  <h1>handover</h1>
+  <p><span class="en">Say "handover" at the end of a chat and you get a short document that carries everything the next chat needs: the goal, what was decided, what is open, the next step. The new chat starts fresh, cheap, and with nothing lost.</span>
+  <span class="nl">Zeg "handover" aan het einde van een chat en je krijgt een kort document met alles wat de volgende chat nodig heeft: het doel, wat besloten is, wat open staat, de volgende stap. De nieuwe chat begint schoon en goedkoop, en er raakt niets kwijt.</span></p>
+  <h2><span class="en">Why short chats win</span><span class="nl">Waarom korte chats winnen</span></h2>
+  <p><span class="en">An AI chat has no memory between answers. To write each new answer it re-reads the whole conversation so far. So a long chat pays for its own history again on every turn. I measured this on my own sessions: 85 to 98 percent of what I paid for was re-sent history, not new work. Cost is not even the worst part: a chat dragging weeks of old context gives noticeably worse answers than a fresh chat with one clean summary.</span>
+  <span class="nl">Een AI-chat heeft geen geheugen tussen antwoorden. Voor elk nieuw antwoord leest hij het hele gesprek tot dan toe opnieuw. Een lange chat betaalt dus elke beurt opnieuw voor zijn eigen geschiedenis. Ik heb dit op mijn eigen sessies gemeten: 85 tot 98 procent van wat ik betaalde was opnieuw verstuurde geschiedenis, geen nieuw werk. De kosten zijn niet eens het ergste: een chat die weken aan oude context meesleept geeft merkbaar slechtere antwoorden dan een nieuwe chat met één schone samenvatting.</span></p>
+  <h2><span class="en">How to use it</span><span class="nl">Zo gebruik je het</span></h2>
+  <ol class="steps">
+    <li><span class="en">Work as usual. When the topic is finished, or the chat feels slow or repetitive, say <b>"handover"</b>.</span><span class="nl">Werk zoals altijd. Is het onderwerp afgerond, of wordt de chat traag en herhaalt hij zichzelf, zeg dan <b>"handover"</b>.</span></li>
+    <li><span class="en">Read the document it produces and correct anything wrong; it is your record, not the machine's.</span><span class="nl">Lees het document dat eruit komt en corrigeer wat fout is; het is jouw archief, niet dat van de machine.</span></li>
+    <li><span class="en">Start a new chat in the same project and paste the handover in. Continue where you left off.</span><span class="nl">Start een nieuwe chat in hetzelfde project en plak de handover erin. Ga verder waar je was.</span></li>
+  </ol>
+  <p class="small muted"><span class="en">Rule of thumb: one chat, one topic. If you scroll to find what you said, it is time. The limit: a handover is a summary, and a summary chooses; that is why step 2 says read it first.</span>
+  <span class="nl">Vuistregel: één chat, één onderwerp. Moet je scrollen om terug te vinden wat je zei, dan is het tijd. De grens: een handover is een samenvatting, en een samenvatting kiest; daarom staat in stap 2 dat je eerst leest.</span></p>
+  <p class="small muted"><span class="en">Install: one plugin brings the skills; see <a href="#start">Getting started</a>.</span><span class="nl">Installatie: één plugin brengt de skills mee; zie <a href="#start">Aan de slag</a>.</span></p>
+  <div class="pagenav"><a href="#skill-siteoffice">&#8592; siteoffice-setup</a><a href="#home">Home &#8594;</a></div>
+</div></section>
+
+
+
+
+
+
+
+</main>
+
+<footer class="footer"><div class="wrap">
+  <span class="mono">ZeroNonsense.dev &#183; Siteoffice Groundwork Kit &#183; 01-09-2026</span><br>
+  <span class="en">Written for Claude Desktop; the concept is vendor agnostic. Claude helped draft and build these pages; the concept, the rules and the claims are Wilco de Tree's. Questions: info@zerononsense.dev</span>
+  <span class="nl">Geschreven voor Claude Desktop; het concept is niet aan één leverancier gebonden. Claude hielp deze pagina's schrijven en bouwen; het concept, de regels en de claims zijn van Wilco de Tree. Vragen: info@zerononsense.dev</span>
+</div></footer>
+
+<script>
+function go(p){ location.hash = '#' + p; }
+function route(){
+  var p = (location.hash || '#home').slice(1);
+  var el = document.getElementById('page-' + p);
+  if (!el) { p = 'home'; el = document.getElementById('page-home'); }
+  document.querySelectorAll('.page').forEach(function(x){ x.classList.remove('visible'); });
+  el.classList.add('visible');
+  document.querySelectorAll('#topnav a').forEach(function(a){
+    a.classList.toggle('active', a.dataset.p === p);
+  });
+  var dd = document.getElementById('skillsDD');
+  if (dd) {
+    dd.classList.remove('open');
+    document.getElementById('ddBtn').classList.toggle('active', p.indexOf('skill-') === 0);
+  }
+  window.scrollTo(0,0);
+}
+window.addEventListener('hashchange', route);
+function toggleTheme(){
+  var cur = document.documentElement.dataset.theme;
+  var next = cur === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem('so-theme', next); } catch(e){}
+  paintCtrls();
+}
+function toggleLang(){
+  var next = document.documentElement.dataset.lang === 'en' ? 'nl' : 'en';
+  document.documentElement.dataset.lang = next;
+  document.documentElement.lang = next;
+  try { localStorage.setItem('so-lang', next); } catch(e){}
+  paintCtrls();
+}
+function paintCtrls(){
+  document.getElementById('langBtn').textContent = document.documentElement.dataset.lang.toUpperCase();
+  document.getElementById('themeBtn').innerHTML = document.documentElement.dataset.theme === 'dark' ? '&#9790;' : '&#9728;';
+}
+try {
+  if (!localStorage.getItem('so-theme')) {
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e){
+      document.documentElement.dataset.theme = e.matches ? 'dark' : 'light'; paintCtrls();
+    });
+  }
+} catch(e){}
+(function(){
+  var dd = document.getElementById('skillsDD');
+  if (!dd) return;
+  dd.querySelectorAll('.dd-menu a').forEach(function(a){
+    a.addEventListener('click', function(){
+      dd.classList.add('closed'); dd.classList.remove('open');
+      if (document.activeElement) document.activeElement.blur();
+    });
+  });
+  dd.addEventListener('mouseleave', function(){ dd.classList.remove('closed'); });
+})();
+route(); paintCtrls();
+</script>
+</body>
+</html>
