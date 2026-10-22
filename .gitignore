@@ -5,3 +5,4 @@ __pycache__/
 _board/
 .claude-plugin/types/
 .playwright-mcp/
+.groundwork/

@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 
-import { decide, mentions, receiptId, words } from '../hooks/policy/policy'
+import { decide, mentions, parents, receiptId, words } from '../hooks/policy/policy'
 import type { Policy } from '../hooks/policy/policy'
 import { shipped } from './default-policy'
 
@@ -46,6 +46,48 @@ describe('the rules', () => {
     expect(run('echo $(whoami)')).toBe('deny')
   })
 
+  test('harmless read commands pass, including cd and wc', async () => {
+    const run = (command: string) => decide(policy, { tool: 'Bash', input: { command } }, ctx).action
+    expect(run('cd src && ls')).toBe('allow')
+    expect(run('wc -l README.md')).toBe('allow')
+    expect(run('git diff --stat | wc -l')).toBe('allow')
+    expect(run('Set-Location C:/work/shop; Get-ChildItem | Measure-Object')).toBe('allow')
+    expect(run('Get-ChildItem | Where-Object Name -like *.md')).toBe('allow')
+    expect(run('git stash list')).toBe('allow')
+    expect(run('git branch')).toBe('allow')
+    expect(run('git branch --list')).toBe('allow')
+  })
+
+  test('commands that can write or run something stay denied in read-only mode', async () => {
+    const run = (command: string) => decide(policy, { tool: 'Bash', input: { command } }, ctx).action
+    for (const bad of [
+      'sed -i s/a/b/ notes.txt',
+      'find . -delete',
+      'env FOO=1 python x.py',
+      'sort -o out.txt in.txt',
+      'uniq in.txt out.txt',
+      'date -s 2020-01-01',
+      'hostname other',
+      'git ls-remote --upload-pack=x origin',
+      'git branch newname',
+      'git diff --output=out.txt',
+      'git log --ext-diff',
+      'rg --pre cat x .',
+      'Get-ChildItem | Where-Object { Remove-Item $_ }',
+      'Get-ChildItem | Select-Object @{n="a";e={1}}',
+      'Get-ChildItem | Format-List @(1)',
+      'cd src && echo hi > notes.txt',
+      'cd src && git commit -m x',
+    ]) {
+      expect([bad, run(bad)]).toEqual([bad, 'deny'])
+    }
+  })
+
+  test('the project root is found by looking upward for the .groundwork folder', async () => {
+    expect(parents('C:\\work\\shop\\src\\deep')).toEqual(['C:/work/shop/src/deep', 'C:/work/shop/src', 'C:/work/shop', 'C:/work'])
+    expect(parents('/home/a/shop')).toEqual(['/home/a/shop', '/home/a', '/home'])
+  })
+
   test('a delete needs an approver named in the policy and an unexpired approval for that target', async () => {
     const work = { ...policy, mode: 'work' as const, delete: { ...policy.delete, approvers: ['Sam'] } }
     const call = { tool: 'Bash', input: { command: 'rm -rf build/old-output' } }
@@ -71,11 +113,12 @@ describe('the rules', () => {
 })
 
 // The hooks, end to end: the engine below them is a small in-memory file system.
-function stage($: any, on: any, files: Map<string, string>, core: { n: number }) {
+function stage($: any, on: any, files: Map<string, string>, core: { n: number }, cwd: string = ROOT) {
   const fwd = (p: string) => p.split('\\').join('/')
+  const isDir = (p: string) => [...files.keys()].some(k => k.startsWith(p + '/'))
   mock.clock(on)
-  on('session.cwd', () => ({ value: ROOT }))
-  on('fs.exists', (_: unknown, e: { path: string }) => ({ value: files.has(fwd(e.path)) || fwd(e.path).endsWith('/policy/agent-policy.json') }))
+  on('session.cwd', () => ({ value: cwd }))
+  on('fs.exists', (_: unknown, e: { path: string }) => ({ value: files.has(fwd(e.path)) || isDir(fwd(e.path)) || fwd(e.path).endsWith('/policy/agent-policy.json') }))
   on('fs.read', (_: unknown, e: { path: string }) => ({ value: fwd(e.path).endsWith('/policy/agent-policy.json') ? JSON.stringify(shipped) : files.get(fwd(e.path)) }))
   on('fs.write', (_: unknown, e: { path: string; text: string }) => (files.set(fwd(e.path), e.text), { value: undefined }))
   on('tool.call', () => ((core.n += 1), { result: {} }))
@@ -130,6 +173,15 @@ describe('the hooks', () => {
     const allowed = await $.tool.call({ tool: 'Write', file_path: 'src/app.ts', content: 'x' })
     expect(allowed.deny).toBeUndefined()
     expect(logOf(files).map(l => l.decision)).toEqual(['denied', 'written'])
+  })
+
+  test('a cd into a subfolder keeps the project mode, and the log stays in the project root', async ($, on) => {
+    const files = new Map<string, string>([[ROOT + '/.groundwork/agent-policy.json', JSON.stringify({ mode: 'work' })]])
+    stage($, on, files, { n: 0 }, ROOT + '/src/deep')
+    const out = await $.tool.call({ tool: 'Write', file_path: ROOT + '/src/app.ts', content: 'x' })
+    expect(out.deny).toBeUndefined()
+    expect(logOf(files)[0]).toMatchObject({ decision: 'written', kind: 'write' })
+    expect(files.has(ROOT + '/src/deep/.groundwork/agent-log.ndjson')).toBe(false)
   })
 
   test('the agent cannot edit the approvals file', async ($, on) => {

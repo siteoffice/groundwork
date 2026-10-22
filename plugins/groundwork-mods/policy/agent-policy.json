@@ -26,12 +26,20 @@
     "approvalFile": ".groundwork/approvals.json"
   },
   "readOnlyCommands": [
-    "git status", "git log", "git diff", "git show", "git branch", "git rev-parse",
-    "git ls-files", "git remote -v", "ls", "dir", "cat", "type", "pwd", "echo", "head",
-    "tail", "wc", "grep", "rg", "findstr", "get-childitem", "get-content", "get-location",
-    "select-string", "test-path", "which", "where", "python --version", "py -3 --version",
-    "node --version"
+    "git status", "git log", "git diff", "git show", "git rev-parse", "git ls-files",
+    "git remote -v", "git rev-list", "git describe", "git blame", "git shortlog",
+    "git stash list", "git config --get", "git branch --list", "git branch --show-current",
+    "git branch -a", "git branch -r", "git branch -v", "git branch -vv",
+    "cd", "set-location", "pushd", "popd", "ls", "dir", "cat", "type", "pwd", "echo", "head",
+    "tail", "wc", "cut", "diff", "stat", "du", "df", "basename", "dirname", "realpath",
+    "whoami", "true", "false", "test", "grep", "rg", "findstr",
+    "get-childitem", "get-item", "get-content", "get-location", "get-date", "get-command",
+    "get-filehash", "resolve-path", "split-path", "join-path", "select-string", "test-path",
+    "measure-object", "select-object", "where-object", "sort-object", "format-list",
+    "format-table", "which", "where", "python --version", "py -3 --version", "node --version"
   ],
+  "readOnlyExact": ["git branch"],
+  "blockedArgs": ["--output", "--ext-diff", "--upload-pack", "--pre", "--textconv", "--exec-path"],
   "readWords": ["get", "list", "read", "search", "query", "fetch", "find", "show", "describe", "view", "lookup", "count"],
   "log": ".groundwork/agent-log.ndjson",
   "undoFolder": ".groundwork/undo"

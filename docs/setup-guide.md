@@ -99,7 +99,8 @@ Open `_board\board.html` in a browser. It is one file and it only reads your fol
 Out of the box the agent can read and write drafts. It cannot change other files, send anything,
 or delete without a named person. That is the agent policy in `groundwork-mods`; the rules are in
 `plugins\groundwork-mods\policy\README.md`. To let the agent change files, set `"mode": "work"` in
-`.groundwork\agent-policy.json` in your project. Sends and deletes stay blocked.
+`.groundwork\agent-policy.json` in your project, and add `.groundwork/` to the project's
+`.gitignore`. Sends and deletes stay blocked.
 
 The policy is a guardrail, not a lock. It stops an agent doing the work the normal way. It does not
 stop you, and it cannot see a command it does not recognise once you are in work mode.

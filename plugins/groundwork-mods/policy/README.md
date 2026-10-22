@@ -25,6 +25,15 @@ Set `"mode": "work"` in `.groundwork\agent-policy.json` in your project; it over
 file. In work mode the agent may write anywhere in the project and run other commands. Rules 3 to
 6 still apply. Go back to `"read-only"` when you are done.
 
+The project is the nearest folder, from where the agent works upward, that holds a `.groundwork\`
+folder. A `cd` into a subfolder does not leave the project. Add `.groundwork/` to the project's
+`.gitignore`: the log and the undo copies live there and are yours, not part of the work. The
+skeleton in `templates\skeleton\` already does.
+
+In read-only mode a command also has to be free of script blocks (`{`), sub-expressions (`$(`,
+`@(`) and flags that name an output file or a program to run (`--output`, `--pre`,
+`--upload-pack`, `--ext-diff`, `--textconv`). Those turn a read into a write or a run.
+
 ## Record an approval to delete
 
 A person writes this file; the agent cannot. `.groundwork\approvals.json`:

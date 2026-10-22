@@ -10,6 +10,8 @@ export type Policy = {
   draftWords: string[]
   delete: { commands: string[]; toolWords: string[]; approvers: string[]; approvalFile: string }
   readOnlyCommands: string[]
+  readOnlyExact: string[]
+  blockedArgs: string[]
   readWords: string[]
   log: string
   undoFolder: string
@@ -128,8 +130,12 @@ export function decide(policy: Policy, call: Call, ctx: { root: string; approval
     }
     if (readOnly) {
       const segs = segments(cmd)
-      const readable = segs.length > 0 && segs.every(s => startsWithCommand(s, policy.readOnlyCommands) && !writesToFile(s)) && !/`|\$\(/.test(cmd)
-      if (!readable) return { action: 'deny', kind: 'read-only', why: 'read-only by default: this command is not on the read-only list' }
+      const known = (s: string) => startsWithCommand(s, policy.readOnlyCommands) || policy.readOnlyExact.includes(lower(s))
+      // A script block, a sub-expression or a flag that names an output file or a program to run
+      // turns a read command into a write or a run, so none of them may appear.
+      const risky = /[`{]|\$\(|@[({]/.test(cmd) || policy.blockedArgs.some(a => lower(cmd).includes(a))
+      const readable = segs.length > 0 && segs.every(s => known(s) && !writesToFile(s)) && !risky
+      if (!readable) return { action: 'deny', kind: 'read-only', why: 'read-only by default: this command is not on the read-only list, or carries a script block or an output or run flag' }
       return { action: 'allow', why: 'a read-only command' }
     }
     return { action: 'allow-write', kind: 'shell', target: cmd, backup: false, why: 'work mode' }
@@ -150,6 +156,18 @@ export function decide(policy: Policy, call: Call, ctx: { root: string; approval
   }
 
   return { action: 'allow', why: 'not a write, shell or MCP tool' }
+}
+
+// The folders to look in for the project's .groundwork folder: the working directory first, then
+// each parent, like git looks for .git. A cd inside the project must not leave the project's mode.
+export function parents(cwd: string): string[] {
+  const parts = cwd.replace(/\\/g, '/').replace(/\/+$/, '').split('/')
+  const out: string[] = []
+  for (let i = parts.length; i > 0; i--) {
+    const dir = parts.slice(0, i).join('/')
+    if (dir && !/^[a-zA-Z]:$/.test(dir)) out.push(dir)
+  }
+  return out
 }
 
 export function receiptId(nowIso: string, n: number): string {

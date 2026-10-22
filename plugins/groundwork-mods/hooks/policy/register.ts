@@ -5,7 +5,7 @@
 
 import type { EngineInterface, Register } from 'claude-code'
 
-import { decide, receiptId, undoNote } from './policy'
+import { decide, parents, receiptId, undoNote } from './policy'
 import type { Approval, Decision, Policy } from './policy'
 
 const PROJECT_POLICY = '.groundwork/agent-policy.json'
@@ -35,7 +35,16 @@ async function append($: EngineInterface, path: string, entry: Record<string, un
 
 export const registerPolicy: Register = on => {
   on('tool.call', async ($, e, next) => {
-    const root = await $.session.cwd()
+    const cwd = await $.session.cwd()
+    // The project root is the nearest folder, from the working directory up, that has a
+    // .groundwork folder. Without one the working directory is the root.
+    let root = cwd.replace(/\\/g, '/')
+    for (const dir of parents(cwd)) {
+      if (await $.fs.exists(dir + '/.groundwork')) {
+        root = dir
+        break
+      }
+    }
     const policy = await loadPolicy($, root)
     const nowIso = new Date(await $.clock.now()).toISOString()
     const input = e as unknown as Record<string, unknown>

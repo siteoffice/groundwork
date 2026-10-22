@@ -35,7 +35,7 @@ What it costs you: the gates are slower than letting an agent run. That is on pu
 want a machine that ships without asking you, this is the wrong tool.
 
 I measured what I claim here by running it. The engine carries 987 passing tests, the board 185
-and the mods 18, all green on Windows at this release. Claude Code wrote most of the code and text
+and the mods 22, all green on Windows at this release. Claude Code wrote most of the code and text
 of this release. I set the scope and I decide what ships.
 
 ## 3. Screenshots

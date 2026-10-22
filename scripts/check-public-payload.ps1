@@ -56,7 +56,7 @@ $hits = New-Object System.Collections.Generic.List[string]
 $selfRel = 'scripts' + $bs + 'check-public-payload.ps1'
 
 $files = @(Get-ChildItem -LiteralPath $Root -Recurse -File -Force -Name |
-    Where-Object { $_ -notmatch ('(^|' + $sep + ')(\.git|__pycache__|\.pytest_cache|_board|\.playwright-mcp)' + $sep) -and $_ -ne $selfRel })
+    Where-Object { $_ -notmatch ('(^|' + $sep + ')(\.git|__pycache__|\.pytest_cache|_board|\.playwright-mcp|\.groundwork)' + $sep) -and $_ -ne $selfRel })
 
 foreach ($rel in $files) {
     $full = Join-Path $Root $rel

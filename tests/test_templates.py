@@ -23,6 +23,14 @@ def test_skeleton_has_every_file_of_the_unit():
         assert (SKELETON / rel).is_dir(), rel
 
 
+def test_templates_ignore_the_policy_folder_and_the_board_output():
+    for node in (SKELETON, MOLENWERK):
+        ignored = (node / ".gitignore").read_text(encoding="utf-8").split()
+        assert ".groundwork/" in ignored and "_board/" in ignored, node.name
+    root_ignored = (ROOT / ".gitignore").read_text(encoding="utf-8").split()
+    assert ".groundwork/" in root_ignored
+
+
 def test_claude_md_is_one_import_line():
     for node in (SKELETON, MOLENWERK):
         assert (node / "CLAUDE.md").read_text(encoding="utf-8").strip() == "@AGENTS.md"

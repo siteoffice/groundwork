@@ -3,7 +3,23 @@
 All notable changes. The version is one clock for the whole repository: `groundwork`,
 `groundwork-mods` and the marketplace move together.
 
-## 0.1.0 (unreleased)
+## 0.1.1
+
+Patch for the agent policy, found by using it on this repository.
+
+- **Safer read-only list.** `git branch <name>`, `rg --pre`, `git diff --output` and
+  `git ls-remote --upload-pack` could write a file, create a branch or run a program in read-only
+  mode. They are blocked now, as are `sort`, `uniq`, `tree`, `date` and `hostname`, which can
+  write or set things. A script block (`{`), a sub-expression (`$(`, `@(`) or an output or run flag
+  in a read-only command is refused.
+- **More harmless reads.** `cd`, `wc`, `cut`, `diff`, `stat`, `du`, `df`, `basename`, `dirname`,
+  `realpath`, `Get-Item`, `Measure-Object` and the read-only `git` forms (`rev-list`, `describe`,
+  `blame`, `shortlog`, `stash list`, `config --get`, the list forms of `branch`) are on the list.
+- **The project root is found upward.** A `cd` into a subfolder no longer drops the project's
+  mode. The log and undo copies stay in the project's `.groundwork\` folder.
+- **`.groundwork/` is ignored** in this repository and in both templates. 22 mod tests pass.
+
+## 0.1.0
 
 First public version. Windows tested; macOS untested.
 
