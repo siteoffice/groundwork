@@ -1,7 +1,7 @@
 {
   "name": "groundwork-mods",
   "displayName": "Groundwork Mods",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Setup Doctor and an agent policy pack: read-only by default, drafts allowed, sends blocked, writes logged.",
   "author": {
     "name": "Wilco de Tree",

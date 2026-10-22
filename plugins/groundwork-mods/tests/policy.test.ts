@@ -56,6 +56,11 @@ describe('the rules', () => {
     expect(run('git stash list')).toBe('allow')
     expect(run('git branch')).toBe('allow')
     expect(run('git branch --list')).toBe('allow')
+    expect(run('git branch -a | wc -l')).toBe('allow')
+    expect(run('git diff 2>&1 | wc -l')).toBe('allow')
+    expect(run('git remote -v')).toBe('allow')
+    expect(run('python --version')).toBe('allow')
+    expect(run('cd src && git status && git log --oneline')).toBe('allow')
   })
 
   test('commands that can write or run something stay denied in read-only mode', async () => {
@@ -78,6 +83,17 @@ describe('the rules', () => {
       'Get-ChildItem | Format-List @(1)',
       'cd src && echo hi > notes.txt',
       'cd src && git commit -m x',
+      'ls & touch x',
+      'ls &> out.txt',
+      'Get-Content (New-Item x)',
+      'cat <(touch x)',
+      'git branch -a -D x',
+      'git branch -a -m old new',
+      'git branch -v newname',
+      'git remote -v add x https://example.com/x.git',
+      'python --version -c print(1)',
+      'rg --hostname-bin x y .',
+      'rg --search-zip x .',
     ]) {
       expect([bad, run(bad)]).toEqual([bad, 'deny'])
     }
@@ -182,6 +198,17 @@ describe('the hooks', () => {
     expect(out.deny).toBeUndefined()
     expect(logOf(files)[0]).toMatchObject({ decision: 'written', kind: 'write' })
     expect(files.has(ROOT + '/src/deep/.groundwork/agent-log.ndjson')).toBe(false)
+  })
+
+  test('a folder with only a log in it does not shadow the project that holds the policy file', async ($, on) => {
+    const files = new Map<string, string>([
+      [ROOT + '/.groundwork/agent-policy.json', JSON.stringify({ mode: 'work' })],
+      [ROOT + '/src/.groundwork/agent-log.ndjson', ''],
+    ])
+    stage($, on, files, { n: 0 }, ROOT + '/src')
+    const out = await $.tool.call({ tool: 'Write', file_path: ROOT + '/src/app.ts', content: 'x' })
+    expect(out.deny).toBeUndefined()
+    expect(files.has(ROOT + '/.groundwork/agent-log.ndjson')).toBe(true)
   })
 
   test('the agent cannot edit the approvals file', async ($, on) => {

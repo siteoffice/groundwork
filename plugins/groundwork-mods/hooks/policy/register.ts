@@ -36,15 +36,27 @@ async function append($: EngineInterface, path: string, entry: Record<string, un
 export const registerPolicy: Register = on => {
   on('tool.call', async ($, e, next) => {
     const cwd = await $.session.cwd()
-    // The project root is the nearest folder, from the working directory up, that has a
-    // .groundwork folder. Without one the working directory is the root.
+    // The project root is the nearest folder, from the working directory up, that holds a
+    // .groundwork/agent-policy.json: a folder with only a log in it must not shadow the project.
+    // With no policy file anywhere, the nearest .groundwork folder, else the working directory.
     let root = cwd.replace(/\\/g, '/')
-    for (const dir of parents(cwd)) {
-      if (await $.fs.exists(dir + '/.groundwork')) {
-        root = dir
+    const dirs = parents(cwd)
+    let found = ''
+    for (const dir of dirs) {
+      if (await $.fs.exists(dir + '/' + PROJECT_POLICY)) {
+        found = dir
         break
       }
     }
+    if (!found) {
+      for (const dir of dirs) {
+        if (await $.fs.exists(dir + '/.groundwork')) {
+          found = dir
+          break
+        }
+      }
+    }
+    if (found) root = found
     const policy = await loadPolicy($, root)
     const nowIso = new Date(await $.clock.now()).toISOString()
     const input = e as unknown as Record<string, unknown>

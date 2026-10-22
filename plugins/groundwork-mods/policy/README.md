@@ -25,8 +25,9 @@ Set `"mode": "work"` in `.groundwork\agent-policy.json` in your project; it over
 file. In work mode the agent may write anywhere in the project and run other commands. Rules 3 to
 6 still apply. Go back to `"read-only"` when you are done.
 
-The project is the nearest folder, from where the agent works upward, that holds a `.groundwork\`
-folder. A `cd` into a subfolder does not leave the project. Add `.groundwork/` to the project's
+The project is the nearest folder, from where the agent works upward, that holds a
+`.groundwork\agent-policy.json` file; with no such file, the nearest `.groundwork\` folder. A `cd`
+into a subfolder does not leave the project, and a log folder left in a subfolder does not hide it. Add `.groundwork/` to the project's
 `.gitignore`: the log and the undo copies live there and are yours, not part of the work. The
 skeleton in `templates\skeleton\` already does.
 

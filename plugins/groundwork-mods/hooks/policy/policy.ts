@@ -133,7 +133,12 @@ export function decide(policy: Policy, call: Call, ctx: { root: string; approval
       const known = (s: string) => startsWithCommand(s, policy.readOnlyCommands) || policy.readOnlyExact.includes(lower(s))
       // A script block, a sub-expression or a flag that names an output file or a program to run
       // turns a read command into a write or a run, so none of them may appear.
-      const risky = /[`{]|\$\(|@[({]/.test(cmd) || policy.blockedArgs.some(a => lower(cmd).includes(a))
+      // Any grouping ( ) [ ] { }, any sub-expression or process substitution, and a lone & (which
+      // starts a second command) are refused; && is a joiner and >&1 a redirect, so both stay.
+      const risky =
+        /[`{}()\[\]]|\$\{|@[({]|[<>]\(/.test(cmd) ||
+        /(^|[^&>])&(?!&)/.test(cmd) ||
+        policy.blockedArgs.some(a => lower(cmd).includes(a))
       const readable = segs.length > 0 && segs.every(s => known(s) && !writesToFile(s)) && !risky
       if (!readable) return { action: 'deny', kind: 'read-only', why: 'read-only by default: this command is not on the read-only list, or carries a script block or an output or run flag' }
       return { action: 'allow', why: 'a read-only command' }

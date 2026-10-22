@@ -3,6 +3,20 @@
 All notable changes. The version is one clock for the whole repository: `groundwork`,
 `groundwork-mods` and the marketplace move together.
 
+## 0.1.2
+
+Patch for the agent policy: the read-only check had gaps that the 0.1.1 review found.
+
+- **Read-only commands are stricter.** Any grouping (`( ) [ ] { }`), sub-expression or process
+  substitution, and a lone `&` (which starts a second command) are refused. `git branch -a -D x`,
+  `git remote -v add ...` and `python --version -c ...` got through on a prefix match. All `git
+  branch` forms, `git remote -v` and the three `--version` commands now match exactly. `rg
+  --hostname-bin` and `--search-zip` are blocked flags.
+- **The project root is the nearest folder with a policy file.** In 0.1.1 a leftover log folder in
+  a subfolder hid the project's mode.
+- **README:** the line about install screenshots is gone; the repository shows features, not
+  install steps. 23 mod tests pass.
+
 ## 0.1.1
 
 Patch for the agent policy, found by using it on this repository.

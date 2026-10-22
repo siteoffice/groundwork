@@ -35,7 +35,7 @@ What it costs you: the gates are slower than letting an agent run. That is on pu
 want a machine that ships without asking you, this is the wrong tool.
 
 I measured what I claim here by running it. The engine carries 987 passing tests, the board 185
-and the mods 22, all green on Windows at this release. Claude Code wrote most of the code and text
+and the mods 23, all green on Windows at this release. Claude Code wrote most of the code and text
 of this release. I set the scope and I decide what ships.
 
 ## 3. Screenshots
@@ -46,8 +46,6 @@ All four are rendered from this release. The receipt page is what you get when y
 ![The Molenwerk example company on the board, dark theme](assets/screenshots/board-molenwerk-dark.png)
 ![A receipt for an accepted change, light theme: a table with project, decision, time and a hash of the flow log, labelled self-issued, not signed](assets/screenshots/receipt-light.png)
 ![The same receipt in the dark theme](assets/screenshots/receipt-dark.png)
-
-Screenshots of the install steps are not in yet; see the known limits.
 
 ## 4. Install, no terminal
 

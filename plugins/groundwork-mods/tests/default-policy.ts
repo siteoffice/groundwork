@@ -79,19 +79,12 @@ export const shipped = {
     "git show",
     "git rev-parse",
     "git ls-files",
-    "git remote -v",
     "git rev-list",
     "git describe",
     "git blame",
     "git shortlog",
     "git stash list",
     "git config --get",
-    "git branch --list",
-    "git branch --show-current",
-    "git branch -a",
-    "git branch -r",
-    "git branch -v",
-    "git branch -vv",
     "cd",
     "set-location",
     "pushd",
@@ -139,13 +132,20 @@ export const shipped = {
     "format-list",
     "format-table",
     "which",
-    "where",
+    "where"
+  ],
+  "readOnlyExact": [
+    "git branch",
+    "git branch --list",
+    "git branch -a",
+    "git branch -r",
+    "git branch -v",
+    "git branch -vv",
+    "git branch --show-current",
+    "git remote -v",
     "python --version",
     "py -3 --version",
     "node --version"
-  ],
-  "readOnlyExact": [
-    "git branch"
   ],
   "blockedArgs": [
     "--output",
@@ -153,7 +153,9 @@ export const shipped = {
     "--upload-pack",
     "--pre",
     "--textconv",
-    "--exec-path"
+    "--exec-path",
+    "--hostname-bin",
+    "--search-zip"
   ],
   "readWords": [
     "get",
