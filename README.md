@@ -108,6 +108,9 @@ default. See the [issue list](https://github.com/siteoffice/groundwork/issues).
 - **The work step runs in your session.** The engine ships no sprint runner.
 - **A plugin that runs before the mods can skip their session-start hook.** The Setup Doctor
   says when that happened. Claude Code's built-in security plugin is one such plugin.
+- **Cowork shows a warning about `groundwork-mods`.** It names an unknown `types` key in
+  `plugin.json`. Safe to ignore: the key is the type contract Claude Code uses for the Setup
+  Doctor, and Cowork does not run mods.
 
 Report a bug with the issue template: the command, what it printed, and your system.
 

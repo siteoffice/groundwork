@@ -3,6 +3,11 @@
 All notable changes. The version is one clock for the whole repository: `groundwork`,
 `groundwork-mods` and the marketplace move together.
 
+## 0.1.4
+
+- **README:** the known limits now explain the Cowork warning about an unknown `types` key in the
+  `groundwork-mods` manifest. Nothing else changed.
+
 ## 0.1.3
 
 - **`siteoffice-migrate` loads with its description.** The description held `Modes: audit ...`;
