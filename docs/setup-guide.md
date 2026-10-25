@@ -71,11 +71,13 @@ after `/clear` and `/resume`. Restart once and check again before you worry.
 ## What needs BurnMon
 
 BurnMon is a separate app that watches your agent sessions and writes a small snapshot file in
-your home folder. The Fleet and the Doctor's BurnMon line need it; everything else in Groundwork
-works without it. BurnMon is not bundled: get it from
+your home folder. The Fleet's BurnMon line and the Doctor's BurnMon line need it; everything else
+in Groundwork works without it. BurnMon is not bundled: get it from
 <https://github.com/siteoffice/burnmon/releases>. The Doctor shows grey "not installed" when the
-snapshot file is missing, amber "installed but not running" when it is older than ten seconds or
-cannot be read, and green when it is fresh.
+snapshot file is missing, amber "installed but not running" when it is ten seconds or older or
+cannot be read, and green when it is fresh. The Fleet's line (off until you switch the Fleet on,
+see the README) says the same in words: "BurnMon is not installed", "BurnMon is not running" or
+"BurnMon is running". Both read only the `written_at` field.
 
 ## Run your first loop
 

@@ -7,7 +7,7 @@ agents. Claude Code first; the skills are plain Markdown and portable.
 
 - `.claude-plugin\marketplace.json`: the marketplace, two plugins, one version clock (0.1.0).
 - `plugins\groundwork`: skills, engine (vendored by `scripts\sync-engine.ps1`), board, receipts.
-- `plugins\groundwork-mods`: Setup Doctor and the agent policy pack.
+- `plugins\groundwork-mods`: Setup Doctor, agent policy pack, and the Fleet and the Git lane behind switches (off by default).
 - `templates\`: folder skeleton, AGENTS.md and GLOSSARY.md starters, Molenwerk example.
 - `docs\`: setup guide, kit story, questionnaire, CHANGELOG.
 - `assets\screenshots\`: real screenshots with alt text.

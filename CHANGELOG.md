@@ -9,6 +9,19 @@ All notable changes. The version is one clock for the whole repository: `groundw
   than two ticks (10 seconds), amber "installed but not running" when it is older or cannot be
   read, grey "not installed" when it is missing. It reads only the `written_at` field, and it never
   counts toward the tally or the daily toast. The README and the setup guide say what needs BurnMon.
+- **`groundwork-mods` has two switches, both off by default.** `fleet` turns on the Fleet (`/fleet`,
+  `/thread`, `/threads`, `/burnmon`, `/blackbox`, `/plain`, `/tower`): what waits on you, this
+  session's agents, threads and shells, other sessions, a usage band. `gitLane` turns on the Git
+  lane (`/git`): your change as one lane, a next-step button, a guard on Claude's risky git, a Test
+  Bench and a PR Desk, with no model calls of its own (its Ask Claude buttons send a prompt in your session). A switch that is off registers nothing. Start a new
+  session after switching. Do not switch either on next to another plugin that registers `/fleet`,
+  `/git` or a git guard.
+- **Plain Mode inside the Fleet stays off until you switch it on.** It then makes small model calls
+  on your own quota (about 1,100 tokens per "So what", about 400 per question set), at most 50,000
+  tokens a day, each call logged to `~/.burnmon/overhead`.
+- **The Fleet shows a BurnMon line.** It reads only `written_at` from `~/.burnmon/snapshot.json`
+  and says running (younger than 10 seconds), not running (10 seconds or older, or unreadable) or
+  not installed. The README says what needs BurnMon.
 
 ## 0.2.0
 
