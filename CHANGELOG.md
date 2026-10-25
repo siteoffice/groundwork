@@ -5,6 +5,11 @@ All notable changes. The version is one clock for the whole repository: `groundw
 
 ## Unreleased
 
+- **The Git guard can allow a folder outside the project for good.** When it holds a write outside
+  the project, a second chip sits next to Allow once: "Allow always for this folder, in this
+  project". The folder is stored per project root and survives sessions; writes into it or below it
+  are no longer held. A chip in the pane forgets the folders for this project. Deletes, deploys,
+  publishes and migrations stay allow-once only.
 - **The Doctor has an optional BurnMon row.** Green when `~/.burnmon/snapshot.json` is younger
   than two ticks (10 seconds), amber "installed but not running" when it is older or cannot be
   read, grey "not installed" when it is missing. It reads only the `written_at` field, and it never

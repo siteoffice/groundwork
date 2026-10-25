@@ -4,7 +4,7 @@ import { describe, expect, mock, test } from 'claude-code/testing'
 import type { GitLaneRepo } from '../types'
 import { POLICY_RX, policyText } from './host'
 import { shipped } from './default-policy'
-import { EMPTY_REPO, blastOf, deskFrom, deskNeeds, jobOf, openThreadsOf, threadListOf, branchNameOf, checksFrom, isFlaky, tailOf, countsOf, nextStepSo, churnBar, guardReason, laneOf, mergeNumstat, nextStep, parsePr, parseStatus } from '../hooks/git/model'
+import { EMPTY_REPO, blastOf, folderOfKey, deskFrom, deskNeeds, jobOf, openThreadsOf, threadListOf, branchNameOf, checksFrom, isFlaky, tailOf, countsOf, nextStepSo, churnBar, guardReason, laneOf, mergeNumstat, nextStep, parsePr, parseStatus } from '../hooks/git/model'
 
 const STATUS = [
   '# branch.oid 1234',
@@ -381,6 +381,11 @@ describe('Blast Radius', () => {
     expect(blastOf('Write', { file_path: '/home/a/other/x.md' }, '/work/shop', [])?.kind).toBe('outside')
     expect(blastOf('Write', { file_path: TMP + '\\shop\\a.ts' }, TMP.replace(/\\/g, '/') + '/shop', [])).toBeNull()
     expect(blastOf('Edit', { file_path: '/home/a/.claude/plans/p.md' }, '/work/shop', [])).toBeNull()
+    // A folder allowed always for this project: writes into it or below it are not held, a sibling still is.
+    expect(blastOf('Write', { file_path: 'C:\\work\\hub\\specs\\a.md' }, 'C:/work/shop', [], ['c:/work/hub/specs'])).toBeNull()
+    expect(blastOf('Write', { file_path: 'C:\\work\\hub\\specs\\x\\b.md' }, 'C:/work/shop', [], ['c:/work/hub/specs'])).toBeNull()
+    expect(blastOf('Write', { file_path: 'C:\\work\\hub\\specsold\\a.md' }, 'C:/work/shop', [], ['c:/work/hub/specs'])?.kind).toBe('outside')
+    expect(folderOfKey('outside:c:/work/hub/specs/a.md')).toBe('c:/work/hub/specs')
     const fifteen = Array.from({ length: 15 }, (_, i) => '/work/shop/f' + i + '.ts')
     expect(blastOf('Edit', { file_path: '/work/shop/new.ts' }, '/work/shop', fifteen)?.kind).toBe('many')
     expect(blastOf('Edit', { file_path: '/work/shop/f3.ts' }, '/work/shop', fifteen)).toBeNull()
