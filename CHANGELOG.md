@@ -3,6 +3,18 @@
 All notable changes. The version is one clock for the whole repository: `groundwork`,
 `groundwork-mods` and the marketplace move together.
 
+## 0.2.0
+
+- **The `groundwork` plugin now registers the `siteoffice-git` guard hook.** It runs before every
+  Bash and PowerShell call and denies raw mutating git (`commit`, `push`, `merge`, `rebase` and the
+  like) in an agent session; read-only git such as `git status` runs as before. The registration is
+  `plugins\groundwork\hooks\hooks.json`, next to the skill, so a Groundwork install gets the guard.
+- **It runs on `powershell`, else `pwsh`, and stays silent when neither exists.** No error and no
+  output on a machine without PowerShell; the call is allowed. The entry sets `"shell": "bash"`
+  explicitly, because the command line is POSIX.
+- `tests\test_guard_hook.py` covers the deny, the allow, both fallbacks and the single
+  registration.
+
 ## 0.1.6
 
 - **The Doctor names the real cause of the skipped session-start row.** Claude Code skips the

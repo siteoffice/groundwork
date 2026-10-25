@@ -1,0 +1,17 @@
+{
+  "description": "Groundwork hooks, hand written. Publish generates only the skills folder, never this file. Registers the siteoffice-git guard once: it denies raw git commands in an agent session. Runs powershell, else pwsh, and does nothing when neither is installed.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "if command -v powershell >/dev/null 2>&1; then exec powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/skills/siteoffice-git/hooks/git_guard.ps1\"; elif command -v pwsh >/dev/null 2>&1; then exec pwsh -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/skills/siteoffice-git/hooks/git_guard.ps1\"; fi; exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}
