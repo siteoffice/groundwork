@@ -6,3 +6,5 @@ _board/
 .claude-plugin/types/
 .playwright-mcp/
 .groundwork/
+_log/
+04_assets/
