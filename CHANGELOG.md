@@ -3,6 +3,13 @@
 All notable changes. The version is one clock for the whole repository: `groundwork`,
 `groundwork-mods` and the marketplace move together.
 
+## Unreleased
+
+- **The Doctor has an optional BurnMon row.** Green when `~/.burnmon/snapshot.json` is younger
+  than two ticks (10 seconds), amber "installed but not running" when it is older or cannot be
+  read, grey "not installed" when it is missing. It reads only the `written_at` field, and it never
+  counts toward the tally or the daily toast. The README and the setup guide say what needs BurnMon.
+
 ## 0.2.0
 
 - **The `groundwork` plugin now registers the `siteoffice-git` guard hook.** It runs before every

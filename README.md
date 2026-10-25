@@ -16,6 +16,15 @@ You get four things: a folder skeleton for a company, a department or a project;
 where you decide; a board that draws your folders as one HTML page; and an agent policy that
 makes the agent read-only until you say otherwise.
 
+### What needs BurnMon
+
+BurnMon is a separate app that watches your agent sessions and writes a small snapshot file in
+your home folder. Two things need it: the Fleet, which reads that snapshot, and the Doctor's
+BurnMon line, which shows whether BurnMon runs. Everything else in Groundwork works without it.
+BurnMon is linked, never bundled: [get it from its releases
+page](https://github.com/siteoffice/burnmon/releases). Run `/setup-doctor` to see whether it is
+running, installed but stopped, or missing.
+
 ## 2. Goals and benefits
 
 - **The record lives in your folder.** A flow is plain files: `flow.json` and a log. Look at
