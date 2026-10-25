@@ -30,6 +30,9 @@ makes the agent read-only until you say otherwise.
   plain file: `plugins\groundwork-mods\policy\agent-policy.json`.
 - **A board that only reads.** `plugins\groundwork\board\render_board.py` draws a folder tree as
   one static HTML file.
+- **A git guard in agent sessions.** `plugins\groundwork\hooks\hooks.json` denies raw mutating git
+  (`commit`, `push`, `merge` and the like) from the agent and points it at the `siteoffice-git`
+  steps. `git status` and other read-only git still run.
 
 What it costs you: the gates are slower than letting an agent run. That is on purpose. If you
 want a machine that ships without asking you, this is the wrong tool.
@@ -114,6 +117,9 @@ default. See the [issue list](https://github.com/siteoffice/groundwork/issues).
   lands a change with `git push` and a pull request. The policy blocks every push, in work mode
   too, so you run the push or the merge yourself. The skill's own engine ships in
   `plugins\groundwork\engine\sync`.
+- **The git guard needs Windows PowerShell or PowerShell 7, and Git Bash on Windows.** It runs
+  `powershell`, else `pwsh`. With neither it does nothing and raw git is not blocked. Like the agent
+  policy it is a guardrail, not a lock.
 - **Where an organisation manages Claude Code, session-start hooks of plugins you install are
   skipped.** Claude Code says so under `/plugin`, Errors. The Setup Doctor names it as a
   recommended row. The mods then miss the reset after `/clear` and `/resume`; the agent policy
