@@ -9,5 +9,19 @@
     "url": "https://zerononsense.dev"
   },
   "homepage": "https://github.com/siteoffice/groundwork",
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "fleet": {
+      "type": "boolean",
+      "title": "Fleet",
+      "default": false,
+      "description": "Off by default. The Fleet pane (/fleet): what waits on you in every session, this session's agents, threads and background shells, a usage band, the Black Box, a log of what Claude did that is not tamper-proof (/blackbox) and Plain Mode (/plain). Plain Mode stays off until you switch it on; it then makes small model calls on your own quota (measured: about 1,100 tokens per So what, about 400 per question set), at most 50,000 tokens a day, each call logged to ~/.burnmon/overhead. Start a new session after switching."
+    },
+    "gitLane": {
+      "type": "boolean",
+      "title": "Git lane",
+      "default": false,
+      "description": "Off by default. The Git lane (/git): your change as one lane from changes to merged, the next step as one button with the exact commands shown first, a guard on Claude's risky git, a Test Bench and a PR Desk. No model calls of its own (its Ask Claude buttons send a prompt in your session). Start a new session after switching."
+    }
+  }
 }

@@ -8,7 +8,8 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import { chipRow, section, tips } from './chips'
 import type { Els } from './chips'
-import { buildReport, snapshotAgeSeconds, summary } from './checks'
+import { buildReport, summary } from './checks'
+import { readBurnmon } from '../burnmon'
 import type { DoctorFacts } from '../types'
 
 const PANE = 'groundwork-doctor'
@@ -46,19 +47,6 @@ async function bundledEngine($: EngineInterface): Promise<boolean> {
     return false
   }
   return false
-}
-
-// BurnMon's snapshot: is the file there, and how old is it. Only the age is kept; the file's
-// text never leaves this function.
-async function readBurnmon($: EngineInterface, home: string): Promise<DoctorFacts['burnmon']> {
-  if (!home) return { exists: false, ageSeconds: null }
-  const path = home.replace(/[\\/]+$/, '') + '/.burnmon/snapshot.json'
-  if (!(await $.fs.exists(path))) return { exists: false, ageSeconds: null }
-  try {
-    return { exists: true, ageSeconds: snapshotAgeSeconds(String(await $.fs.read(path)), await $.clock.now()) }
-  } catch {
-    return { exists: true, ageSeconds: null }
-  }
 }
 
 // Gathers every fact the checks need. Nothing here changes anything.
