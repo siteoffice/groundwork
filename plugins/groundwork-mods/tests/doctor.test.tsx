@@ -209,4 +209,84 @@ describe('pane', () => {
     expect(await ui.find({ key: 'fix-engine' })).toBeDefined()
     await ui.unmount()
   })
+
+  // BurnMon's snapshot at <home>/.burnmon/snapshot.json. Only its written_at may be read.
+  async function openWithSnapshot($: any, on: any, opts: { home?: string; snapshot: 'missing' | 'throws' | 'fresh' | 'old' | 'fresh-with-sessions' }) {
+    const clock = mock.clock(on)
+    mock.store(on)
+    on('command.register', () => ({ value: {} }) as never)
+    on('session.cwd', () => ({ value: 'C:\\work\\shop' }))
+    on('config.list', () => ({ value: [] }))
+    on('env.get', (_: unknown, e: { name: string }) => {
+      if (e.name === 'USERPROFILE') return { value: opts.home === '' ? undefined : (opts.home ?? 'C:\\Users\\a') } as never
+      return { value: undefined } as never
+    })
+    on('session.version', () => ({ value: { version: '2.1.303' } }) as never)
+    on('ui.open', () => ({ value: { isPlaced: true } }) as never)
+    on('ui.toast', () => ({ value: undefined }) as never)
+    on('ui.copy', () => ({ value: { isCopied: true } }) as never)
+    on('fs.exists', (_: unknown, e: { path: string }) => ({
+      value: opts.snapshot !== 'missing' && e.path.split('\\').join('/').endsWith('/.burnmon/snapshot.json'),
+    }))
+    on('fs.list', () => ({ value: [] }) as never)
+    // Handlers answer synchronously, so the mock clock's start is read once, here. The pane's
+    // check runs ms after it (clock.advance(10) below), far inside the 3 s and 600 s ages.
+    const now: number = (clock as any).now()
+    on('fs.read', (_: unknown, e: { path: string }) => {
+      if (!e.path.split('\\').join('/').endsWith('/.burnmon/snapshot.json')) return { value: '' } as never
+      if (opts.snapshot === 'throws') throw new Error('locked')
+      const age = opts.snapshot === 'old' ? 600 : 3
+      const extra = opts.snapshot === 'fresh-with-sessions' ? ',"sessions":[{"project":"SECRETMARK"}]' : ''
+      return { value: '{"written_at":"' + new Date(now - age * 1000).toISOString() + '"' + extra + '}' } as never
+    })
+    on('process.run', (_: unknown, e: { argv: string[] }) => {
+      const a = e.argv.join(' ')
+      const out = (stdout: string, exitCode = 0) => ({ value: { exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } })
+      if (a === 'git --version') return out('git version 2.47\n')
+      if (a.includes('user.name')) return out('Sam\n')
+      if (a.includes('user.email')) return out('sam@example.com\n')
+      if (a.startsWith('py -3')) return out('Python 3.12\n')
+      if (a.includes('--show-toplevel')) return out('C:/work/shop\n')
+      return out('', 1)
+    })
+    on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
+    on('command.run', () => ({}) as never)
+    await $.session.start({ cwd: 'C:\\work\\shop', surface: 'terminal', isInteractive: true })
+    await $.command.run({ command: 'setup-doctor', presentation: { isFullscreen: false, columns: 160 } } as never)
+    await clock.advance(10)
+    return await $.ui.mount({ plugin: 'groundwork-mods', surface: 'terminal', component: 'Pane', requestId: 'groundwork-doctor', props: { title: 'Setup', isFocused: false, bodyColumns: 100, placement: 'dock', scroll: {}, view: {} } } as never)
+  }
+
+  test('a fresh snapshot shows BurnMon as running, and none of its other content', async ($, on) => {
+    const ui = await openWithSnapshot($, on, { snapshot: 'fresh-with-sessions' })
+    expect(await ui.find({ type: 'Text', text: /BurnMon \(feeds the Fleet\)/ })).toBeDefined()
+    expect(await ui.find({ key: 'fix-burnmon' })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /SECRETMARK/ })).toBeUndefined()
+    await ui.unmount()
+  })
+  test('an old snapshot says installed but not running', async ($, on) => {
+    const ui = await openWithSnapshot($, on, { snapshot: 'old' })
+    expect(await ui.find({ type: 'Text', text: /BurnMon is installed but not running/ })).toBeDefined()
+    expect(await ui.find({ key: 'fix-burnmon' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: '◐' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: '○' })).toBeUndefined()
+    await ui.unmount()
+  })
+  test('an unreadable snapshot file is amber, not a crash', async ($, on) => {
+    const ui = await openWithSnapshot($, on, { snapshot: 'throws' })
+    expect(await ui.find({ type: 'Text', text: /could not be read/ })).toBeDefined()
+    await ui.unmount()
+  })
+  test('a missing file is "not installed" with a copyable fix', async ($, on) => {
+    const ui = await openWithSnapshot($, on, { snapshot: 'missing' })
+    expect(await ui.find({ type: 'Text', text: /not installed/ })).toBeDefined()
+    expect(await ui.find({ key: 'fix-burnmon' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: '○' })).toBeDefined()
+    await ui.unmount()
+  })
+  test('with no home folder known the Doctor says not installed and does not throw', async ($, on) => {
+    const ui = await openWithSnapshot($, on, { home: '', snapshot: 'fresh' })
+    expect(await ui.find({ type: 'Text', text: /not installed/ })).toBeDefined()
+    await ui.unmount()
+  })
 })

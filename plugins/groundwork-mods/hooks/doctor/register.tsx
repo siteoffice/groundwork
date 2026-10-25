@@ -8,7 +8,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import { chipRow, section, tips } from './chips'
 import type { Els } from './chips'
-import { buildReport, summary } from './checks'
+import { buildReport, snapshotAgeSeconds, summary } from './checks'
 import type { DoctorFacts } from '../types'
 
 const PANE = 'groundwork-doctor'
@@ -46,6 +46,19 @@ async function bundledEngine($: EngineInterface): Promise<boolean> {
     return false
   }
   return false
+}
+
+// BurnMon's snapshot: is the file there, and how old is it. Only the age is kept; the file's
+// text never leaves this function.
+async function readBurnmon($: EngineInterface, home: string): Promise<DoctorFacts['burnmon']> {
+  if (!home) return { exists: false, ageSeconds: null }
+  const path = home.replace(/[\\/]+$/, '') + '/.burnmon/snapshot.json'
+  if (!(await $.fs.exists(path))) return { exists: false, ageSeconds: null }
+  try {
+    return { exists: true, ageSeconds: snapshotAgeSeconds(String(await $.fs.read(path)), await $.clock.now()) }
+  } catch {
+    return { exists: true, ageSeconds: null }
+  }
 }
 
 // Gathers every fact the checks need. Nothing here changes anything.
@@ -120,6 +133,7 @@ async function gather($: EngineInterface): Promise<DoctorFacts> {
     notif: typeof settings.preferredNotifChannel === 'string' ? settings.preferredNotifChannel : '',
     needsBell,
     statusLine: !!settings.statusLine,
+    burnmon: await readBurnmon($, home),
   }
 }
 
@@ -192,10 +206,11 @@ export const registerDoctor: Register = on => {
         tip: 'Copy the fix',
         onPress: () => void $.ui.copy({ text: p.fix as string }).then(() => $.ui.toast('Copied: run it ' + (p.fixWhere === 'Inside Claude Code' ? 'inside Claude Code' : 'in ' + p.fixWhere))),
       }
+      const grey = !p.ok && p.tone === 'grey'
       return (
       <Box key={'p-' + p.id} flexDirection="column">
         <Box flexDirection="row" columnGap={1} alignItems="flex-start">
-          <Text color={p.ok ? 'success' : p.level === 'required' ? 'error' : 'warning'}>{p.ok ? '✓' : p.level === 'required' ? '✕' : '◐'}</Text>
+          <Text color={p.ok ? 'success' : p.level === 'required' ? 'error' : 'warning'} dimColor={grey}>{p.ok ? '✓' : p.level === 'required' ? '✕' : grey ? '○' : '◐'}</Text>
           <Text bold={!p.ok}>{p.title}</Text>
         </Box>
         {!p.ok && (
@@ -242,6 +257,9 @@ export const registerDoctor: Register = on => {
         <Text> </Text>
         {section(E, 'RECOMMENDED', cols)}
         {probes.filter(p => p.level === 'recommended').map(row)}
+        <Text> </Text>
+        {section(E, 'OPTIONAL', cols)}
+        {probes.filter(p => p.level === 'optional').map(row)}
         <Text> </Text>
         <Text dimColor>The doctor only reads: it changes nothing. Copy a fix, run it where it says, then press ↻.</Text>
       </Box>

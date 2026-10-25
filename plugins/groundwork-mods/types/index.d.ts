@@ -14,6 +14,8 @@ export type DoctorFacts = {
   notif: string
   needsBell: boolean
   statusLine: boolean
+  /** BurnMon's snapshot: file there, and its age from written_at (null when it cannot be read). */
+  burnmon: { exists: boolean; ageSeconds: number | null }
 }
 
 declare module 'claude-code' {
