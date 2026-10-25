@@ -273,6 +273,7 @@ declare module 'claude-code' {
       'git.deskDetail': GitLaneDeskDetail | null
       'git.held': GitLaneHeld | null
       'git.allowed': Record<string, number>
+      'git.folders': Record<string, string[]>
       'git.turnFiles': string[]
     }
   }

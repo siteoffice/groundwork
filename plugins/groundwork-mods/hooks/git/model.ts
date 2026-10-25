@@ -548,8 +548,13 @@ export function withoutData(command: string): string {
     .replace(/@(['"])\r?\n[\s\S]*?\r?\n\1@/g, '@data@')
 }
 
+// The folder a held outside write goes to, from its key ('outside:<path>').
+export const folderOfKey = (key: string) => key.replace(/^outside:/, '').replace(/\/[^/]*$/, '')
+
 // Is this call one to hold? `files` is what Claude changed this turn so far.
-export function blastOf(tool: string, input: Record<string, unknown>, root: string, files: string[]): Blast | null {
+// `standing` lists folders outside the project the person allowed always for
+// this project: a write into one of them, or below it, is not held.
+export function blastOf(tool: string, input: Record<string, unknown>, root: string, files: string[], standing: string[] = []): Blast | null {
   if (tool === 'Bash' || tool === 'PowerShell') {
     const command = withoutData(String(input.command ?? ''))
     const c = command.replace(/\s+/g, ' ').trim()
@@ -562,7 +567,8 @@ export function blastOf(tool: string, input: Record<string, unknown>, root: stri
   const path = pathOf(input)
   if (!path) return null
   const p = norm(path)
-  if (root && isAbs(path) && !SCRATCH.test(p + '/') && p !== norm(root) && !p.startsWith(norm(root) + '/')) {
+  const isStanding = standing.some(f => p.startsWith(norm(f) + '/'))
+  if (root && isAbs(path) && !SCRATCH.test(p + '/') && !isStanding && p !== norm(root)&& !p.startsWith(norm(root) + '/')) {
     return { kind: 'outside', what: 'changes a file outside this project: ' + path, undo: UNDO.outside, key: 'outside:' + p }
   }
   if (!files.map(norm).includes(p) && files.length >= MANY_FILES) {

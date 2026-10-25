@@ -39,6 +39,7 @@ import {
   tailOf,
   PR_FIELDS,
   blastOf,
+  folderOfKey,
   deskFrom,
   deskNeeds,
   jobOf,
@@ -73,6 +74,9 @@ const deskPick = atom({ plugin: 'groundwork-mods', key: 'git.deskPick' } as cons
 const deskDetail = atom({ plugin: 'groundwork-mods', key: 'git.deskDetail' } as const, null as GitLaneDeskDetail | null)
 const held = atom({ plugin: 'groundwork-mods', key: 'git.held' } as const, null as GitLaneHeld | null)
 const allowed = atom({ plugin: 'groundwork-mods', key: 'git.allowed' } as const, {} as Record<string, number>)
+// Folders outside a project that the person allowed always, per project root.
+// Kept in $.store, so it holds across sessions.
+const standing = atom({ plugin: 'groundwork-mods', key: 'git.folders' } as const, {} as Record<string, string[]>)
 const turnFiles = atom({ plugin: 'groundwork-mods', key: 'git.turnFiles' } as const, [] as string[])
 
 // A held call is refused and waits for ▸ Allow once, in every mode: an
@@ -241,6 +245,8 @@ async function loadSwitches($: EngineInterface) {
   const band = await $.store.get('git.bandOn')
   const main = await $.store.get('git.protectMain')
   const guard = await $.store.get('git.guardOn')
+  const kept = await $.store.get('git.folders')
+  await update($, standing, () => (kept && typeof kept === 'object' ? (kept as Record<string, string[]>) : {}))
   await update($, bandOn, () => band !== false)
   await update($, protectMain, () => main !== false)
   await update($, guardOn, () => guard !== false)
@@ -534,15 +540,40 @@ async function allowOnce($: EngineInterface) {
   $.ui.toast('Allowed once: Claude goes on')
 }
 
+const rootKey = (root: string) => root.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+
+async function allowFolder($: EngineInterface) {
+  const hold = await read($, held)
+  if (!hold || hold.kind !== 'outside') return
+  const root = rootKey((await read($, repo)).root)
+  const folder = folderOfKey(hold.key)
+  const s = await read($, standing)
+  const next = { ...s, [root]: [...new Set([...(s[root] ?? []), folder])] }
+  await update($, standing, () => next)
+  await $.store.set('git.folders', next)
+  await update($, held, () => null)
+  await $.prompt.submit({ text: 'I allowed writes into ' + folder + ' for this project in the Git guard, from now on: go on with what you wanted to do (it ' + hold.what + ').' })
+  $.ui.toast('Allowed always for this folder: Claude goes on')
+}
+
+async function forgetFolders($: EngineInterface) {
+  const root = rootKey((await read($, repo)).root)
+  const next = Object.fromEntries(Object.entries(await read($, standing)).filter(([k]) => k !== root))
+  await update($, standing, () => next)
+  await $.store.set('git.folders', next)
+  $.ui.toast('Folders allowed always are forgotten for this project')
+}
+
 async function saveFirst($: EngineInterface) {
   await $.ui.open({ id: PANE, title: 'Git' })
   await startStep($)
 }
 
-function heldChips($: EngineInterface, where: 'b' | 'p', r: GitLaneRepo): Chip[] {
+function heldChips($: EngineInterface, where: 'b' | 'p', r: GitLaneRepo, hold: GitLaneHeld): Chip[] {
   const k = (x: string) => (where === 'p' ? x : 'b-' + x)
   return [
     { key: k('allow'), glyph: '\u25B8', color: 'warning', tip: 'Allow once: Claude goes on', onPress: () => allowOnce($) },
+    ...(hold.kind === 'outside' ? [{ key: k('always'), glyph: '\u25B6', color: 'warning', tip: 'Allow always for this folder, in this project', onPress: () => allowFolder($) }] : []),
     ...(r.files.length ? [{ key: k('savefirst'), glyph: '\u25C7', tip: 'Save first, then decide', onPress: () => saveFirst($) }] : []),
     { key: k('drop'), glyph: '\u2715', on: false, tip: 'Keep it stopped', onPress: () => update($, held, () => null) },
   ]
@@ -550,7 +581,7 @@ function heldChips($: EngineInterface, where: 'b' | 'p', r: GitLaneRepo): Chip[]
 
 // The Git lane's icon buttons, the same set in the band and the pane, as
 // the Fleet's are: one place to learn them, two places to press them.
-function gitChips($: EngineInterface, where: 'b' | 'p', r: GitLaneRepo, st: { band: boolean; main: boolean; guard: boolean }): Chip[] {
+function gitChips($: EngineInterface, where: 'b' | 'p', r: GitLaneRepo, st: { band: boolean; main: boolean; guard: boolean; kept?: number }): Chip[] {
   const k = (x: string) => (where === 'p' ? x : 'b-' + x)
   return [
     { key: k('refresh'), glyph: '\u21BB', tip: 'Look again now', onPress: () => refresh($, true) },
@@ -559,6 +590,7 @@ function gitChips($: EngineInterface, where: 'b' | 'p', r: GitLaneRepo, st: { ba
       ? [{ key: k('main'), glyph: '\u2302', on: st.main, tip: st.main ? 'Main protected: branch first' : 'Main open', onPress: () => flip($, 'protectMain') }]
       : []),
     { key: k('guard'), glyph: '\u2298', on: st.guard, tip: st.guard ? 'Guard on: risky steps wait for you' : 'Guard off', onPress: () => flip($, 'guardOn') },
+    ...(where === 'p' && st.kept ? [{ key: k('forget'), glyph: '⊝', tip: 'Forget the ' + st.kept + ' folder(s) allowed always for this project', onPress: () => forgetFolders($) }] : []),
     ...(r.mode === 'siteoffice' && /^work\//.test(r.branch)
       ? [{ key: k('park'), glyph: '\u229F', tip: 'Park this branch (abort)', onPress: () => previewSo($, 'abort', [], 'Park this branch') }]
       : []),
@@ -606,7 +638,7 @@ export const registerGitLane: Register = on => {
     if (base.decision === 'deny' || !e.tool_use_id || !(await read($, guardOn))) return base
     const input = (e.input && typeof e.input === 'object' ? e.input : {}) as Record<string, unknown>
     const r = await read($, repo)
-    const b = blastOf(String(e.tool), input, r.root, e.agentId ? [] : await read($, turnFiles))
+    const b = blastOf(String(e.tool), input, r.root, e.agentId ? [] : await read($, turnFiles), (await read($, standing))[rootKey(r.root)] ?? [])
     if (!b) return base
     const now = await $.clock.now()
     if (((await read($, allowed))[b.key] ?? 0) > now) {
@@ -619,7 +651,9 @@ export const registerGitLane: Register = on => {
       decision: 'deny' as const,
       reason:
         'Git lane guard held this call: it ' + b.what + '. Undo: ' + b.undo +
-        ' Tell the person in plain words what you want to change and why. They can press \u25B8 Allow once in the Git band (then you go on), save first, or keep it stopped. Do not try another way around it.',
+        ' Tell the person in plain words what you want to change and why. They can press \u25B8 Allow once in the Git band (then you go on)' +
+        (b.kind === 'outside' ? ', ▶ Allow always for this folder' : '') +
+        ', save first, or keep it stopped. Do not try another way around it.',
     }
   })
 
@@ -663,7 +697,7 @@ export const registerGitLane: Register = on => {
     const bandChips = [
       { key: 'git-open', glyph: '\u25C8', tip: 'Open the Git lane \u00B7 /git', onPress: () => $.ui.open({ id: PANE, title: 'Git' }) },
       ...gitChips($, 'b', r, { band: true, main: await read($, protectMain), guard: await read($, guardOn) }),
-      ...(hold ? heldChips($, 'b', r) : []),
+      ...(hold ? heldChips($, 'b', r, hold) : []),
     ]
     return (
       <Box flexDirection="column">
@@ -738,7 +772,7 @@ export const registerGitLane: Register = on => {
     const b = await read($, bench)
 
     const E = els as unknown as Els
-    const paneChips = gitChips($, 'p', r, { band, main, guard })
+    const paneChips = gitChips($, 'p', r, { band, main, guard, kept: ((await read($, standing))[rootKey(r.root)] ?? []).length })
     const toggles = chipRow(E, paneChips, light)
 
     if (!r.isRepo) {
@@ -866,7 +900,7 @@ export const registerGitLane: Register = on => {
     const shown = r.files.slice(0, 8)
     const pr = r.pr
     const hold = await read($, held)
-    const hChips = hold ? heldChips($, 'p', r) : []
+    const hChips = hold ? heldChips($, 'p', r, hold) : []
 
     // PR Desk: every open PR, grouped by who it waits on.
     const d = await read($, desk)
