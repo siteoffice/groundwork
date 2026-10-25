@@ -19,11 +19,48 @@ makes the agent read-only until you say otherwise.
 ### What needs BurnMon
 
 BurnMon is a separate app that watches your agent sessions and writes a small snapshot file in
-your home folder. Two things need it: the Fleet, which reads that snapshot, and the Doctor's
-BurnMon line, which shows whether BurnMon runs. Everything else in Groundwork works without it.
-BurnMon is linked, never bundled: [get it from its releases
+your home folder. Two things need it: the Fleet's BurnMon line and the Doctor's BurnMon line,
+which both show whether BurnMon runs. Everything else in Groundwork works without it, the rest of
+the Fleet and the whole Git lane included. Both lines read only the `written_at` field of
+`~/.burnmon/snapshot.json`, nothing from inside your sessions. The Fleet's line says "BurnMon is
+running" with the snapshot's age when the file is younger than ten seconds, "BurnMon is not
+running" when it is ten seconds or older or cannot be read, and "BurnMon is not installed" with
+the link when the file is missing. BurnMon is linked, never bundled: [get it from its releases
 page](https://github.com/siteoffice/burnmon/releases). Run `/setup-doctor` to see whether it is
 running, installed but stopped, or missing.
+
+### The Fleet and the Git lane
+
+`groundwork-mods` carries two more parts. Both are off by default, and a switch that is off
+registers nothing: no command, no hook, no output.
+
+- **The Fleet** (`/fleet`) shows what waits on you in every session, this session's agents,
+  threads and background shells, your other sessions and a usage band. Its other commands are
+  `/thread` and `/threads` (a task in its own git worktree), `/burnmon` (the usage band on or off),
+  `/blackbox` (a log of what Claude did, written as NDJSON; it is not tamper-proof: the file is rewritten whole
+  and not protected against edits, and Claude can edit it in work mode), `/plain` and `/tower` (the old
+  name of `/fleet`).
+- **The Git lane** (`/git`) draws your change as one lane from changes to merged. The next step is
+  one button, with the exact commands shown first. It also has a guard on Claude's risky git, a
+  Test Bench and a PR Desk. In a Siteoffice repo the writes go through the `siteoffice-git` engine.
+  The lane makes no model calls of its own; its "Ask Claude" buttons send a prompt in your session,
+  which is a normal turn on your quota.
+
+To switch them on, open `/config`, find the Groundwork Mods rows "Fleet" and "Git lane", or add
+this to `settings.json`, then start a new session. The commands register when a session starts, so
+an open session does not pick the switch up.
+
+```json
+{ "pluginConfigs": { "groundwork-mods": { "options": { "fleet": true, "gitLane": true } } } }
+```
+
+Plain Mode (`/plain`, inside the Fleet) is off until you switch it on. Then it makes small model
+calls on your own quota: about 1,100 tokens for each "So what" and about 400 for each question
+set, capped at 50,000 tokens a day. Each call adds one line to `~/.burnmon/overhead/<day>.ndjson`.
+
+Do not switch on the Fleet or the Git lane in a session that also loads another plugin that
+registers `/fleet`, `/git` or a git guard. Both would register the same commands. Both
+register their commands on every surface (terminal, Desktop, mobile and VS Code).
 
 ## 2. Goals and benefits
 
@@ -47,7 +84,7 @@ What it costs you: the gates are slower than letting an agent run. That is on pu
 want a machine that ships without asking you, this is the wrong tool.
 
 I measured what I claim here by running it. The engine carries 987 passing tests, the board 185,
-the mods 25 and the `siteoffice-git` engine 448, all green on Windows at this release. That last
+the mods 122, the repository's pytest suite 29 and the `siteoffice-git` engine 448, all green on Windows at this release. That last
 suite builds real git repositories and takes about 25 minutes. Claude Code wrote most of the code
 and text of this release. I set the scope and I decide what ships.
 
@@ -126,6 +163,12 @@ default. See the [issue list](https://github.com/siteoffice/groundwork/issues).
   lands a change with `git push` and a pull request. The policy blocks every push, in work mode
   too, so you run the push or the merge yourself. The skill's own engine ships in
   `plugins\groundwork\engine\sync`.
+- **The Git lane runs git when you press its button.** The agent policy blocks every agent push.
+  A push or merge you start from a lane button is your own action, so the policy does not see it.
+- **In a Siteoffice repo the lane can run the repo's own code.** The lane takes the engine path
+  from `settings.git.engine` in `siteoffice.json`, else `<repo>/sync/git_flow.py`, and its preview
+  runs `python <engine>`. A downloaded repo can bring its own engine, so press the lane's button
+  only in a repo you trust.
 - **The git guard needs Windows PowerShell or PowerShell 7, and Git Bash on Windows.** It runs
   `powershell`, else `pwsh`. With neither it does nothing and raw git is not blocked. Like the agent
   policy it is a guardrail, not a lock.
