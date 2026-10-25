@@ -7,14 +7,36 @@ import type { DoctorFacts } from '../types'
 export type Probe = {
   id: string
   title: string
-  level: 'required' | 'recommended'
+  level: 'required' | 'recommended' | 'optional'
   ok: boolean
+  /** Only on a failed optional probe: amber is "installed, not running", grey is "not installed". */
+  tone?: 'amber' | 'grey'
   why: string
   fix?: string
   fixWhere?: string
 }
 
 export const MIN_VERSION = '2.1.287'
+
+// BurnMon writes its snapshot every 5 seconds (snapshot schema version 1). The file counts as
+// fresh while it is younger than two of those ticks.
+export const BURNMON_TICK_SECONDS = 5
+export const BURNMON_MAX_AGE_SECONDS = 2 * BURNMON_TICK_SECONDS
+export const BURNMON_RELEASES_URL = 'https://github.com/siteoffice/burnmon/releases'
+
+// Age of a snapshot from its written_at field alone; null when the text is not JSON or the
+// field is missing or not a date.
+export function snapshotAgeSeconds(raw: string, nowMs: number): number | null {
+  try {
+    const at = (JSON.parse(raw) as { written_at?: unknown }).written_at
+    if (typeof at !== 'string') return null
+    const parsed = Date.parse(at)
+    if (Number.isNaN(parsed)) return null
+    return Math.max(0, (nowMs - parsed) / 1000)
+  } catch {
+    return null
+  }
+}
 
 // 2.1.303 against 2.1.287: true when `v` is at least `min`.
 export function atLeast(v: string, min: string): boolean {
@@ -163,6 +185,32 @@ export function buildReport(f: DoctorFacts): Probe[] {
     fix: '/statusline show the folder, the model and effort, and minutes left on the prompt cache',
     fixWhere: 'Inside Claude Code',
   })
+  const bm = f.burnmon
+  const fresh = bm.exists && bm.ageSeconds !== null && bm.ageSeconds < BURNMON_MAX_AGE_SECONDS
+  const probe: Probe = {
+    id: 'burnmon',
+    title: 'BurnMon (feeds the Fleet)',
+    level: 'optional',
+    ok: fresh,
+    why: 'The Fleet reads its snapshot, written seconds ago.',
+  }
+  if (!fresh) {
+    if (!bm.exists) {
+      probe.tone = 'grey'
+      probe.why = 'BurnMon is not installed. The Fleet and this line need it; the rest of Groundwork works without it.'
+      probe.fix = BURNMON_RELEASES_URL
+      probe.fixWhere = 'Your browser, open this page'
+    } else {
+      probe.tone = 'amber'
+      probe.why =
+        bm.ageSeconds === null
+          ? 'BurnMon is installed but not running: its snapshot file could not be read.'
+          : 'BurnMon is installed but not running. Its snapshot is older than two ticks.'
+      probe.fix = 'Start BurnMon, then press the refresh button here.'
+      probe.fixWhere = 'Your computer'
+    }
+  }
+  out.push(probe)
   return out
 }
 

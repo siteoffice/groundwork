@@ -61,11 +61,21 @@ Restart Claude Code after the install. The mods load at the start of a session.
 ## Check it
 
 Type `/setup-doctor` in Claude Code. It lists what is missing, each with one fix you can copy.
-It only reads; it changes nothing. Press the refresh button after you fix something.
+It only reads; it changes nothing. Press the refresh button after you fix something. An optional
+BurnMon line at the bottom says whether BurnMon runs; it never counts as something to fix.
 
 If the doctor says "Session start events reach the mods" is not met, a plugin that runs before the
 mods is passing the start event on past them. Groundwork still works. The mods then miss the reset
 after `/clear` and `/resume`. Restart once and check again before you worry.
+
+## What needs BurnMon
+
+BurnMon is a separate app that watches your agent sessions and writes a small snapshot file in
+your home folder. The Fleet and the Doctor's BurnMon line need it; everything else in Groundwork
+works without it. BurnMon is not bundled: get it from
+<https://github.com/siteoffice/burnmon/releases>. The Doctor shows grey "not installed" when the
+snapshot file is missing, amber "installed but not running" when it is older than ten seconds or
+cannot be read, and green when it is fresh.
 
 ## Run your first loop
 
