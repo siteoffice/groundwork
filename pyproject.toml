@@ -1,0 +1,3 @@
+# Test configuration only: lets tools find the test suite. Groundwork ships no Python package.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
