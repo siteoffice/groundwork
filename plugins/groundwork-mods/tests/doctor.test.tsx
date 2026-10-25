@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 
-import { atLeast, buildReport, sessionStartReaches, summary } from '../hooks/doctor/checks'
+import { BURNMON_MAX_AGE_SECONDS, BURNMON_RELEASES_URL, atLeast, buildReport, sessionStartReaches, snapshotAgeSeconds, summary } from '../hooks/doctor/checks'
 import type { DoctorFacts } from '../types'
 
 const good: DoctorFacts = {
@@ -17,6 +17,7 @@ const good: DoctorFacts = {
   notif: 'terminal_bell',
   needsBell: true,
   statusLine: true,
+  burnmon: { exists: true, ageSeconds: 2 },
 }
 
 describe('checks', () => {
@@ -68,6 +69,56 @@ describe('checks', () => {
     expect(sessionStartReaches({ ...good, hooks: { sessionStart: false, classicSessionStart: false } })).toBe(true)
     expect(buildReport(good).find(p => p.id === 'sessionstart')?.ok).toBe(true)
     expect(summary(buildReport(good))).toEqual({ required: 0, recommended: 0 })
+  })
+})
+
+describe('burnmon check', () => {
+  const bm = (b: { exists: boolean; ageSeconds: number | null }) =>
+    buildReport({ ...good, burnmon: b }).find(p => p.id === 'burnmon')!
+
+  test('fresh snapshot is green', async () => {
+    const p = bm({ exists: true, ageSeconds: 2 })
+    expect(p.ok).toBe(true)
+    expect(p.level).toBe('optional')
+  })
+  test('missing file is grey: not installed, fix links the releases page', async () => {
+    const p = bm({ exists: false, ageSeconds: null })
+    expect(p.ok).toBe(false)
+    expect(p.tone).toBe('grey')
+    expect(p.why).toContain('not installed')
+    expect(p.fix).toBe(BURNMON_RELEASES_URL)
+  })
+  test('old snapshot is amber: installed but not running', async () => {
+    const p = bm({ exists: true, ageSeconds: 600 })
+    expect(p.ok).toBe(false)
+    expect(p.tone).toBe('amber')
+    expect(p.why).toContain('BurnMon is installed but not running')
+    expect(p.fix).toBeTruthy()
+  })
+  test('a snapshot exactly at the age limit is amber, just under it is green', async () => {
+    expect(BURNMON_MAX_AGE_SECONDS).toBe(10)
+    expect(bm({ exists: true, ageSeconds: 10 }).ok).toBe(false)
+    expect(bm({ exists: true, ageSeconds: 9.999 }).ok).toBe(true)
+  })
+  test('an unreadable file (age unknown) is amber with its own reason', async () => {
+    const p = bm({ exists: true, ageSeconds: null })
+    expect(p.ok).toBe(false)
+    expect(p.tone).toBe('amber')
+    expect(p.why).toContain('could not be read')
+  })
+  test('the optional probe never changes the tally', async () => {
+    const gone = buildReport({ ...good, burnmon: { exists: false, ageSeconds: null } })
+    expect(summary(gone)).toEqual({ required: 0, recommended: 0 })
+  })
+  test('snapshotAgeSeconds reads only written_at and survives bad input', async () => {
+    const now = Date.parse('2026-10-25T12:00:10Z')
+    expect(snapshotAgeSeconds('{"written_at":"2026-10-25T12:00:00Z","sessions":[{"x":1}]}', now)).toBe(10)
+    expect(snapshotAgeSeconds('{"written_at":"2026-10-25T12:00:30Z"}', now)).toBe(0) // future: clamped
+    expect(snapshotAgeSeconds('{"sessions":[]}', now)).toBeNull() // no written_at
+    expect(snapshotAgeSeconds('{"written_at":12}', now)).toBeNull() // not a string
+    expect(snapshotAgeSeconds('{"written_at":"not a date"}', now)).toBeNull()
+    expect(snapshotAgeSeconds('', now)).toBeNull() // empty file
+    expect(snapshotAgeSeconds('{not json', now)).toBeNull()
   })
 })
 
