@@ -27,6 +27,24 @@ All notable changes. The version is one clock for the whole repository: `groundw
 - **The Fleet shows a BurnMon line.** It reads only `written_at` from `~/.burnmon/snapshot.json`
   and says running (younger than 10 seconds), not running (10 seconds or older, or unreadable) or
   not installed. The README says what needs BurnMon.
+- **The Git lane, the Setup Doctor and the `siteoffice-git` launcher take their engine only from
+  `SITEOFFICE_SYNC_DIR` or the bundled engine.** A repo can no longer name its own: `settings.git.engine`
+  and `<repo>\sync\git_flow.py` are gone. `SITEOFFICE_SYNC_DIR` is ignored when it resolves inside the
+  repo or any of its worktrees, compared by real path; relative, drive-relative, UNC and device
+  values, and a bare root such as `/`, are ignored too (the launcher no longer crashes on a bare
+  root). The Doctor says so in one line and names the reason, in the launcher's own words.
+- **The Fleet runs every git call hardened.** `core.fsmonitor` is off and no hooks path is used,
+  `git diff` runs without external diff or textconv and with submodules ignored, and `gh` gets the
+  same settings through environment variables (git 2.31 or newer). It follows a thread folder only
+  under `.claude\worktrees`, only for thread agents, only after a successful tool call. It refuses
+  to show a diff for a folder whose git config defines programs to run, and checks again on every
+  refresh. The check counts a hit in the local, worktree or command scope, and a check that fails
+  or cannot run, as untrusted. In tests, the pattern and the classification run against real git;
+  the Fleet's own code paths run against a mock host.
+- **The Git lane's prompts carry only the pull request number.** The remote's default branch name
+  no longer reaches a prompt.
+- **The Doctor no longer names a private tool, and the payload gate skips a worktree's `.git`
+  pointer file,** so it exits 0 inside a worktree (run it on `pwsh`).
 
 ## 0.2.0
 

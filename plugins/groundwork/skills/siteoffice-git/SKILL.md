@@ -57,7 +57,7 @@ The agent may run any step itself, always preview first, and applies only after 
 
 - Exit 2 (refused): state the refusal, give the next move, stop. Never retry with raw git.
 - Exit 3 (blocked): say what is blocked (a red check, a missing `gh`), give the next move, stop.
-- "Engine not found": tell the user to set `SITEOFFICE_SYNC_DIR` or `settings.git.engine`, then stop.
+- "Engine not found": tell the user to install the groundwork plugin or set `SITEOFFICE_SYNC_DIR` to a folder outside the repo, then stop.
 - The hook denies a git command: use the launcher step that covers it. If no step covers it, say so and stop. Wilco runs that git by hand.
 
 ## Guard check
