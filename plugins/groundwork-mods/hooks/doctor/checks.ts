@@ -2,6 +2,7 @@
 // the tests can check every line. Each check says what it is for in one
 // sentence and, when it fails, gives one fix and where to run it.
 
+import { syncDirNote } from '../engine'
 import type { DoctorFacts } from '../types'
 
 export type Probe = {
@@ -14,6 +15,8 @@ export type Probe = {
   why: string
   fix?: string
   fixWhere?: string
+  /** One plain line under the title, shown whether the row is ok or not. */
+  note?: string
 }
 
 export const MIN_VERSION = '2.1.287'
@@ -91,7 +94,7 @@ export function buildReport(f: DoctorFacts): Probe[] {
     title: 'Python 3',
     level: 'required',
     ok: !!f.python,
-    why: 'siteoffice-git and Foreman, the one loop\'s engine, run on Python.',
+    why: 'siteoffice-git and the engine behind the one loop run on Python.',
     fix: win ? 'winget install --id Python.Python.3.12 -e' : 'brew install python',
     fixWhere: shell(f),
   })
@@ -102,7 +105,8 @@ export function buildReport(f: DoctorFacts): Probe[] {
       level: 'required',
       ok: f.manifest.engineOk,
       why: 'This folder is a Siteoffice unit, so saves and pull requests go through siteoffice-git.',
-      fix: 'Ask Claude: "find the siteoffice-git engine and set settings.git.engine in siteoffice.json"',
+      note: syncDirNote(f.manifest.syncDirReason ?? ''),
+      fix: '/plugin install groundwork@groundwork',
       fixWhere: 'Inside Claude Code',
     })
   }
