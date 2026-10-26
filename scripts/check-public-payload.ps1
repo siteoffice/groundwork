@@ -5,7 +5,7 @@
 .DESCRIPTION
   G2: no private names or private paths in any text file.
   G3: no pack file, ADR, _drafts folder or dump in a public path.
-  Skips .git and this script. Binary files are skipped by extension (the repo carries none;
+  Skips a .git folder or .git pointer file and this script. Binary files are skipped by extension (the repo carries none;
   screenshots are checked by name only).
 
 .EXAMPLE
@@ -56,7 +56,7 @@ $hits = New-Object System.Collections.Generic.List[string]
 $selfRel = 'scripts' + $bs + 'check-public-payload.ps1'
 
 $files = @(Get-ChildItem -LiteralPath $Root -Recurse -File -Force -Name |
-    Where-Object { $_ -notmatch ('(^|' + $sep + ')(\.git|__pycache__|\.pytest_cache|_board|\.playwright-mcp|\.groundwork)' + $sep) -and $_ -ne $selfRel })
+    Where-Object { $_ -notmatch ('(^|' + $sep + ')(\.git|__pycache__|\.pytest_cache|_board|\.playwright-mcp|\.groundwork)' + $sep) -and $_ -notmatch ('(^|' + $sep + ')\.git$') -and $_ -ne $selfRel })
 
 foreach ($rel in $files) {
     $full = Join-Path $Root $rel

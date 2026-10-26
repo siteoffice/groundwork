@@ -145,9 +145,46 @@ export function dirOf(path: string): string {
   return cut <= 0 ? path : path.slice(0, cut)
 }
 
+// The Fleet runs git in folders a downloaded repo controls: no fsmonitor, no
+// hooks, no external diff or textconv program. The platform comes from the
+// caller as a flag, never from a global.
+export function nullDevice(isWindows: boolean): string {
+  return isWindows ? 'NUL' : '/dev/null'
+}
+
+export function hardenGit(argv: string[], isWindows: boolean): string[] {
+  if (argv[0] !== 'git') return argv
+  const rest = argv.slice(1)
+  const at = rest.findIndex((a, i) => a === 'diff' && rest[i - 1] !== '-C')
+  const body = at < 0 ? rest : [...rest.slice(0, at + 1), '--no-ext-diff', '--no-textconv', '--ignore-submodules=all', ...rest.slice(at + 1)]
+  return ['git', '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=' + nullDevice(isWindows), ...body]
+}
+
+// The same two settings for the git that `gh` runs (git 2.31 or newer).
+export function gitConfigEnv(isWindows: boolean): Record<string, string> {
+  return {
+    GIT_CONFIG_COUNT: '2',
+    GIT_CONFIG_KEY_0: 'core.fsmonitor',
+    GIT_CONFIG_VALUE_0: 'false',
+    GIT_CONFIG_KEY_1: 'core.hooksPath',
+    GIT_CONFIG_VALUE_1: nullDevice(isWindows),
+  }
+}
+
 export function sameDir(a: string, b: string): boolean {
   const n = (s: string) => s.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
   return n(a) === n(b)
+}
+
+// A thread works only in a folder under <repo>/.claude/worktrees/<name>.
+export function isUnderWorktrees(path: string, repoRoot: string): boolean {
+  const n = (s: string) => s.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+  const root = n(repoRoot)
+  if (!root) return false
+  const p = n(path)
+  if (p.split('/').some(seg => seg === '.' || seg === '..')) return false
+  const head = root + '/.claude/worktrees/'
+  return p.startsWith(head) && p.length > head.length
 }
 
 export function worked(ms: number): string {

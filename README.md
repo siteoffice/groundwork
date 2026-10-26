@@ -84,7 +84,7 @@ What it costs you: the gates are slower than letting an agent run. That is on pu
 want a machine that ships without asking you, this is the wrong tool.
 
 I measured what I claim here by running it. The engine carries 987 passing tests, the board 185,
-the mods 122, the repository's pytest suite 29 and the `siteoffice-git` engine 448, all green on Windows at this release. That last
+the mods 166, the repository's pytest suite 56 and the `siteoffice-git` engine 448, all green on Windows at this release. That last
 suite builds real git repositories and takes about 25 minutes. Claude Code wrote most of the code
 and text of this release. I set the scope and I decide what ships.
 
@@ -165,10 +165,39 @@ default. See the [issue list](https://github.com/siteoffice/groundwork/issues).
   `plugins\groundwork\engine\sync`.
 - **The Git lane runs git when you press its button.** The agent policy blocks every agent push.
   A push or merge you start from a lane button is your own action, so the policy does not see it.
-- **In a Siteoffice repo the lane can run the repo's own code.** The lane takes the engine path
-  from `settings.git.engine` in `siteoffice.json`, else `<repo>/sync/git_flow.py`, and its preview
-  runs `python <engine>`. A downloaded repo can bring its own engine, so press the lane's button
-  only in a repo you trust.
+- **In a Siteoffice repo the Git lane, the Setup Doctor and the `siteoffice-git` launcher run only
+  an engine you installed.** They take `SITEOFFICE_SYNC_DIR` first, else the engine the
+  `groundwork` plugin ships. A repo can no longer name its own engine: `settings.git.engine` in
+  `siteoffice.json` and `<repo>\sync\git_flow.py` are gone. They ignore `SITEOFFICE_SYNC_DIR` when
+  it resolves inside the repo or any of its worktrees, because a repo's `.claude\settings.json`
+  `env` block can set it. Paths are compared by real path (symlinks and junctions are followed);
+  relative, drive-relative, UNC and device values, and a bare root, are ignored. The Setup Doctor
+  says so in one line and names the reason (inside the repo, not an absolute path, or does not
+  resolve), in the launcher's own words. In the launcher on Windows PowerShell the real-path check does not cover 8.3 short names,
+  hard links, mapped drives, or a link swapped in between the check and the run.
+- **The Fleet runs git only in a thread's own worktree, and hardened.** Every git call runs with
+  `core.fsmonitor` off and no hooks path, `git diff` runs with no external diff, no textconv and
+  submodules ignored (a submodule's own config can define a filter), and `gh` gets the same settings through environment variables (git 2.31 or newer). It follows a
+  thread folder only under `.claude\worktrees`, only for thread agents, and only after a tool call
+  that succeeded. It refuses to show a diff for a folder whose repo-local, worktree or command git
+  config defines programs to run; the check runs again on every refresh. The check reads the
+  repo's local, worktree and command settings through a pattern naming the keys that run programs
+  (filters, `core.sshCommand`, pager, editor, askpass, diff commands and textconv, credential
+  helpers, includes, `extensions.worktreeConfig`), and counts a hit in any of those three scopes
+  as untrusted; global and system settings are not counted. A check that fails or cannot run
+  counts as untrusted.
+- **A repo can hide settings from the Fleet's trust check.** A repo's own `.claude\settings.json`
+  `env` block can set `GIT_CONFIG_GLOBAL` or `GIT_CONFIG_PARAMETERS`. Settings that git reads this
+  way are not seen by the trust check, so only open the Fleet in repos you trust. The hardened git
+  calls still override `core.fsmonitor` and `core.hooksPath` themselves.
+- **The Git lane's own git calls are not hardened.** Its status and diff calls, which run every few
+  seconds, use your git config as it is, so open the lane only in a repo you trust. Its guard
+  builds a pattern from the remote's branch name; that is deferred. The lane's prompts carry only
+  the pull request number, never the remote's default branch name.
+- **The Fleet's tick scan of `.claude\worktrees\agent-<id>` is unchanged.** It still looks in that
+  folder for each known thread without waiting for a tool call.
+- **Windows PowerShell 5.1 still cannot run the payload gate.** Run `scripts\check-public-payload.ps1`
+  on `pwsh`. It skips a worktree's `.git` pointer file, so it exits 0 inside a worktree.
 - **The git guard needs Windows PowerShell or PowerShell 7, and Git Bash on Windows.** It runs
   `powershell`, else `pwsh`. With neither it does nothing and raw git is not blocked. Like the agent
   policy it is a guardrail, not a lock.

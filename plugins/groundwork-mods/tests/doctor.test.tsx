@@ -26,6 +26,11 @@ describe('checks', () => {
     expect(s).toEqual({ required: 0, recommended: 0 })
   })
 
+  test('the Python row names no private tool', async () => {
+    const py = buildReport({ ...good, python: '' }).find(p => p.id === 'python')
+    expect(py?.why).toBe('siteoffice-git and the engine behind the one loop run on Python.')
+  })
+
   test('each gap gives one fix and where to run it', async () => {
     const probes = buildReport({ ...good, version: '2.1.250', plugin: false, git: { ok: true, name: '', email: 'x' }, python: '', notif: '', gh: { installed: false, authed: false } })
     const byId = Object.fromEntries(probes.map(p => [p.id, p]))
@@ -45,6 +50,15 @@ describe('checks', () => {
     expect(plain.some(p => p.id === 'engine')).toBe(false)
     expect(plain.some(p => p.id === 'bell')).toBe(false)
     expect(plain.find(p => p.id === 'manifest')?.ok).toBe(false)
+  })
+
+  test('an ignored SITEOFFICE_SYNC_DIR shows the reason that matches the launcher wording', async () => {
+    const note = (syncDirReason?: '' | 'inside' | 'invalid-form' | 'unresolved') => buildReport({ ...good, manifest: { ...good.manifest, syncDirReason } }).find(p => p.id === 'engine')?.note
+    expect(note('inside')).toBe('SITEOFFICE_SYNC_DIR points inside this repo or one of its worktrees, so it is ignored.')
+    expect(note('invalid-form')).toBe('SITEOFFICE_SYNC_DIR is not an absolute path, so it is ignored.')
+    expect(note('unresolved')).toBe('SITEOFFICE_SYNC_DIR does not resolve to a folder or file, so it is ignored.')
+    expect(note('')).toBeUndefined()
+    expect(note(undefined)).toBeUndefined()
   })
 
   test('versions compare by number', async () => {

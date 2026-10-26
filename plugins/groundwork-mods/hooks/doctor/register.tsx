@@ -9,6 +9,8 @@ import type { EngineInterface, Register } from 'claude-code'
 import { chipRow, section, tips } from './chips'
 import type { Els } from './chips'
 import { buildReport, summary } from './checks'
+import { engineFor, engineIO } from '../engine'
+import type { IgnoredReason } from '../engine'
 import { readBurnmon } from '../burnmon'
 import type { DoctorFacts } from '../types'
 
@@ -30,23 +32,6 @@ async function run($: EngineInterface, argv: string[], cwd?: string) {
   } catch {
     return { exitCode: 1, stdout: '', stderr: '' }
   }
-}
-
-// The siteoffice-git engine the Groundwork plugin ships. Installed, the two plugins sit side by
-// side in one cache folder, one folder per version; in a checkout they are siblings under plugins.
-async function bundledEngine($: EngineInterface): Promise<boolean> {
-  const root = $.plugin.root.replace(/\\/g, '/').replace(/\/+$/, '')
-  const up = (p: string) => p.replace(/\/[^/]*$/, '')
-  if (await $.fs.exists(up(root) + '/groundwork/engine/sync/git_flow.py')) return true
-  const versions = up(up(root)) + '/groundwork'
-  try {
-    for (const e of await $.fs.list(versions)) {
-      if (await $.fs.exists(versions + '/' + e.name + '/engine/sync/git_flow.py')) return true
-    }
-  } catch {
-    return false
-  }
-  return false
 }
 
 // Gathers every fact the checks need. Nothing here changes anything.
@@ -71,28 +56,21 @@ async function gather($: EngineInterface): Promise<DoctorFacts> {
   // siteoffice.json: at the repo root or the folder itself.
   const base = root || cwd
   const mpath = base.replace(/[\\/]+$/, '') + '/siteoffice.json'
-  const manifest = { found: false, valid: false, checks: 0, engineOk: false }
+  const manifest = { found: false, valid: false, checks: 0, engineOk: false, syncDirReason: '' as IgnoredReason }
   if (await $.fs.exists(mpath)) {
     manifest.found = true
     try {
-      const j = JSON.parse(String(await $.fs.read(mpath))) as { settings?: { git?: { checks?: unknown; engine?: unknown } } }
+      const j = JSON.parse(String(await $.fs.read(mpath))) as { settings?: { git?: { checks?: unknown } } }
       manifest.valid = true
       const checks = j.settings?.git?.checks
       manifest.checks = Array.isArray(checks) ? checks.length : 0
-      const fromManifest = typeof j.settings?.git?.engine === 'string' ? (j.settings.git.engine as string) : ''
-      const env = (await $.env.get('SITEOFFICE_SYNC_DIR')) ?? ''
-      for (const c of [env, fromManifest, base + '/sync/git_flow.py']) {
-        if (!c) continue
-        const file = /\.py$/i.test(c) ? c : c.replace(/[\\/]+$/, '') + '/git_flow.py'
-        if (await $.fs.exists(file)) {
-          manifest.engineOk = true
-          break
-        }
-      }
-      if (!manifest.engineOk) manifest.engineOk = await bundledEngine($)
     } catch {
       manifest.valid = false
     }
+    // The lane's own rule: SITEOFFICE_SYNC_DIR outside the repo, else the engine the plugin ships.
+    const c = await engineFor(engineIO($), base)
+    manifest.engineOk = !!c.engine
+    manifest.syncDirReason = c.ignoredReason
   }
   // User settings: the plugin, the bell, the status line.
   let settings: { enabledPlugins?: Record<string, unknown>; preferredNotifChannel?: unknown; statusLine?: unknown } = {}
@@ -201,6 +179,7 @@ export const registerDoctor: Register = on => {
           <Text color={p.ok ? 'success' : p.level === 'required' ? 'error' : 'warning'} dimColor={grey}>{p.ok ? '✓' : p.level === 'required' ? '✕' : grey ? '○' : '◐'}</Text>
           <Text bold={!p.ok}>{p.title}</Text>
         </Box>
+        {p.note && <Text dimColor wrap="wrap">{'  ' + p.note}</Text>}
         {!p.ok && (
           <Box flexDirection="column">
             <Text dimColor wrap="wrap">{'  ' + p.why}</Text>

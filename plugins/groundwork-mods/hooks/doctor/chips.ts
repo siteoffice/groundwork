@@ -1,4 +1,4 @@
-// ZND chips: small icon buttons on a faint tile. While the pointer rests on
+// Chips: small icon buttons on a faint tile. While the pointer rests on
 // an icon its label shows at the right end of the row, laid over it, so
 // nothing moves and no room is kept for it. On a
 // surface without a pointer (the phone) the label stays hidden and the icon
