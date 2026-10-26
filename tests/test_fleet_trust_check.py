@@ -135,7 +135,7 @@ def test_a_clean_repo_is_trusted(repo):
     assert not any(line.startswith("local") or line.startswith("worktree") for line in lines)
 
 
-def test_any_command_scope_match_is_untrusted():
+def test_a_program_valued_command_scope_match_is_untrusted():
     assert not trusted(0, ["command\tcore.sshcommand evil"])
     assert not trusted(0, ["command\tcore.pager evil"])
 
@@ -883,3 +883,81 @@ def test_the_hardened_argv_alone_stops_an_fsmonitor_program(based, tmp_path):
     marker.unlink()
     lane_run(based, "status", "--porcelain=v2")
     assert not marker.exists(), "the lane's hardened argv let core.fsmonitor run"
+
+
+# ---- Live finding 2026-10-26: Claude Code's own command-scope pins close the lane ----
+
+# What Claude Code 2.x adds, as command scope, to every git argv a plugin starts through $.process.run
+# (captured live with `git config --show-scope --list` from a probe plugin; git listed this block twice).
+# It is not in the child's environment: `cmd /c set` shows no GIT_CONFIG_PARAMETERS, and passing
+# GIT_CONFIG_PARAMETERS='' and GIT_CONFIG_COUNT=0 does not remove it.
+HOST_PINS = [
+    "core.fsmonitor=",
+    "core.hookspath=" + (r"\\.\NUL" if os.name == "nt" else "/dev/null"),
+    "core.askpass=",
+    "protocol.ext.allow=never",
+    "submodule.recurse=false",
+    "log.showsignature=false",
+    "format.pretty=medium",
+    "gc.auto=0",
+    "maintenance.auto=false",
+    *(
+        "hook." + h + ".enabled=false"
+        for h in (
+            "applypatch-msg", "pre-applypatch", "post-applypatch", "pre-commit", "pre-merge-commit",
+            "prepare-commit-msg", "commit-msg", "post-commit", "pre-rebase", "post-checkout", "post-merge",
+            "pre-push", "pre-receive", "update", "proc-receive", "post-receive", "post-update",
+            "reference-transaction", "push-to-checkout", "pre-auto-gc", "post-rewrite", "sendemail-validate",
+            "fsmonitor-watchman", "p4-changelist", "p4-prepare-changelist", "p4-post-changelist",
+            "p4-pre-submit", "post-index-change",
+        )
+    ),
+]
+
+REAL_TRUST_UNDER_HOST = REAL_TRUST.replace(
+    "cp.spawnSync(argv[0], argv.slice(1),",
+    "cp.spawnSync(argv[0], argv[0] === 'git' ? [...pins, ...pins, ...argv.slice(1)] : argv.slice(1),",
+).replace("async (m, dir, base) =>", "async (m, dir, base, pins) =>")
+assert REAL_TRUST_UNDER_HOST != REAL_TRUST
+
+
+def test_the_host_pins_are_command_scope_lines_the_pattern_matches(repo):
+    pins = [a for p in HOST_PINS for a in ("-c", p)]
+    seen = subprocess.run([GIT, *pins, "-C", str(repo), "config", "--show-scope", "--get-regexp", runs_programs()], env=fleet_env(), capture_output=True, text=True, timeout=60)
+    keys = [l.split("\t", 1)[1].split()[0] for l in seen.stdout.splitlines() if l.startswith("command\t")]
+    assert "core.askpass" in keys and "protocol.ext.allow" in keys and "submodule.recurse" in keys, seen.stdout
+    assert "hook.pre-commit.enabled" in keys, seen.stdout
+
+
+def test_a_clean_repo_stays_trusted_under_the_host_pins(repo):
+    # Reproduces the live G4 blocker: in a fresh repo the lane closed with reason core.askpass.
+    base = {k: v for k, v in fleet_env().items() if not k.startswith("GIT_CONFIG_KEY") and not k.startswith("GIT_CONFIG_VALUE") and k != "GIT_CONFIG_COUNT"}
+    pins = [a for p in HOST_PINS for a in ("-c", p)]
+    assert tuple(node_json(REAL_TRUST_UNDER_HOST, str(repo), base, pins)) == (True, "")
+
+
+@pytest.mark.parametrize(
+    "extra, why",
+    [
+        (["core.askpass=evil.exe"], "core.askpass"),
+        (["core.askpass"], "core.askpass"),
+        (["hook.evil.command=sh -c evil"], "hook.evil.command"),
+        (["hook.pre-commit.enabled=true"], "hook.pre-commit.enabled"),
+        (["protocol.ext.allow=always"], "protocol.ext.allow"),
+        (["submodule.recurse=true"], "submodule.recurse"),
+        (["core.sshCommand=evil"], "core.sshcommand"),
+        (["hook.pre-commit.enabled=no"], "hook.pre-commit.enabled"),
+    ],
+)
+def test_a_switch_on_or_a_second_value_next_to_the_host_pins_closes_the_folder(repo, extra, why):
+    # The last case switches off too, but a second, different value for a key the host set is never trusted.
+    base = {k: v for k, v in fleet_env().items() if not k.startswith("GIT_CONFIG_KEY") and not k.startswith("GIT_CONFIG_VALUE") and k != "GIT_CONFIG_COUNT"}
+    pins = [a for p in [*HOST_PINS, *extra] for a in ("-c", p)]
+    assert tuple(node_json(REAL_TRUST_UNDER_HOST, str(repo), base, pins)) == (False, why)
+
+
+def test_a_repo_local_switch_off_value_stays_untrusted(repo):
+    # Only command scope is judged by value; local and worktree scope stay strict.
+    git_in(repo, "config", "--local", "core.askpass", "")
+    git_in(repo, "config", "--local", "hook.pre-commit.enabled", "false")
+    assert real_trust(repo) == (False, "core.askpass")

@@ -5,7 +5,7 @@ import { PLAIN_CAP_DEFAULT, bar, dayOf, firstLine, groupLineOf, overheadFile, ov
 import { agentViewAttention, attentionOf, canStop, endShell, gitConfigEnv, hardenGit, isUnderWorktrees, liveCards, nullDevice, numstatSum, parseAgentView, plainText, reconcileShells, safeKey, proofOf, resumeCommand, shellState, sortThreads, splitDiff, startShell, threadState, verdictOf, visibleShells } from '../hooks/fleet/threads'
 import type { FleetAgentView, FleetCard, FleetShell, FleetThread } from '../types'
 
-import { POLICY_RX, policyText } from './host'
+import { POLICY_RX, policyText, underHost } from './host'
 import { burnmonNote } from '../hooks/burnmon'
 import { BURNMON_RELEASES_URL } from '../hooks/doctor/checks'
 
@@ -557,7 +557,10 @@ function session(on: On, files: Record<string, string>, agents: unknown[] = [], 
     // core.fsmonitor nor core.hooksPath, so nothing matches and git exits 1 with empty output.
     const failed = !!hit && hit[1].startsWith('EXIT2')
     if (hit && hit[1].startsWith('THROW')) return { deny: 'spawn failed' } as never
-    return { value: { exitCode: failed ? 2 : hit ? 0 : 1, stdout: hit && !failed ? hit[1] : '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } } as never
+    const raw = { stdout: hit && !failed ? hit[1] : '', exitCode: failed ? 2 : hit ? 0 : 1 }
+    // The trust check answers as the real host's git does: its own command-scope pins after the repo's lines.
+    const r = / config --show-scope --get-regexp /.test(line) ? underHost(raw.stdout, raw.exitCode) : raw
+    return { value: { exitCode: r.exitCode, stdout: r.stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } } as never
   })
   on('ui.toast', ($, e) => (toasts.push(e), { value: undefined }) as never)
   on('ui.notify', () => ({ value: undefined }) as never)

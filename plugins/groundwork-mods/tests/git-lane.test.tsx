@@ -2,7 +2,7 @@ import type { On } from 'claude-code'
 import { describe, expect, mock, test } from 'claude-code/testing'
 
 import type { GitLaneRepo } from '../types'
-import { POLICY_RX, policyText } from './host'
+import { HOST_CHECK, POLICY_RX, policyText, underHost } from './host'
 import { shipped } from './default-policy'
 import { EMPTY_REPO, blastOf, folderOfKey, deskFrom, deskNeeds, jobOf, openThreadsOf, threadListOf, branchNameOf, checksFrom, isFlaky, tailOf, countsOf, nextStepSo, churnBar, guardReason, shownBranch, cleanBranch, drawnBranch, laneOf, mergeNumstat, nextStep, parsePr, parseStatus } from '../hooks/git/model'
 
@@ -182,7 +182,7 @@ describe('pane', () => {
       ran.push(argv.join(' '))
       const a = argv.join(' ')
       const out = (stdout: string, exitCode = 0) => ({ value: { exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } })
-      if (a.includes(' config --show-scope --get-regexp ')) return out('', 1)
+      if (a.includes(' config --show-scope --get-regexp ')) return out(HOST_CHECK)
       if (a.includes('--absolute-git-dir')) return out('/work/siteoffice\n/work/siteoffice/.git\n')
       if (a.includes('rev-parse --is-inside-work-tree')) return out('true\n')
       if (a.includes('status --porcelain=v2')) return out(STATUS)
@@ -222,7 +222,7 @@ describe('pane', () => {
     on('session.cwd', () => ({ value: '/work/notes' }))
     on('process.run', (_$, e) => {
       const a = (e as { argv: string[] }).argv.join(' ')
-      if (a.includes(' config --show-scope --get-regexp ')) return { value: { exitCode: 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+      if (a.includes(' config --show-scope --get-regexp ')) return { value: { exitCode: 0, stdout: HOST_CHECK, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
       return { value: { exitCode: 128, stdout: '', stderr: 'fatal: not a git repository', isStdoutTruncated: false, isStderrTruncated: false } }
     })
     on('command.register', () => ({ value: {} }) as never)
@@ -249,7 +249,7 @@ describe('pane', () => {
     on('process.run', ($, e) => {
       const a = (e as { argv: string[] }).argv.join(' ')
       const out = (stdout: string, exitCode = 0) => ({ value: { exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } })
-      if (a.includes(' config --show-scope --get-regexp ')) return out('', 1)
+      if (a.includes(' config --show-scope --get-regexp ')) return out(HOST_CHECK)
       if (a.includes('rev-parse --is-inside-work-tree')) return out('true\n')
       if (a.includes('--absolute-git-dir')) return out('/work/shop\n/work/shop/.git\n')
       if (a.includes('--show-toplevel')) return out('/work/shop\n')
@@ -312,7 +312,7 @@ describe('guard', () => {
     on('fs.read', ($, e) => ({ value: POLICY_RX.test(norm((e as { path: string }).path)) ? policyText({ send: { ...shipped.send, commands: [] } }) : '' }))
     on('process.run', (_$, e) => {
       const a = (e as { argv: string[] }).argv.join(' ')
-      if (a.includes(' config --show-scope --get-regexp ')) return out('', 1)
+      if (a.includes(' config --show-scope --get-regexp ')) return out(HOST_CHECK)
       if (a.includes('--is-inside-work-tree')) return out('true\n')
       if (a.includes('--absolute-git-dir')) return out('C:/Temp/gw-lane/shop\nC:/Temp/gw-lane/shop/.git\n')
       if (a.includes('--show-toplevel')) return out('C:/Temp/gw-lane/shop\n')
@@ -353,7 +353,7 @@ describe('band', () => {
     on('process.run', ($, e) => {
       const a = (e as { argv: string[] }).argv.join(' ')
       const out = (stdout: string, exitCode = 0) => ({ value: { exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } })
-      if (a.includes(' config --show-scope --get-regexp ')) return out('', 1)
+      if (a.includes(' config --show-scope --get-regexp ')) return out(HOST_CHECK)
       if (a.includes('--absolute-git-dir')) return out('/work/siteoffice\n/work/siteoffice/.git\n')
       if (a.includes('rev-parse --is-inside-work-tree')) return out('true\n')
       if (a.includes('status --porcelain=v2')) return out(STATUS)
@@ -423,8 +423,8 @@ function siteofficeWorld(on: On, status: string, engine: (argv: string[]) => { s
     }
     if (a === 'python --version') return out('Python 3.12')
     if (a.includes(' config --show-scope --get-regexp ')) {
-      const c = config()
-      return out(c, c ? 0 : 1)
+      const h = underHost(config(), 1)
+      return out(h.stdout, h.exitCode)
     }
     if (a.includes('--is-inside-work-tree')) return out('true\n')
     if (a.includes('--absolute-git-dir')) return out('/work/siteoffice\n/work/siteoffice/.git\n')
@@ -554,7 +554,7 @@ describe('Test Bench', () => {
     on('process.run', ($, e) => {
       const a = (e as { argv: string[] }).argv.join(' ')
       const out = (stdout: string, exitCode = 0) => ({ value: { exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } })
-      if (a.includes(' config --show-scope --get-regexp ')) return out('', 1)
+      if (a.includes(' config --show-scope --get-regexp ')) return out(HOST_CHECK)
       if (a.includes('rev-parse --is-inside-work-tree')) return out('true\n')
       if (a.includes('--absolute-git-dir')) return out('/work/shop\n/work/shop/.git\n')
       if (a.includes('--show-toplevel')) return out('/work/shop\n')
@@ -628,7 +628,7 @@ describe('Blast Radius', () => {
     on('process.run', ($, e) => {
       const a = (e as { argv: string[] }).argv.join(' ')
       const out = (stdout: string, exitCode = 0) => ({ value: { exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } })
-      if (a.includes(' config --show-scope --get-regexp ')) return out('', 1)
+      if (a.includes(' config --show-scope --get-regexp ')) return out(HOST_CHECK)
       if (a.includes('rev-parse --is-inside-work-tree')) return out('true\n')
       if (a.includes('--absolute-git-dir')) return out('/work/shop\n/work/shop/.git\n')
       if (a.includes('--show-toplevel')) return out('/work/shop\n')
@@ -689,7 +689,7 @@ describe('PR Desk', () => {
     on('process.run', ($, e) => {
       const a = (e as { argv: string[] }).argv.join(' ')
       const out = (stdout: string, exitCode = 0) => ({ value: { exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } })
-      if (a.includes(' config --show-scope --get-regexp ')) return out('', 1)
+      if (a.includes(' config --show-scope --get-regexp ')) return out(HOST_CHECK)
       if (a.includes('rev-parse --is-inside-work-tree')) return out('true\n')
       if (a.includes('--absolute-git-dir')) return out('/work/shop\n/work/shop/.git\n')
       if (a.includes('--show-toplevel')) return out('/work/shop\n')
@@ -743,7 +743,7 @@ describe('PR Desk', () => {
     on('process.run', ($, e) => {
       const a = (e as { argv: string[] }).argv.join(' ')
       const out = (stdout: string, exitCode = 0) => ({ value: { exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } })
-      if (a.includes(' config --show-scope --get-regexp ')) return out('', 1)
+      if (a.includes(' config --show-scope --get-regexp ')) return out(HOST_CHECK)
       if (a.includes('rev-parse --is-inside-work-tree')) return out('true\n')
       if (a.includes('--absolute-git-dir')) return out('/work/shop\n/work/shop/.git\n')
       if (a.includes('--show-toplevel')) return out('/work/shop\n')
@@ -803,7 +803,8 @@ function laneWorld(on: On, cwd: string, config: () => { stdout: string; exitCode
     if (a.includes(' config --show-scope --get-regexp ')) {
       const c = config()
       if (c === 'THROW') throw new Error('boom')
-      return out(c.stdout, c.exitCode)
+      const h = underHost(c.stdout, c.exitCode)
+      return out(h.stdout, h.exitCode)
     }
     if (a.includes('--is-inside-work-tree')) return /not-a-repo/.test(cwd) ? out('', 128) : out('true\n')
     if (a.includes('--absolute-git-dir')) return out(cwd + '\n' + cwd + '/.git\n')
@@ -1134,7 +1135,7 @@ describe('hardened lane', () => {
     on('process.run', (_$, e) => {
       const a = (e as { argv: string[] }).argv.join(' ')
       seen.push({ argv: a })
-      if (a.includes(' config --show-scope --get-regexp ')) return state.dirty ? out('local\tfilter.evil.clean sh -c evil\n') : out('', 1)
+      if (a.includes(' config --show-scope --get-regexp ')) return state.dirty ? out('local\tfilter.evil.clean sh -c evil\n' + HOST_CHECK) : out(HOST_CHECK)
       if (a.includes('--is-inside-work-tree')) return out('true\n')
       if (a.includes('--absolute-git-dir')) return out(cwd + '\n' + cwd + '/.git\n')
     if (a.includes('--show-toplevel')) return out(cwd + '\n')
