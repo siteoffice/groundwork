@@ -45,8 +45,6 @@ import {
   dirOf,
   endShell,
   fleetDir,
-  gitConfigEnv,
-  hardenGit,
   isUnderWorktrees,
   liveCards,
   numstatSum,
@@ -64,6 +62,7 @@ import {
   visibleShells,
   worked,
 } from './threads'
+import { isTrustedFolder as trustCheck, runGit } from '../gitsafe'
 import {
   GLYPH,
   PLAIN_CAP_DEFAULT,
@@ -459,51 +458,13 @@ async function toggleBurn($: EngineInterface) {
 // Threads and Fleet.
 
 async function git($: EngineInterface, argv: string[], timeoutMs = 8000, cwd?: string) {
-  try {
-    const win = /^[a-zA-Z]:/.test($.plugin.root)
-    return await $.process.run(hardenGit(argv, win), { timeoutMs, ...(cwd ? { cwd } : {}), env: { GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0', GH_PROMPT_DISABLED: '1', ...gitConfigEnv(win) } })
-  } catch (err) {
-    // -1 is no real exit code: a run that threw is told apart from git's own "no match" exit 1.
-    return { exitCode: -1, stdout: '', stderr: String(err) }
-  }
+  return runGit($, argv, timeoutMs, cwd)
 }
 
-// A repo's own .git/config can name programs that git runs against the working
-// tree (clean and smudge filters, textconv, a pager, ssh). A flag list never
-// covers them all, so before the Fleet runs diff, ls-files or status in a
-// folder it asks, with the same hardened git, whether the effective config
-// holds any such setting set by the repo or the command line (local, worktree
-// and command scope; the person's own system and global settings, such as
-// Git LFS filters, do not count). Any match, an unreadable scope and any
-// failure of the check mean the folder is not trusted and git is not run
-// there. A clean verdict is never kept, because an agent can change the
-// config after the check: the check runs again on each refresh. Only an
-// untrusted verdict is kept for the session.
-const RUNS_PROGRAMS = '^(filter\\..*\\.(clean|smudge|process)|core\\.(sshcommand|pager|editor|askpass)|diff\\..*\\.(command|textconv)|credential\\..*|include\\..*|includeif\\..*|extensions\\.worktreeconfig)$'
 const untrustedFolders = new Set<string>()
 
-function lineIsUntrusted(line: string): boolean {
-  const tab = line.indexOf('\t')
-  const scope = (tab < 0 ? line : line.slice(0, tab)).trim()
-  if (!['system', 'global', 'local', 'worktree', 'command'].includes(scope)) return true
-  if (scope === 'system' || scope === 'global') return false
-  const rest = tab < 0 ? '' : line.slice(tab + 1).trim()
-  const [key = '', ...value] = rest.split(/\s+/)
-  if (key.toLowerCase() === 'extensions.worktreeconfig') return /^(true|yes|on|1)$/i.test(value.join(' '))
-  return true
-}
-
-// The pattern names neither core.fsmonitor nor core.hooksPath, so the Fleet's own
-// command-scope pairs never match; any command-scope match that does come back is untrusted.
-// (A repo can change the config between this check and a later diff; the check reruns on each refresh.)
 async function isTrustedFolder($: EngineInterface, dir: string): Promise<boolean> {
-  if (untrustedFolders.has(dir)) return false
-  const r = await git($, ['git', '-C', dir, 'config', '--show-scope', '--get-regexp', RUNS_PROGRAMS])
-  const lines = String(r.stdout).split('\n').filter(l => l.trim())
-  // Only git's own exit 1 (no match) or exit 0 (matches) can be clean; a run that threw (-1) or any other exit is not.
-  const clean = (r.exitCode === 1 || r.exitCode === 0) && !lines.some(lineIsUntrusted)
-  if (!clean) untrustedFolders.add(dir)
-  return clean
+  return trustCheck($, dir, untrustedFolders)
 }
 
 // The thread and reviewer agent types: a thread works in a worktree of its

@@ -39,3 +39,11 @@ def test_frontmatter_parses_with_a_yaml_parser(path):
     data = yaml.safe_load(frontmatter(path))
     assert data["name"] == path.parent.name
     assert data["description"]
+
+
+def test_siteoffice_git_names_no_person_and_its_own_marketplace():
+    d = ROOT / "plugins" / "groundwork" / "skills" / "siteoffice-git"
+    text = "\n".join(p.read_text(encoding="utf-8") for p in [d / "SKILL.md", *sorted((d / "references").glob("*.md"))])
+    assert ("Wil" + "co") not in text
+    assert ("z" + "nd-") not in text.lower()
+    assert "/plugin install groundwork@groundwork" in text

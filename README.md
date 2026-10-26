@@ -84,7 +84,8 @@ What it costs you: the gates are slower than letting an agent run. That is on pu
 want a machine that ships without asking you, this is the wrong tool.
 
 I measured what I claim here by running it. The engine carries 987 passing tests, the board 185,
-the mods 166, the repository's pytest suite 56 and the `siteoffice-git` engine 448, all green on Windows at this release. That last
+the mods 203, the repository's pytest suite 220 and the `siteoffice-git` engine 448, all green on Windows at this release. Not verified: macOS and Linux, and a live Claude Code session (the mods tests mock the host). The trust
+tests that drive real git through the real `gitsafe.ts` need Node 22 or newer and are skipped when it is missing or older than 22.18. That last
 suite builds real git repositories and takes about 25 minutes. Claude Code wrote most of the code
 and text of this release. I set the scope and I decide what ships.
 
@@ -177,27 +178,28 @@ default. See the [issue list](https://github.com/siteoffice/groundwork/issues).
   hard links, mapped drives, or a link swapped in between the check and the run.
 - **The Fleet runs git only in a thread's own worktree, and hardened.** Every git call runs with
   `core.fsmonitor` off and no hooks path, `git diff` runs with no external diff, no textconv and
-  submodules ignored (a submodule's own config can define a filter), and `gh` gets the same settings through environment variables (git 2.31 or newer). It follows a
+  submodules ignored (a submodule's own config can define a filter), and `gh` gets the same settings through environment variables (git 2.31 or newer; unverified: that gh passes them on to the git it starts). It follows a
   thread folder only under `.claude\worktrees`, only for thread agents, and only after a tool call
   that succeeded. It refuses to show a diff for a folder whose repo-local, worktree or command git
-  config defines programs to run; the check runs again on every refresh. The check reads the
-  repo's local, worktree and command settings through a pattern naming the keys that run programs
-  (filters, `core.sshCommand`, pager, editor, askpass, diff commands and textconv, credential
-  helpers, includes, `extensions.worktreeConfig`), and counts a hit in any of those three scopes
-  as untrusted; global and system settings are not counted. A check that fails or cannot run
-  counts as untrusted.
+  config defines programs to run. A clean verdict is checked again on every refresh; an untrusted
+  verdict stays for the session, so after you move a setting to your global git config you restart
+  the session to open the lane again (unverified: that a restart clears the verdict, a check in the live look). The check reads the repo's local, worktree and command settings for a list of keys that
+  name a program to run (filters, `core.sshCommand`, pager and editor, diff commands, credential
+  helpers, hooks, `gpg`, `alias` and `url` sections, includes, and more). It is a best-effort
+  warning from a list of known settings, not a proof that git runs nothing else from a repo's
+  config. Do not open a repo you do not trust in a session. A repo with submodules, or with a
+  setting from that list (for example `git lfs install --local`), shows as closed; move the
+  setting to your global git config. A default branch whose name starts with `-` is passed to
+  `git switch` as an option (existing behaviour, not changed in G4).
 - **A repo can hide settings from the Fleet's trust check.** A repo's own `.claude\settings.json`
   `env` block can set `GIT_CONFIG_GLOBAL` or `GIT_CONFIG_PARAMETERS`. Settings that git reads this
   way are not seen by the trust check, so only open the Fleet in repos you trust. The hardened git
   calls still override `core.fsmonitor` and `core.hooksPath` themselves.
-- **The Git lane's own git calls are not hardened.** Its status and diff calls, which run every few
-  seconds, use your git config as it is, so open the lane only in a repo you trust. Its guard
-  builds a pattern from the remote's branch name; that is deferred. The lane's prompts carry only
-  the pull request number, never the remote's default branch name.
+- **The Git lane runs git hardened, and only in a folder it trusts.** Every git call it makes runs with core.fsmonitor off and no hooks path, git diff runs with no external diff, no textconv and submodules ignored, git status runs with submodules ignored, and gh gets the same settings through environment variables. That also means your own pre-commit and pre-push hooks do not run on the lane's own git calls, in a repo without the siteoffice-git engine. In a Siteoffice repo the lane's saves run through the engine, whose git calls are not hardened here (nothing in `plugins\groundwork\engine\sync\git_flow.py` overrides hooks), so the repo's own hooks run there. Before it runs git, the lane runs the Fleet's trust check on the session folder. In a folder it calls untrusted the lane only shows one line with the reason (the first setting that closed it, in parentheses): it saves, pushes and calls the engine for nothing, and runs no git beyond the read-only settings check itself (`git config`, `git rev-parse`) and no gh. The Git guard keeps full strength there: it still holds a push to the default branch (main, master and the name in `.git\refs\remotes\origin\HEAD`, read as a file and never with git, all count when the lane cannot ask; a checkout without that file protects main and master only) and a write outside the folder. The trust check is a warning from a list of known settings, not a guarantee, and a repo's config can make git run a program in ways it does not name, so open the lane only in repos you trust. A clean verdict is checked again on every refresh; an untrusted verdict stays for the session, so after you move a setting to your global git config you restart the session to open the lane again (unverified: that a restart clears the verdict, a check in the live look). The guard shows the remote's default branch name in quotes, without control characters and cut at 60 characters. The siteoffice-git engine's own steps are not changed by this.
 - **The Fleet's tick scan of `.claude\worktrees\agent-<id>` is unchanged.** It still looks in that
   folder for each known thread without waiting for a tool call.
 - **Windows PowerShell 5.1 still cannot run the payload gate.** Run `scripts\check-public-payload.ps1`
-  on `pwsh`. It skips a worktree's `.git` pointer file, so it exits 0 inside a worktree.
+  on `pwsh`. Inside a git work tree it checks the files git knows (tracked files, and new files that are not ignored), so a local ignored file does not fail it; elsewhere it checks every file in the folder. It reads the working tree copy of each file git lists, not the staged blob, so a hit staged and then removed from the working file is not seen.
 - **The git guard needs Windows PowerShell or PowerShell 7, and Git Bash on Windows.** It runs
   `powershell`, else `pwsh`. With neither it does nothing and raw git is not blocked. Like the agent
   policy it is a guardrail, not a lock.
