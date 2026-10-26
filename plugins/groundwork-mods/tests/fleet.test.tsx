@@ -2,7 +2,7 @@ import type { On } from 'claude-code'
 import { describe, expect, mock, test } from 'claude-code/testing'
 
 import { PLAIN_CAP_DEFAULT, bar, dayOf, firstLine, groupLineOf, overheadFile, overheadLine, plainTip, tokensOf, isGuardHold, isSetupNoise, outcomeOf, colorFor, levelColor, parseExplanations, perHour, phraseFor, questionsKey, resetLabel, spark, treeOrder, withPlainWords } from '../hooks/fleet/plain'
-import { agentViewAttention, attentionOf, canStop, endShell, liveCards, numstatSum, parseAgentView, plainText, reconcileShells, safeKey, proofOf, resumeCommand, shellState, sortThreads, splitDiff, startShell, threadState, verdictOf, visibleShells } from '../hooks/fleet/threads'
+import { agentViewAttention, attentionOf, canStop, endShell, gitConfigEnv, hardenGit, isUnderWorktrees, liveCards, nullDevice, numstatSum, parseAgentView, plainText, reconcileShells, safeKey, proofOf, resumeCommand, shellState, sortThreads, splitDiff, startShell, threadState, verdictOf, visibleShells } from '../hooks/fleet/threads'
 import type { FleetAgentView, FleetCard, FleetShell, FleetThread } from '../types'
 
 import { POLICY_RX, policyText } from './host'
@@ -86,6 +86,24 @@ const thread = (over: Partial<FleetThread>): FleetThread => ({
 })
 
 describe('threads helpers', () => {
+  test('every Fleet git call turns off fsmonitor and hooks, and git diff runs no external program', async () => {
+    expect(hardenGit(['git', '-C', '/r', 'rev-parse', 'HEAD'], false)).toEqual(['git', '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null', '-C', '/r', 'rev-parse', 'HEAD'])
+    expect(hardenGit(['git', '-C', '/r', 'diff', '--numstat', 'abc'], true)).toEqual(['git', '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=NUL', '-C', '/r', 'diff', '--no-ext-diff', '--no-textconv', '--ignore-submodules=all', '--numstat', 'abc'])
+    expect(hardenGit(['git', '-C', 'diff', 'ls-files'], false)).toEqual(['git', '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null', '-C', 'diff', 'ls-files'])
+    expect(hardenGit(['gh', 'pr', 'view'], true)).toEqual(['gh', 'pr', 'view'])
+    expect(gitConfigEnv(true)).toEqual({ GIT_CONFIG_COUNT: '2', GIT_CONFIG_KEY_0: 'core.fsmonitor', GIT_CONFIG_VALUE_0: 'false', GIT_CONFIG_KEY_1: 'core.hooksPath', GIT_CONFIG_VALUE_1: 'NUL' })
+    expect(nullDevice(false)).toBe('/dev/null')
+    expect(nullDevice(true)).toBe('NUL')
+  })
+  test('a thread root counts only inside the repo\'s .claude/worktrees folder', async () => {
+    expect(isUnderWorktrees('/work/siteoffice/.claude/worktrees/agent-a1', '/work/siteoffice')).toBe(true)
+    expect(isUnderWorktrees('C:\\Work\\Shop\\.claude\\worktrees\\agent-a1\\src', 'c:/work/shop/')).toBe(true)
+    expect(isUnderWorktrees('/work/wt', '/work/siteoffice')).toBe(false)
+    expect(isUnderWorktrees('/work/siteoffice/.claude/worktrees', '/work/siteoffice')).toBe(false)
+    expect(isUnderWorktrees('/work/siteoffice/.claude/worktrees/../../evil', '/work/siteoffice')).toBe(false)
+    expect(isUnderWorktrees('/work/siteoffice-evil/.claude/worktrees/x', '/work/siteoffice')).toBe(false)
+    expect(isUnderWorktrees('/work/siteoffice/.claude/worktrees/x', '')).toBe(false)
+  })
   test('checks, counts, diff files, order and verdicts read right', async () => {
     expect(proofOf('npx vitest run src')).toBe('tests')
     expect(proofOf('py -3 -m pytest flows -q')).toBe('tests')
@@ -503,7 +521,11 @@ const PANE_PROPS = (cols: number) => ({ title: 'Fleet', isFocused: false, bodyCo
 
 // The engine around one session: its folder, its id, a home folder and a
 // file system in memory, git answering from a table.
-function session(on: On, files: Record<string, string>, agents: unknown[] = [], gitTable: [RegExp, string][] = [], toasts: unknown[] = [], registered: string[] = [], runs: string[] = [], home: string | undefined = '/home/w') {
+function session(on: On, files: Record<string, string>, agents: unknown[] = [], gitTable: [RegExp, string][] = [], toasts: unknown[] = [], registered: string[] = [], runs: string[] = [], home: string | undefined = '/home/w', inits: { argv: string; env?: Record<string, string> }[] = [], links: Record<string, string> = {}) {
+  on('fs.stat', ($, e) => {
+    const p = (e as { path: string }).path
+    return { value: { kind: 'dir', size: 0, mtimeMs: 0, isLink: false, realPath: links[norm(p)] ?? p } } as never
+  })
   on('session.cwd', () => ({ value: '/work/siteoffice' }))
   on('session.id', () => ({ value: 's-me' }) as never)
   on('agent.list', () => ({ value: agents }) as never)
@@ -528,8 +550,14 @@ function session(on: On, files: Record<string, string>, agents: unknown[] = [], 
   on('process.run', ($, e) => {
     const line = ((e as { argv: string[] }).argv ?? []).join(' ')
     runs.push(line)
+    inits.push({ argv: line, env: (e as { init?: { env?: Record<string, string> } }).init?.env })
     const hit = gitTable.find(([re]) => re.test(line))
-    return { value: { exitCode: hit ? 0 : 1, stdout: hit ? hit[1] : '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } } as never
+    // A table answer that starts with EXIT2 is a failed command (exit 2), THROW is a run that throws; no match is exit 1
+    // with no output. That is also real git's answer for a clean repo's config check: the pattern names neither
+    // core.fsmonitor nor core.hooksPath, so nothing matches and git exits 1 with empty output.
+    const failed = !!hit && hit[1].startsWith('EXIT2')
+    if (hit && hit[1].startsWith('THROW')) return { deny: 'spawn failed' } as never
+    return { value: { exitCode: failed ? 2 : hit ? 0 : 1, stdout: hit && !failed ? hit[1] : '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } } as never
   })
   on('ui.toast', ($, e) => (toasts.push(e), { value: undefined }) as never)
   on('ui.notify', () => ({ value: undefined }) as never)
@@ -581,20 +609,22 @@ describe('Threads', () => {
     const agents = [{ id: 'a1', name: 'fix settled', description: 'Keep settled responses visible', type: 'groundwork-mods:thread', status: 'running', spawnedBy: 'groundwork-mods' }]
     const files: Record<string, string> = {}
     const asks: string[] = []
+    const runs: string[] = []
+    const inits: { argv: string; env?: Record<string, string> }[] = []
     on('prompt.submit', ($, e) => (asks.push(String((e as { text: string }).text)), { text: (e as { text: string }).text }) as never)
     session(on, files, agents, [
       [/-C \/work\/siteoffice rev-parse --show-toplevel$/, '/work/siteoffice\n'],
-      [/-C \/work\/wt\/src rev-parse --show-toplevel --abbrev-ref HEAD/, '/work/wt\nthread-a1\n'],
+      [/-C \/work\/siteoffice\/\.claude\/worktrees\/agent-a1\/src rev-parse --show-toplevel --abbrev-ref HEAD/, '/work/siteoffice/.claude/worktrees/agent-a1\nthread-a1\n'],
       [/-C \/work\/siteoffice rev-parse HEAD/, 'abc\n'],
       [/merge-base HEAD abc/, 'abc\n'],
-      [/diff --numstat abc/, '2\t1\tsrc/thread.ts\n'],
+      [/diff --no-ext-diff --no-textconv --ignore-submodules=all --numstat abc/, '2\t1\tsrc/thread.ts\n'],
       [/ls-files --others/, ''],
-      [/diff --no-color -U3 abc/, DIFF],
-    ])
+      [/diff --no-ext-diff --no-textconv --ignore-submodules=all --no-color -U3 abc/, DIFF],
+    ], [], [], runs, undefined, inits)
     on('tool.call', () => ({ result: { stdout: '', stderr: '', interrupted: false } }) as never)
     await $.session.start({ cwd: '/work/siteoffice', surface: 'terminal', isInteractive: true })
     await clock.advance(4100)
-    await $.tool.call({ tool: 'Edit', file_path: '/work/wt/src/thread.ts', old_string: 'a', new_string: 'b', agentId: 'a1' } as never)
+    await $.tool.call({ tool: 'Edit', file_path: '/work/siteoffice/.claude/worktrees/agent-a1/src/thread.ts', old_string: 'a', new_string: 'b', agentId: 'a1' } as never)
     await $.tool.call({ tool: 'Bash', command: 'npx vitest run', agentId: 'a1' } as never)
     await clock.advance(10)
     agents[0] = { ...agents[0], status: 'completed' } as (typeof agents)[number]
@@ -611,6 +641,19 @@ describe('Threads', () => {
     await ui.press({ key: 'thread-review' })
     expect(files['/home/w/.claude/groundwork-fleet/reviews/a1.diff']).toContain('+const c = 4')
     expect(asks.some(a => a.includes('groundwork-mods:reviewer') && a.includes('"review a1"'))).toBe(true)
+    // The Fleet's calls all name a folder with -C; the Doctor's own `git --version` is not the Fleet's.
+    const gitRuns = runs.filter(r => r.startsWith('git ') && r.includes(' -C '))
+    expect(gitRuns.length).toBeGreaterThan(0)
+    for (const r of gitRuns) expect(r).toMatch(/^git -c core\.fsmonitor=false -c core\.hooksPath=(NUL|\/dev\/null) /)
+    for (const r of gitRuns.filter(r => / diff /.test(r))) expect(r).toContain(' diff --no-ext-diff --no-textconv --ignore-submodules=all ')
+    for (const kind of ['rev-parse', 'merge-base', 'diff --no-ext-diff --no-textconv --ignore-submodules=all --numstat', 'ls-files', 'diff --no-ext-diff --no-textconv --ignore-submodules=all --no-color']) {
+      expect(gitRuns.some(r => r.includes(' ' + kind))).toBe(true)
+    }
+    const gh = inits.find(i => i.argv.startsWith('gh pr view'))
+    expect(gh?.env?.GIT_CONFIG_COUNT).toBe('2')
+    expect(gh?.env?.GIT_CONFIG_KEY_0).toBe('core.fsmonitor')
+    expect(gh?.env?.GIT_CONFIG_KEY_1).toBe('core.hooksPath')
+    for (const i of inits.filter(i => i.argv.startsWith('git ') && i.argv.includes(' -C '))) expect(i.env?.GIT_CONFIG_KEY_0).toBe('core.fsmonitor')
     await ui.unmount()
     const band = await $.ui.mount({ ...BAND, surface: 'terminal' } as never)
     expect(await band.find({ type: 'Text', text: /1 thread ready for you/ })).toBeDefined()
@@ -718,6 +761,48 @@ describe('Fleet notices', () => {
 
 })
 
+describe('Thread root detection', () => {
+  const THREAD = { id: 'a1', name: 'fix settled', description: 'Keep settled responses visible', type: 'groundwork-mods:thread', status: 'running', spawnedBy: 'groundwork-mods' }
+  const TABLE = (wt: string): [RegExp, string][] => [
+    [/-C \/work\/siteoffice rev-parse --show-toplevel$/, '/work/siteoffice\n'],
+    [new RegExp('-C ' + wt.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&') + '/src rev-parse --show-toplevel --abbrev-ref HEAD'), wt + '\nthread-a1\n'],
+    [/-C \/work\/siteoffice rev-parse HEAD/, 'abc\n'],
+    [/merge-base HEAD abc/, 'abc\n'],
+  ]
+  async function run($: { session: { start: (x: never) => Promise<unknown> }; tool: { call: (x: never) => Promise<unknown> } }, on: On, agents: unknown[], table: [RegExp, string][], tool: Record<string, unknown>, inner: () => unknown, links: Record<string, string> = {}) {
+    const clock = mock.clock(on, { now: NOW })
+    mock.store(on)
+    const runs: string[] = []
+    session(on, {}, agents, table, [], [], runs, undefined, [], links)
+    on('tool.call', inner as never)
+    await $.session.start({ cwd: '/work/siteoffice', surface: 'terminal', isInteractive: true } as never)
+    await clock.advance(4100)
+    await $.tool.call(tool as never)
+    await clock.advance(10)
+    return runs
+  }
+  const OK = () => ({ result: { stdout: '', stderr: '', interrupted: false } })
+
+  test('a folder outside .claude/worktrees is never run as a thread root', ON, async ($, on) => {
+    const runs = await run($, on, [THREAD], TABLE('/work/wt'), { tool: 'Edit', file_path: '/work/wt/src/thread.ts', old_string: 'a', new_string: 'b', agentId: 'a1' }, OK)
+    expect(runs.some(r => r.includes('-C /work/wt'))).toBe(false)
+  })
+  test('an agent that is not a thread gets no root detection', ON, async ($, on) => {
+    const agents = [{ id: 'x1', name: 'helper', description: 'Look around', type: 'general-purpose', status: 'running' }]
+    const runs = await run($, on, agents, TABLE('/work/siteoffice/.claude/worktrees/agent-x1'), { tool: 'Edit', file_path: '/work/siteoffice/.claude/worktrees/agent-x1/src/a.ts', old_string: 'a', new_string: 'b', agentId: 'x1' }, OK)
+    expect(runs.some(r => r.includes('worktrees/agent-x1'))).toBe(false)
+  })
+  test('a failed tool call does not detect a root', ON, async ($, on) => {
+    const runs = await run($, on, [THREAD], TABLE('/work/siteoffice/.claude/worktrees/agent-a1'), { tool: 'Edit', file_path: '/work/siteoffice/.claude/worktrees/agent-a1/src/thread.ts', old_string: 'a', new_string: 'b', agentId: 'a1' }, () => ({ isError: true, result: {} }))
+    expect(runs.some(r => r.includes('worktrees/agent-a1/src'))).toBe(false)
+  })
+  test('a folder under .claude/worktrees that really lands outside is refused', ON, async ($, on) => {
+    const wt = '/work/siteoffice/.claude/worktrees/agent-a1'
+    const runs = await run($, on, [THREAD], TABLE(wt), { tool: 'Edit', file_path: wt + '/src/thread.ts', old_string: 'a', new_string: 'b', agentId: 'a1' }, OK, { [wt + '/src']: '/work/evil/src' })
+    expect(runs.some(r => r.includes('worktrees/agent-a1/src'))).toBe(false)
+  })
+})
+
 describe('Threads worktree folder', () => {
   test('a thread that only reads still shows its worktree, found by its folder', ON, async ($, on) => {
     const clock = mock.clock(on, { now: NOW })
@@ -729,7 +814,7 @@ describe('Threads worktree folder', () => {
       [/-C \/work\/siteoffice\/\.claude\/worktrees\/agent-b2 rev-parse --show-toplevel --abbrev-ref HEAD/, '/work/siteoffice/.claude/worktrees/agent-b2\nworktree-agent-b2\n'],
       [/-C \/work\/siteoffice rev-parse HEAD/, 'abc\n'],
       [/merge-base HEAD abc/, 'abc\n'],
-      [/diff --numstat abc/, ''],
+      [/diff --no-ext-diff --no-textconv --ignore-submodules=all --numstat abc/, ''],
       [/ls-files --others/, ''],
     ])
     await $.session.start({ cwd: '/work/siteoffice', surface: 'terminal', isInteractive: true })
@@ -739,6 +824,141 @@ describe('Threads worktree folder', () => {
     await ui.press({ key: 'thread-b2' })
     expect(await ui.find({ type: 'Text', text: /worktree-agent-b2/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /Not seen in a worktree/ })).toBeUndefined()
+    await ui.unmount()
+  })
+})
+
+describe('Fleet git settings that run programs', () => {
+  const PLAIN_LINE = /git settings that run programs/
+  async function openThread($: any, on: On, id: string, config: [RegExp, string][]) {
+    const clock = mock.clock(on, { now: NOW })
+    mock.store(on)
+    const wt = '/work/siteoffice/.claude/worktrees/agent-' + id
+    const agents = [{ id, name: 'look', description: 'Check the line', type: 'groundwork-mods:thread', status: 'completed' }]
+    const runs: string[] = []
+    const table: [RegExp, string][] = [
+      [/-C \/work\/siteoffice rev-parse --show-toplevel$/, '/work/siteoffice\n'],
+      [new RegExp('-C ' + wt.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&') + ' rev-parse --show-toplevel --abbrev-ref HEAD'), wt + '\nthread-' + id + '\n'],
+      [/-C \/work\/siteoffice rev-parse HEAD/, 'abc\n'],
+      [/merge-base HEAD abc/, 'abc\n'],
+      [/diff --no-ext-diff --no-textconv --ignore-submodules=all --numstat abc/, '2\t1\tsrc/thread.ts\n'],
+      [/ls-files --others/, ''],
+      [/diff --no-ext-diff --no-textconv --ignore-submodules=all --no-color -U3 abc/, DIFF],
+      ...config,
+    ]
+    session(on, { [wt]: '' }, agents, table, [], [], runs)
+    await $.session.start({ cwd: '/work/siteoffice', surface: 'terminal', isInteractive: true })
+    await clock.advance(4100)
+    await clock.advance(4100)
+    const ui = await $.ui.mount({ plugin: 'groundwork-mods', surface: 'terminal', component: 'Pane', requestId: 'groundwork-fleet', props: PANE_PROPS(140) } as never)
+    await ui.press({ key: 'thread-' + id })
+    await clock.advance(10)
+    return { runs, ui, wt, table, clock }
+  }
+  const treeRuns = (runs: string[], wt: string) => runs.filter(r => r.includes('-C ' + wt + ' '))
+  const CHECK = ' config --show-scope --get-regexp '
+  const CHECK_RX = /config --show-scope --get-regexp/
+  const gitRuns = (runs: string[], wt: string) => treeRuns(runs, wt).filter(r => r.includes(' diff ') || r.includes(' ls-files '))
+
+  test('a clean repo shows its diff as before, after a hardened config check', ON, async ($, on) => {
+    const { runs, ui, wt } = await openThread($, on, 'g1', [])
+    const mine = treeRuns(runs, wt)
+    const checks = mine.filter(r => r.includes(CHECK))
+    expect(checks.length).toBeGreaterThan(0)
+    expect(checks[0]).toMatch(/^git -c core\.fsmonitor=false -c core\.hooksPath=(NUL|\/dev\/null) -C /)
+    expect(mine.some(r => r.includes(' ls-files '))).toBe(true)
+    expect(mine.some(r => r.includes(' diff '))).toBe(true)
+    expect(await ui.find({ type: 'Text', text: PLAIN_LINE })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /src\/thread\.ts/ })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('the config check sends a pattern that names every program-valued key family', ON, async ($, on) => {
+    const { runs, ui, wt } = await openThread($, on, 'rx1', [])
+    const check = treeRuns(runs, wt).find(r => r.includes(CHECK)) ?? ''
+    for (const key of ['clean|smudge|process', 'sshcommand', 'pager', 'editor', 'askpass', 'command|textconv', 'credential', 'include', 'includeif', 'extensions\\.worktreeconfig']) {
+      expect(check).toContain(key)
+    }
+    await ui.unmount()
+  })
+
+  const FAMILIES: [string, string][] = [
+    ['filter clean', 'local\tfilter.lfs.clean sh -c evil'],
+    ['core.sshCommand', 'local\tcore.sshcommand ssh -o ProxyCommand=evil'],
+    ['diff textconv', 'local\tdiff.doc.textconv evil'],
+    ['include.path', 'local\tinclude.path ../evil.cfg'],
+    ['worktree scope', 'worktree\tcore.pager evil'],
+    ['command scope, core.sshcommand', 'command\tcore.sshcommand evil'],
+    ['command scope, core.pager', 'command\tcore.pager evil'],
+    ['unparseable scope', 'weird\tcore.pager evil'],
+    ['extensions.worktreeconfig true', 'local\textensions.worktreeconfig true'],
+  ]
+  FAMILIES.forEach(([name, out], i) => {
+    test('a folder with ' + name + ' shows no diff, says why, and git diff and ls-files never run there', ON, async ($, on) => {
+      const { runs, ui, wt } = await openThread($, on, 'u' + i, [[CHECK_RX, out + '\n']])
+      const mine = treeRuns(runs, wt)
+      expect(mine.some(r => r.includes(CHECK))).toBe(true)
+      expect(mine.some(r => r.includes(' diff ') || r.includes(' ls-files '))).toBe(false)
+      expect(await ui.find({ type: 'Text', text: PLAIN_LINE })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /src\/thread\.ts/ })).toBeUndefined()
+      await ui.unmount()
+    })
+  })
+
+  test('a config check that throws is untrusted', ON, async ($, on) => {
+    const { runs, ui, wt } = await openThread($, on, 'f2', [[CHECK_RX, 'THROW']])
+    expect(treeRuns(runs, wt).some(r => r.includes(' diff ') || r.includes(' ls-files '))).toBe(false)
+    expect(await ui.find({ type: 'Text', text: PLAIN_LINE })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('a failing config check is untrusted', ON, async ($, on) => {
+    const { runs, ui, wt } = await openThread($, on, 'f1', [[CHECK_RX, 'EXIT2']])
+    expect(treeRuns(runs, wt).some(r => r.includes(' diff ') || r.includes(' ls-files '))).toBe(false)
+    expect(await ui.find({ type: 'Text', text: PLAIN_LINE })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('a global-scope filter.lfs.clean (Git LFS) and a system-scope pager stay trusted', ON, async ($, on) => {
+    const { runs, ui, wt } = await openThread($, on, 'l1', [[CHECK_RX, 'global\tfilter.lfs.clean\tgit-lfs clean -- %f\nsystem\tcore.pager less\n']])
+    expect(gitRuns(runs, wt).length).toBeGreaterThan(0)
+    expect(await ui.find({ type: 'Text', text: PLAIN_LINE })).toBeUndefined()
+    await ui.unmount()
+  })
+
+  test('extensions.worktreeconfig set to false in local scope stays trusted', ON, async ($, on) => {
+    const { runs, ui, wt } = await openThread($, on, 'l2', [[CHECK_RX, 'local\textensions.worktreeconfig false\n']])
+    expect(gitRuns(runs, wt).length).toBeGreaterThan(0)
+    await ui.unmount()
+  })
+
+  test('a trusted verdict is not cached: the check runs again on each refresh, once within one', ON, async ($, on) => {
+    const { runs, ui, wt, clock } = await openThread($, on, 'c1', [])
+    const count = () => treeRuns(runs, wt).filter(r => r.includes(CHECK)).length
+    const before = count()
+    expect(before).toBeGreaterThan(0)
+    const diffsBefore = treeRuns(runs, wt).filter(r => r.includes(' diff --no-ext-diff --no-textconv --ignore-submodules=all --no-color')).length
+    await ui.press({ key: 'back' })
+    await ui.press({ key: 'thread-c1' })
+    await clock.advance(10)
+    // One pick is two refresh calls (thread, then pull request): two checks, not one per git command.
+    expect(count() - before).toBe(2)
+    expect(treeRuns(runs, wt).filter(r => r.includes(' diff --no-ext-diff --no-textconv --ignore-submodules=all --no-color')).length).toBeGreaterThan(diffsBefore)
+    await ui.unmount()
+  })
+
+  test('a folder clean on the first refresh and local-scope dirty on the second turns untrusted: no diff, no ls-files, no gh', ON, async ($, on) => {
+    const { runs, ui, wt, table, clock } = await openThread($, on, 'd1', [])
+    expect(gitRuns(runs, wt).length).toBeGreaterThan(0)
+    table.unshift([CHECK_RX, 'local\tdiff.evil.textconv evil\n'])
+    const mark = runs.length
+    await ui.press({ key: 'back' })
+    await ui.press({ key: 'thread-d1' })
+    await clock.advance(10)
+    const after = runs.slice(mark)
+    expect(after.some(r => r.includes(CHECK))).toBe(true)
+    expect(after.some(r => r.includes(' diff ') || r.includes(' ls-files ') || r.startsWith('gh ') || r.includes(' pr view'))).toBe(false)
+    expect(await ui.find({ type: 'Text', text: PLAIN_LINE })).toBeDefined()
     await ui.unmount()
   })
 })

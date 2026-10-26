@@ -45,13 +45,15 @@ import {
   dirOf,
   endShell,
   fleetDir,
+  gitConfigEnv,
+  hardenGit,
+  isUnderWorktrees,
   liveCards,
   numstatSum,
   prOf,
   proofOf,
   reconcileShells,
   resumeCommand,
-  sameDir,
   shellState,
   sortThreads,
   splitDiff,
@@ -458,10 +460,50 @@ async function toggleBurn($: EngineInterface) {
 
 async function git($: EngineInterface, argv: string[], timeoutMs = 8000, cwd?: string) {
   try {
-    return await $.process.run(argv, { timeoutMs, ...(cwd ? { cwd } : {}), env: { GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0', GH_PROMPT_DISABLED: '1' } })
+    const win = /^[a-zA-Z]:/.test($.plugin.root)
+    return await $.process.run(hardenGit(argv, win), { timeoutMs, ...(cwd ? { cwd } : {}), env: { GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0', GH_PROMPT_DISABLED: '1', ...gitConfigEnv(win) } })
   } catch (err) {
-    return { exitCode: 1, stdout: '', stderr: String(err) }
+    // -1 is no real exit code: a run that threw is told apart from git's own "no match" exit 1.
+    return { exitCode: -1, stdout: '', stderr: String(err) }
   }
+}
+
+// A repo's own .git/config can name programs that git runs against the working
+// tree (clean and smudge filters, textconv, a pager, ssh). A flag list never
+// covers them all, so before the Fleet runs diff, ls-files or status in a
+// folder it asks, with the same hardened git, whether the effective config
+// holds any such setting set by the repo or the command line (local, worktree
+// and command scope; the person's own system and global settings, such as
+// Git LFS filters, do not count). Any match, an unreadable scope and any
+// failure of the check mean the folder is not trusted and git is not run
+// there. A clean verdict is never kept, because an agent can change the
+// config after the check: the check runs again on each refresh. Only an
+// untrusted verdict is kept for the session.
+const RUNS_PROGRAMS = '^(filter\\..*\\.(clean|smudge|process)|core\\.(sshcommand|pager|editor|askpass)|diff\\..*\\.(command|textconv)|credential\\..*|include\\..*|includeif\\..*|extensions\\.worktreeconfig)$'
+const untrustedFolders = new Set<string>()
+
+function lineIsUntrusted(line: string): boolean {
+  const tab = line.indexOf('\t')
+  const scope = (tab < 0 ? line : line.slice(0, tab)).trim()
+  if (!['system', 'global', 'local', 'worktree', 'command'].includes(scope)) return true
+  if (scope === 'system' || scope === 'global') return false
+  const rest = tab < 0 ? '' : line.slice(tab + 1).trim()
+  const [key = '', ...value] = rest.split(/\s+/)
+  if (key.toLowerCase() === 'extensions.worktreeconfig') return /^(true|yes|on|1)$/i.test(value.join(' '))
+  return true
+}
+
+// The pattern names neither core.fsmonitor nor core.hooksPath, so the Fleet's own
+// command-scope pairs never match; any command-scope match that does come back is untrusted.
+// (A repo can change the config between this check and a later diff; the check reruns on each refresh.)
+async function isTrustedFolder($: EngineInterface, dir: string): Promise<boolean> {
+  if (untrustedFolders.has(dir)) return false
+  const r = await git($, ['git', '-C', dir, 'config', '--show-scope', '--get-regexp', RUNS_PROGRAMS])
+  const lines = String(r.stdout).split('\n').filter(l => l.trim())
+  // Only git's own exit 1 (no match) or exit 0 (matches) can be clean; a run that threw (-1) or any other exit is not.
+  const clean = (r.exitCode === 1 || r.exitCode === 0) && !lines.some(lineIsUntrusted)
+  if (!clean) untrustedFolders.add(dir)
+  return clean
 }
 
 // The thread and reviewer agent types: a thread works in a worktree of its
@@ -550,10 +592,27 @@ async function syncThreads($: EngineInterface, list: FleetAgent[]) {
   }
 }
 
-// Where an agent works, from the first file it touches: a folder outside
-// the session's own repo is its worktree; its fork point is the diff's base.
+// A thread agent: one this mod spawned (the thread agent type).
+async function isThreadAgent($: EngineInterface, agentId: string): Promise<boolean> {
+  if ((await read($, threads))[agentId]) return true
+  const a = (await read($, agents)).find(x => x.id === agentId)
+  return !!a && (a.type === THREAD_TYPE || a.spawnedBy === 'groundwork-mods')
+}
+
+// Under <repo>/.claude/worktrees by spelling and where both really land.
+async function isInWorktrees($: EngineInterface, path: string, main: string): Promise<boolean> {
+  if (!isUnderWorktrees(path, main)) return false
+  const real = async (p: string) => (await $.fs.stat(p, { resolve: true }).catch(() => undefined))?.realPath
+  const [rp, rm] = [await real(path), await real(main)]
+  return !!rp && !!rm && isUnderWorktrees(rp, rm)
+}
+
+// Where a thread agent works, from a file it touched with a call that
+// succeeded: only a folder under the repo's .claude/worktrees counts; its
+// fork point is the diff's base.
 async function detectRoot($: EngineInterface, agentId: string, file: string) {
   if ((await read($, reviewers))[agentId]) return
+  if (!(await isThreadAgent($, agentId))) return
   const t = (await read($, threads))[agentId]
   if (t?.root) return
   const dir = dirOf(file)
@@ -565,10 +624,11 @@ async function detectRoot($: EngineInterface, agentId: string, file: string) {
     main = top.exitCode === 0 ? top.stdout.trim() : ''
     if (main) await update($, repoRoot, () => main)
   }
+  if (!(await isInWorktrees($, dir, main))) return
   const at = await git($, ['git', '-C', dir, 'rev-parse', '--show-toplevel', '--abbrev-ref', 'HEAD'])
   if (at.exitCode !== 0) return
   const [top = '', branch = ''] = at.stdout.trim().split('\n').map(l => l.trim())
-  if (!top || (main && sameDir(top, main))) return
+  if (!top || !(await isInWorktrees($, top, main))) return
   const head = main ? await git($, ['git', '-C', main, 'rev-parse', 'HEAD']) : { exitCode: 1, stdout: '' }
   const fork = head.exitCode === 0 ? await git($, ['git', '-C', top, 'merge-base', 'HEAD', head.stdout.trim()]) : { exitCode: 1, stdout: '' }
   const base = fork.exitCode === 0 ? fork.stdout.trim() : head.exitCode === 0 ? head.stdout.trim() : 'HEAD'
@@ -590,6 +650,12 @@ async function detectRoot($: EngineInterface, agentId: string, file: string) {
 async function refreshThread($: EngineInterface, id: string, withDiff: boolean) {
   const t = (await read($, threads))[id]
   if (!t?.root || !t.base) return
+  const trusted = await isTrustedFolder($, t.root)
+  if (!trusted !== !!t.untrusted) await changeThread($, id, x => ({ ...x, untrusted: !trusted }))
+  if (!trusted) {
+    await update($, diff, d => (d?.id === id ? null : d))
+    return
+  }
   const num = await git($, ['git', '-C', t.root, 'diff', '--numstat', t.base])
   const extra = await git($, ['git', '-C', t.root, 'ls-files', '--others', '--exclude-standard'])
   const untracked = extra.exitCode === 0 ? extra.stdout.split('\n').map(l => l.trim()).filter(Boolean) : []
@@ -605,6 +671,7 @@ async function refreshThread($: EngineInterface, id: string, withDiff: boolean) 
 async function refreshPr($: EngineInterface, id: string) {
   const t = (await read($, threads))[id]
   if (!t?.root || !t.branch || t.branch === 'HEAD') return
+  if (!(await isTrustedFolder($, t.root))) return
   const out = await git($, ['gh', 'pr', 'view', '--json', 'number,state,statusCheckRollup'], 15000, t.root)
   const pr = out.exitCode === 0 ? prOf(out.stdout) : undefined
   if (!same(pr, t.pr)) await changeThread($, id, x => ({ ...x, pr }))
@@ -649,6 +716,10 @@ async function pickThread($: EngineInterface, id: string) {
 async function askReviewer($: EngineInterface, id: string) {
   const t = (await read($, threads))[id]
   if (!t?.root || !t.base) return
+  if (!(await isTrustedFolder($, t.root))) {
+    $.ui.toast('This thread\'s folder has git settings that run programs, so its diff is not read')
+    return
+  }
   if (!typesRegistered) await registerTypes($)
   const full = await git($, ['git', '-C', t.root, 'diff', '--no-color', '-U3', t.base], 15000)
   const body = full.exitCode === 0 ? full.stdout : ''
@@ -971,7 +1042,7 @@ async function threadTool($: EngineInterface, agentId: string, tool: string, inp
     if (kind && outcome !== 'denied') await changeThread($, agentId, x => ({ ...x, proofs: { ...x.proofs, [kind]: outcome === 'ok' ? 'ok' : 'fail' } }))
   }
   const file = input.file_path ?? input.notebook_path
-  if (typeof file === 'string' && file) $.clock.after(0, () => detectRoot($, agentId, file).catch(() => undefined))
+  if (outcome === 'ok' && typeof file === 'string' && file) $.clock.after(0, () => detectRoot($, agentId, file).catch(() => undefined))
 }
 
 // The icon buttons, the same set in the band and the Fleet pane. The band
@@ -1586,12 +1657,13 @@ export const registerFleet: Register = on => {
           <Text> </Text>
           {section(E, 'DIFF', cols)}
           {!t.root && <Text dimColor>  Not seen in a worktree yet: changes in the main folder show in the Git lane.</Text>}
-          {t.root && t.stat ? (
+          {t.root && t.untrusted ? <Text color="warning">  This folder has git settings that run programs, so the diff is not shown.</Text> : null}
+          {t.root && !t.untrusted && t.stat ? (
             <Text dimColor>
               {'  +' + t.stat.add + ' −' + t.stat.del + ' in ' + t.stat.files + ' file' + (t.stat.files === 1 ? '' : 's') + (t.stat.untracked ? ' · ' + t.stat.untracked + ' new' : '') + ' since it forked'}
             </Text>
           ) : null}
-          {t.root && d?.id !== t.id ? <Text dimColor>  Reading the diff…</Text> : null}
+          {t.root && !t.untrusted && d?.id !== t.id ? <Text dimColor>  Reading the diff…</Text> : null}
           {files.map((f, i) => (
             <Box key={'file-' + i} flexDirection="column">
               <Text>
