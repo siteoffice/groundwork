@@ -51,6 +51,7 @@ import {
 import type { StageState } from './model'
 import { chipRow, section, tips } from '../doctor/chips'
 import type { Chip, Els } from '../doctor/chips'
+import { engineFor, engineIO } from '../engine'
 
 const PANE = 'groundwork-git-lane'
 const TICK_MS = 3000
@@ -109,8 +110,8 @@ async function run($: EngineInterface, argv: string[], timeoutMs = 5000) {
 }
 
 // A Siteoffice repo: the nearest siteoffice.json at or above the git root.
-// Its engine, as the siteoffice-git launcher finds it: SITEOFFICE_SYNC_DIR,
-// then settings.git.engine, then sync/git_flow.py in the repo.
+// Its engine: SITEOFFICE_SYNC_DIR unless it points inside this repo or a worktree, else the one
+// the groundwork plugin ships (hooks/engine.ts, shared with the Doctor). A repo cannot name its own engine.
 async function siteofficeOf($: EngineInterface, root: string): Promise<{ mode: GitLaneRepo['mode']; engine: string }> {
   if (!root) return { mode: 'git', engine: '' }
   const parts = root.replace(/\\/g, '/').split('/')
@@ -123,21 +124,8 @@ async function siteofficeOf($: EngineInterface, root: string): Promise<{ mode: G
     }
   }
   if (!manifest) return { mode: 'git', engine: '' }
-  let fromManifest = ''
-  try {
-    const j = JSON.parse(await $.fs.read(manifest)) as { settings?: { git?: { engine?: unknown } } }
-    const v = j.settings?.git?.engine
-    if (typeof v === 'string' && v.trim()) fromManifest = /^([a-zA-Z]:[\\/]|\/)/.test(v) ? v : root + '/' + v
-  } catch {
-    fromManifest = ''
-  }
-  const env = (await $.env.get('SITEOFFICE_SYNC_DIR')) ?? ''
-  for (const c of [env, fromManifest, root + '/sync/git_flow.py']) {
-    if (!c) continue
-    const file = /\.py$/i.test(c) ? c : c.replace(/[\\/]+$/, '') + '/git_flow.py'
-    if (await $.fs.exists(file)) return { mode: 'siteoffice', engine: file }
-  }
-  return { mode: 'siteoffice-missing', engine: '' }
+  const { engine } = await engineFor(engineIO($), root)
+  return engine ? { mode: 'siteoffice', engine } : { mode: 'siteoffice-missing', engine: '' }
 }
 
 let pythonCmd = ''
@@ -1025,7 +1013,7 @@ export const registerGitLane: Register = on => {
           {tips(E, paneChips)}
         </Box>
         {r.mode === 'siteoffice' && <Text dimColor>via siteoffice-git: its preview, its rules, its receipts</Text>}
-        {r.mode === 'siteoffice-missing' && <Text color="warning">Siteoffice repo, engine not found: the lane only shows. Set SITEOFFICE_SYNC_DIR or settings.git.engine.</Text>}
+        {r.mode === 'siteoffice-missing' && <Text color="warning">Siteoffice repo, engine not found: the lane only shows. Install the groundwork plugin, which ships one, or set SITEOFFICE_SYNC_DIR to a folder outside this repo.</Text>}
         {hold && (
           <Box flexDirection="column">
             <Text> </Text>

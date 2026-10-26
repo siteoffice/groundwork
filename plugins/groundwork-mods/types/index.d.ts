@@ -7,7 +7,7 @@ export type DoctorFacts = {
   gh: { installed: boolean; authed: boolean }
   python: string
   repo: { inside: boolean; root: string }
-  manifest: { found: boolean; valid: boolean; checks: number; engineOk: boolean }
+  manifest: { found: boolean; valid: boolean; checks: number; engineOk: boolean; syncDirReason?: '' | 'inside' | 'invalid-form' | 'unresolved' }
   plugin: boolean
   /** Which SessionStart events reached these mods in this session. */
   hooks: { sessionStart: boolean; classicSessionStart: boolean }
@@ -51,6 +51,8 @@ export type FleetThread = {
   /** Last result of each kind of check the agent ran: tests, typecheck, lint, build. */
   proofs: Record<string, 'ok' | 'fail'>
   stat?: { files: number; add: number; del: number; untracked: number }
+  /** The folder's own git config names programs git would run, so no diff is read there. */
+  untrusted?: boolean
   pr?: { number: number; state: string; checks: { pass: number; fail: number; pending: number } }
   review?: { state: 'running' | 'ok' | 'issues'; text: string; agentId: string }
   settled?: boolean
