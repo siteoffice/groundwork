@@ -697,7 +697,8 @@ export const registerGitLane: Register = on => {
       const keep = await read($, protectMain)
       // An untrusted folder is not asked, so its default branch may be unknown: main and master both count,
       // and so does the name in .git\refs\remotes\origin\HEAD (read as a file, no git).
-      const names = r.untrusted ? [...new Set([r.defaultBranch || 'main', 'main', 'master', ...(await defaultBranchesFromFiles($, await $.session.cwd()))])]: [r.defaultBranch || 'main']
+      // Before the first refresh (and after /clear) the repo atom is empty, so that counts as not known to be trusted.
+      const names = r.untrusted || !r.isRepo ? [...new Set([r.defaultBranch || 'main', 'main', 'master', ...(await defaultBranchesFromFiles($, await $.session.cwd()))])]: [r.defaultBranch || 'main']
       const why = names.map(n => guardReason(command, n, keep)).find(Boolean) ?? ''
       if (why) {
         $.ui.toast('✕ Git guard stopped Claude: ' + why)

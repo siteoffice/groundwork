@@ -226,17 +226,48 @@ export function originHeadNames(loose: string, packed: string): string[] {
   return lines.flatMap(l => (l.startsWith(sha + ' refs/remotes/origin/') && !l.endsWith('/HEAD') ? [l.slice(sha.length + 1 + 'refs/remotes/origin/'.length).trim()] : []))
 }
 
-// Walks up from dir to the first .git folder; a .git file (a worktree) or any failed read gives [].
+// A linked worktree's .git is a file ("gitdir: <path>"); the remote refs live in the common dir that the
+// worktree's gitdir names in its commondir file. Returns '' when dotGit is not such a file.
+async function commonDirOf($: EngineInterface, dotGit: string): Promise<string> {
+  // Collapses . and .. itself (git writes commondir as ../..), so the host's fs never sees a .. segment.
+  const abs = (p: string, base: string) => {
+    const out: string[] = []
+    for (const s of (/^([a-zA-Z]:|\/)/.test(p) ? p : base + '/' + p).split('/')) {
+      if (s === '..') {
+        if (out.length > 1) out.pop()
+      } else if (s !== '.' && (s !== '' || out.length === 0)) out.push(s)
+    }
+    return out.join('/')
+  }
+  const text = String(await $.fs.read(dotGit))
+  const m = /^gitdir:\s*(.+?)\s*$/m.exec(text)
+  if (!m) return ''
+  const gitdir = abs(m[1].replace(/[\\]/g, '/'), dotGit.slice(0, -'/.git'.length))
+  const commonFile = gitdir + '/commondir'
+  if (!(await $.fs.exists(commonFile))) return gitdir
+  return abs(String(await $.fs.read(commonFile)).trim().replace(/[\\]/g, '/'), gitdir)
+}
+
+// Walks up from dir to the first .git folder or worktree .git file. A failed read gives [].
+// A reftable repository keeps no such file, so it also gives [] (the guard still has main and master).
 export async function defaultBranchesFromFiles($: EngineInterface, dir: string): Promise<string[]> {
   try {
     const parts = dir.replace(/[\\]/g, '/').replace(/\/+$/, '').split('/')
     for (let i = parts.length; i > 0; i--) {
-      const git = parts.slice(0, i).join('/') + '/.git'
+      let git = parts.slice(0, i).join('/') + '/.git'
+      let hasHead = await $.fs.exists(git + '/refs/remotes/origin/HEAD')
+      let hasPacked = await $.fs.exists(git + '/packed-refs')
+      if (!hasHead && !hasPacked && (await $.fs.exists(git))) {
+        const common = await commonDirOf($, git).catch(() => '')
+        if (common) {
+          git = common
+          hasHead = await $.fs.exists(git + '/refs/remotes/origin/HEAD')
+          hasPacked = await $.fs.exists(git + '/packed-refs')
+        }
+      }
+      if (!hasHead && !hasPacked) continue
       const headFile = git + '/refs/remotes/origin/HEAD'
       const packedFile = git + '/packed-refs'
-      const hasHead = await $.fs.exists(headFile)
-      const hasPacked = await $.fs.exists(packedFile)
-      if (!hasHead && !hasPacked) continue
       const loose = hasHead ? String(await $.fs.read(headFile)) : ''
       const packed = hasPacked ? String(await $.fs.read(packedFile)) : ''
       return originHeadNames(loose, packed).filter(n => n.length <= 200)
