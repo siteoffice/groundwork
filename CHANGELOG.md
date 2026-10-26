@@ -5,6 +5,11 @@ All notable changes. The version is one clock for the whole repository: `groundw
 
 ## Unreleased
 
+- **`siteoffice-checkup` no longer warns about skills another repo authors.** Check P2 judges
+  "published but no longer routed" against `publish-manifest.json`, the same list the publish
+  script prunes from, so `one-loop` is no longer flagged.
+- **`siteoffice-migrate` description trimmed to 888 characters.** The duplicate trigger
+  "path inventory" is gone; the inventory mode is still named.
 - **The Git guard can allow a folder outside the project for good.** When it holds a write outside
   the project, a second chip sits next to Allow once: "Allow always for this folder, in this
   project". The folder is stored per project root and survives sessions; writes into it or below it

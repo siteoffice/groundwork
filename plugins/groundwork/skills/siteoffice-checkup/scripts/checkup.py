@@ -202,7 +202,17 @@ def check_plugins(skills_repo, public_repo):
     elif distinct:
         add("plugins", "P1", "pass", f"all manifests on {distinct[0]}")
 
-    # P2: what is published versus what routing.json says should be there
+    # P2: what is published versus what routing.json says should be there.
+    # publish-skills.ps1 prunes only skills its last publish-manifest.json lists for a target,
+    # so "no longer routed" is judged against that list, not the folder listing. A skill another
+    # repo authors in the same folder (groundwork's one-loop) is not ours and is never pruned.
+    owned_by_target = {}
+    try:
+        pm_json = json.load(open(os.path.join(skills_repo, "publish-manifest.json"), encoding="utf-8"))
+        for tn, tv in (pm_json.get("targets") or {}).items():
+            owned_by_target[tn] = set((tv or {}).get("skills") or {})
+    except Exception:  # noqa: BLE001
+        owned_by_target = None
     defaults = routing.get("defaults", {}).get("targets", [])
     for tname, t in routing.get("targets", {}).items():
         if not t.get("enabled") or not t.get("repoRelative"):
@@ -214,7 +224,9 @@ def check_plugins(skills_repo, public_repo):
         have = {h for h in have if os.path.isdir(os.path.join(tdir, h)) and not h.startswith("_")}
         for n in sorted(want - have):
             add("plugins", "P2", "warn", f"{tname}: {n} routed but not published yet")
-        for n in sorted(have - want):
+        # No manifest, or no entry for this target yet: fall back to the folder listing.
+        owned = have if owned_by_target is None else owned_by_target.get(tname, have)
+        for n in sorted((have & owned) - want):
             add("plugins", "P2", "warn", f"{tname}: {n} published but no longer routed, next publish prunes it")
 
     drift = os.path.join(skills_repo, "scripts", "check-drift.py")
