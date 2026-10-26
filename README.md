@@ -84,7 +84,7 @@ What it costs you: the gates are slower than letting an agent run. That is on pu
 want a machine that ships without asking you, this is the wrong tool.
 
 I measured what I claim here by running it. The engine carries 987 passing tests, the board 185,
-the mods 205, the repository's pytest suite 220 and the `siteoffice-git` engine 448, all green on Windows at this release. Not verified: macOS and Linux, and a live Claude Code session (the mods tests mock the host). The trust
+the mods 206, the repository's pytest suite 231 and the `siteoffice-git` engine 448, all green on Windows at this release. Not verified: macOS and Linux, and a live Claude Code session (the mods tests mock the host). The trust
 tests that drive real git through the real `gitsafe.ts` need Node 22.18 or newer and are skipped when it is missing or older. That last
 suite builds real git repositories and takes about 25 minutes. Claude Code wrote most of the code
 and text of this release. I set the scope and I decide what ships.

@@ -60,7 +60,8 @@ export async function runGit($: EngineInterface, argv: string[], timeoutMs = 800
 // folder it asks, with the same hardened git, whether the effective config
 // holds any such setting set by the repo or the command line (local, worktree
 // and command scope; the person's own system and global settings, such as
-// Git LFS filters, do not count). Any match, an unreadable scope and any
+// Git LFS filters, do not count, and neither does a command-scope value that
+// switches a program off). Any other match, an unreadable scope and any
 // failure of the check mean the folder is not trusted and git is not run
 // there. A clean verdict is never kept, because an agent can change the
 // config after the check: the check runs again on each refresh. Only an
@@ -152,7 +153,42 @@ export function lineIsUntrusted(line: string, top?: string): boolean {
     if (l === '' || top === undefined) return false
     return top === '' || insideTop(l, top)
   }
-  return true
+  return !(scope === 'command' && switchesOff(line))
+}
+
+// A command-scope line as git prints it: key, then a space and the value. undefined value: no space at all,
+// which is `-c key` without `=` (git's implicit true), never a switch-off.
+function commandEntry(line: string): { key: string; value: string | undefined } {
+  const raw = line.slice(line.indexOf('\t') + 1).replace(/\r$/, '')
+  const sp = raw.indexOf(' ')
+  return sp < 0 ? { key: raw.toLowerCase(), value: undefined } : { key: raw.slice(0, sp).toLowerCase(), value: raw.slice(sp + 1) }
+}
+
+// Claude Code itself adds command-scope pins to every git a plugin runs (an empty core.askpass, every
+// hook.<name>.enabled=false, protocol.ext.allow=never, submodule.recurse=false). A value that switches a program
+// off is harmless whoever set it, so command scope is judged by value; any other value still counts.
+const NULL_DEVICE = /^(nul|\\\\\.\\nul|\/dev\/null)$/i
+function switchesOff(line: string): boolean {
+  const { key, value } = commandEntry(line)
+  if (value === undefined) return false
+  if (key === 'core.askpass') return value === ''
+  if (key === 'core.hookspath') return NULL_DEVICE.test(value)
+  if (key === 'submodule.recurse' || /^hook\.[^\s]+\.enabled$/.test(key)) return /^(false|no|off|0)$/i.test(value)
+  if (/^protocol\.([^\s]+\.)?allow$/.test(key)) return value.toLowerCase() === 'never'
+  return false
+}
+
+// The first command-scope line whose key an earlier command-scope line set to a different value. The host's
+// pins come twice with the same values; a second, different value for a key is never trusted.
+export function conflictingLine(lines: string[]): string | undefined {
+  const seen = new Map<string, string | undefined>()
+  for (const l of lines) {
+    if (l.slice(0, l.indexOf('\t')).trim() !== 'command') continue
+    const { key, value } = commandEntry(l)
+    if (seen.has(key) && seen.get(key) !== value) return l
+    seen.set(key, value)
+  }
+  return undefined
 }
 
 const NOT_FINISHED = 'the settings check did not finish'
@@ -164,7 +200,8 @@ export function whyUntrusted(dir: string): string {
 }
 
 // The pattern names neither core.fsmonitor nor core.hooksPath, so the Fleet's own
-// command-scope pairs never match; any command-scope match that does come back is untrusted.
+// command-scope pairs never match; a command-scope match that does come back is untrusted
+// unless its value switches a program off (the host's own pins, see switchesOff).
 // (A repo can change the config between this check and a later diff; the check reruns on each refresh.)
 export async function isTrustedFolder($: EngineInterface, dir: string, untrusted: Set<string>): Promise<boolean> {
   if (untrusted.has(dir)) return false
@@ -178,7 +215,7 @@ export async function isTrustedFolder($: EngineInterface, dir: string, untrusted
     const t = await runGit($, ['git', '-C', dir, 'rev-parse', '--show-toplevel'])
     top = t.exitCode === 0 ? String(t.stdout).trim() : ''
   }
-  const bad = ran ? lines.find(l => lineIsUntrusted(l, top)) : undefined
+  const bad = ran ? (lines.find(l => lineIsUntrusted(l, top)) ?? conflictingLine(lines)) : undefined
   const clean = ran && bad === undefined
   if (!clean) {
     untrusted.add(dir)

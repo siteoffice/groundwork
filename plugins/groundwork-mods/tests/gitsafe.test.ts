@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 import * as safe from '../hooks/gitsafe'
+import { HOST_CHECK } from './host'
 import * as threads from '../hooks/fleet/threads'
 
 describe('gitsafe', () => {
@@ -123,5 +124,17 @@ describe('gitsafe', () => {
     expect(await closed(world([], { exitCode: 128, stdout: '', stderr: 'fatal: dubious ownership' }), '/d5')).toEqual(['the settings check did not finish', 'the settings check did not finish'])
     // The Fleet's own check does not look for submodules: a .gitmodules file alone leaves it trusted.
     expect(await safe.isTrustedFolder(world(['/r/.gitmodules'], ok) as never, '/d6', new Set())).toBe(true)
+  })
+
+  test('command scope is judged by value: the host pins pass, a switch-on or a second value does not', () => {
+    for (const l of HOST_CHECK.split('\n').filter(Boolean)) expect(safe.lineIsUntrusted(l)).toBe(false)
+    expect(safe.conflictingLine(HOST_CHECK.split('\n').filter(Boolean))).toBeUndefined()
+    expect(safe.lineIsUntrusted('command\tcore.hookspath \\\\.\\NUL')).toBe(false)
+    for (const bad of ['command\tcore.askpass evil.exe', 'command\tcore.askpass', 'command\thook.x.command sh -c evil', 'command\thook.x.enabled true', 'command\tprotocol.ext.allow always', 'command\tsubmodule.recurse true', 'command\tcore.hookspath C:/evil'])
+      expect(safe.lineIsUntrusted(bad)).toBe(true)
+    // Local and worktree scope stay strict, whatever the value.
+    expect(safe.lineIsUntrusted('local\tcore.askpass ')).toBe(true)
+    expect(safe.lineIsUntrusted('worktree\thook.x.enabled false')).toBe(true)
+    expect(safe.conflictingLine(['command\tcore.askpass ', 'command\tcore.askpass ', 'command\tcore.askpass x'])).toBe('command\tcore.askpass x')
   })
 })
