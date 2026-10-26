@@ -94,7 +94,7 @@ describe('the Doctor and the lane agree', () => {
   type Case = { name: string; syncDir?: string; files: string[]; real?: Record<string, string>; bundled: boolean; found: boolean; ignored: boolean; why?: RegExp }
   const CLEAN = ['# branch.oid abc', '# branch.head main', '# branch.upstream origin/main', '# branch.ab +0 -0'].join('\n')
 
-  function agreeWorld(on: On, c: Case) {
+  function agreeWorld(on: On, c: Case, seen: { argv: string; env?: Record<string, string> }[] = []) {
     const out = (stdout: string, exitCode = 0) => ({ value: { exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } })
     on('command.register', () => ({ value: {} }) as never)
     on('command.run', () => ({}) as never)
@@ -119,11 +119,13 @@ describe('the Doctor and the lane agree', () => {
     on('fs.list', () => ({ value: [] }) as never)
     on('process.run', (_$, e) => {
       const a = (e as { argv: string[] }).argv.join(' ')
+      seen.push({ argv: a, env: (e as { init?: { env?: Record<string, string> } }).init?.env })
       if (a === 'git --version') return out('git version 2.47\n')
       if (a.includes('user.name')) return out('Sam\n')
       if (a.includes('user.email')) return out('sam@example.com\n')
       if (/--version$/.test(a) && /^(python3|python|py)\b/.test(a)) return out('Python 3.12\n')
       if (a.includes('--is-inside-work-tree')) return out('true\n')
+      if (a.includes('--absolute-git-dir')) return out('/work/siteoffice\n/work/siteoffice/.git\n')
       if (a.includes('--show-toplevel')) return out('/work/siteoffice\n')
       if (a.includes('worktree list --porcelain')) return out('worktree /work/siteoffice\n\nworktree /work/wt-a\n')
       if (a.includes('status --porcelain=v2')) return out(CLEAN)
@@ -144,6 +146,22 @@ describe('the Doctor and the lane agree', () => {
     { name: 'a relative value, ignored for its form', syncDir: 'evil', files: ['/work/siteoffice/evil/git_flow.py'], bundled: true, found: true, ignored: true, why: /SITEOFFICE_SYNC_DIR is not an absolute path/ },
     { name: 'a bare root, ignored for its form', syncDir: '/', files: B, bundled: true, found: true, ignored: true, why: /SITEOFFICE_SYNC_DIR is not an absolute path/ },
   ]
+  test('the worktree list runs hardened', { options: { gitLane: true } }, async ($, on) => {
+    const clock = mock.clock(on)
+    mock.store(on)
+    const seen: { argv: string; env?: Record<string, string> }[] = []
+    agreeWorld(on, AGREE.find(c => c.name === 'inside a worktree, ignored')!, seen)
+    await $.session.start({ cwd: '/work/siteoffice', surface: 'terminal', isInteractive: true })
+    await clock.advance(3100)
+    const lane = await $.ui.mount({ plugin: 'groundwork-mods', surface: 'terminal', component: 'Pane', requestId: 'groundwork-git-lane', props: { title: 'Git', isFocused: true, bodyColumns: 70, placement: 'dock', scroll: {}, view: {} } } as never)
+    await lane.unmount()
+    const wl = seen.filter(s => s.argv.includes(' worktree list --porcelain'))
+    expect(wl.length).toBeGreaterThan(0)
+    for (const s of wl) {
+      expect(s.argv).toMatch(/^git -c core\.fsmonitor=false -c core\.hooksPath=(NUL|\/dev\/null) -C /)
+      expect(s.env?.GIT_CONFIG_KEY_1).toBe('core.hooksPath')
+    }
+  })
   for (const c of AGREE) {
     test('Doctor and lane agree: ' + c.name, { options: { gitLane: true } }, async ($, on) => {
       const clock = mock.clock(on)

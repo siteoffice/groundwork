@@ -7,6 +7,10 @@
 // write goes through the siteoffice-git engine: its own preview is the
 // confirm screen, its receipts land in _log\runs, its rules decide. The lane
 // never runs raw git there. Without the engine it only shows.
+// Every git and gh call runs hardened (no fsmonitor, no hooks, no external
+// diff program; see ../gitsafe), and only in a folder that passes the
+// folder-trust check: a folder whose own git settings run programs gets one
+// plain line and no git at all.
 
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, InputProps, Register, RenderElement } from 'claude-code'
@@ -22,6 +26,8 @@ import {
   commandsFor,
   engineArgv,
   fileName,
+  cleanBranch,
+  drawnBranch,
   guardReason,
   laneOf,
   mergeNumstat,
@@ -37,6 +43,7 @@ import {
   isFlaky,
   shellFor,
   tailOf,
+  untrustedLineFor,
   PR_FIELDS,
   blastOf,
   folderOfKey,
@@ -50,6 +57,7 @@ import {
 } from './model'
 import type { StageState } from './model'
 import { chipRow, section, tips } from '../doctor/chips'
+import { QUIET_ENV, defaultBranchesFromFiles, gitConfigEnv, hardenGit, hasSubmodules, isTrustedFolder, onWindows, whyUntrusted } from '../gitsafe'
 import type { Chip, Els } from '../doctor/chips'
 import { engineFor, engineIO } from '../engine'
 
@@ -99,14 +107,32 @@ function colorOf(state: StageState, light: boolean): string {
   return 'inactive'
 }
 
-// Every git call: no prompts for passwords, no optional index lock (a read
-// never blocks a git the person runs), a timeout so nothing hangs.
+// Every git and gh call: hardened (git gets the settings as flags, gh in its
+// environment), no prompts for passwords, no optional index lock (a read
+// never blocks a git the person runs), a timeout so nothing hangs. The
+// folder is checked first, by the entry points below; python and the
+// engine's steps are not git calls and keep their own argv and environment.
 async function run($: EngineInterface, argv: string[], timeoutMs = 5000) {
   try {
-    return await $.process.run(argv, { timeoutMs, env: { GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0', GH_PROMPT_DISABLED: '1' } })
+    const win = onWindows($)
+    const isGit = argv[0] === 'git' || argv[0] === 'gh'
+    // git and gh run in the session folder, the same one the trust check looked at.
+    const cwd = isGit ? await $.session.cwd() : undefined
+    return await $.process.run(hardenGit(argv, win), { timeoutMs, ...(cwd ? { cwd } : {}), env: { ...QUIET_ENV, ...(isGit ? gitConfigEnv(win) : {}) } })
   } catch (err) {
     return { exitCode: 1, stdout: '', stderr: String(err) }
   }
+}
+
+// The check runs at each entry point that runs git. A clean verdict is never
+// kept (the config can change between two refreshes); an untrusted one is
+// kept for the session, as in the Fleet.
+const laneUntrusted = new Set<string>()
+async function trustedHere($: EngineInterface): Promise<boolean> {
+  const cwd = await $.session.cwd()
+  if (!(await isTrustedFolder($, cwd, laneUntrusted))) return false
+  // add, pull and switch run a submodule's own git config, which the config check does not read.
+  return (await hasSubmodules($, cwd, laneUntrusted)) === ''
 }
 
 // A Siteoffice repo: the nearest siteoffice.json at or above the git root.
@@ -140,6 +166,7 @@ async function pythonOf($: EngineInterface): Promise<string> {
 // Runs a siteoffice-git step as a preview; the pending card shows the
 // engine's own words, and only a passing preview offers "Do it".
 async function previewSo($: EngineInterface, step: string, args: string[], label: string) {
+  if (!(await trustedHere($))) return
   const r = await read($, repo)
   const py = await pythonOf($)
   await update($, isBusy, () => true)
@@ -150,7 +177,7 @@ async function previewSo($: EngineInterface, step: string, args: string[], label
     kind: step,
     label,
     argvs: [engineArgv(py, r, step, args, true)],
-    warn: step === 'land' ? 'This merges into ' + r.defaultBranch + ' for everyone.' : '',
+    warn: step === 'land' ? 'This merges into ' + cleanBranch(r.defaultBranch) + ' for everyone.' : '',
     preview: text,
     outcome: outcomeOf(out.stdout, out.exitCode),
   }))
@@ -161,6 +188,13 @@ async function refresh($: EngineInterface, withPr: boolean) {
   const cwd = await $.session.cwd()
   const parts = cwd.split(/[\\/]/).filter(Boolean)
   const project = parts[parts.length - 1] ?? cwd
+  if (!(await trustedHere($))) {
+    // The lane only shows here, but the guard keeps its inputs: the last known root and
+    // default branch, else the session folder and main (the guard adds master below).
+    const next = { ...EMPTY_REPO, project, root: before.root || cwd, defaultBranch: before.defaultBranch || 'main', untrusted: true, untrustedWhy: whyUntrusted(cwd) }
+    if (!same(next, before)) await update($, repo, () => next)
+    return
+  }
   const inside = await run($, ['git', 'rev-parse', '--is-inside-work-tree'])
   if (inside.exitCode !== 0 || inside.stdout.trim() !== 'true') {
     const next = { ...EMPTY_REPO, project }
@@ -332,6 +366,11 @@ async function compose($: EngineInterface, value: string) {
 async function confirm($: EngineInterface) {
   const p = await read($, pending)
   if (!p || (await read($, isBusy))) return
+  if (!(await trustedHere($))) {
+    await update($, pending, () => null)
+    await refresh($, false)
+    return
+  }
   if (p.outcome && p.outcome !== 'pass') return
   await update($, isBusy, () => true)
   let res: GitLaneResult = { ok: true, text: p.label + ': done', at: await $.clock.now() }
@@ -387,6 +426,7 @@ async function changeCheck($: EngineInterface, cmd: string, fn: (c: GitLaneCheck
 async function runCheck($: EngineInterface, cmd: string) {
   const b = await read($, bench)
   if (!b || b.checks.find(c => c.cmd === cmd)?.state === 'running') return
+  if (!(await trustedHere($))) return
   const isWindows = /^[a-zA-Z]:/.test(b.root) || (await $.env.get('OS')) === 'Windows_NT'
   const head = (await run($, ['git', 'rev-parse', '--short', 'HEAD'])).stdout.trim()
   await changeCheck($, cmd, c => ({ ...c, state: 'running' }))
@@ -421,6 +461,7 @@ async function runAllChecks($: EngineInterface) {
 async function refreshDesk($: EngineInterface) {
   const r = await read($, repo)
   if (!r.isRepo || !r.hasGh) return
+  if (!(await trustedHere($))) return
   const before = await read($, desk)
   const me = before?.me || (await run($, ['gh', 'api', 'user', '--jq', '.login'], 15000)).stdout.trim()
   const list = await run($, ['gh', 'pr', 'list', '--state', 'open', '--limit', '30', '--json', PR_FIELDS], 20000)
@@ -462,6 +503,7 @@ async function refreshDesk($: EngineInterface) {
 // One PR opened on the desk: the failing checks' last log lines and the
 // review threads still open. Fetched on the press, not on every tick.
 async function openDeskPr($: EngineInterface, n: number) {
+  if (!(await trustedHere($))) return
   if ((await read($, deskPick)) === n) {
     await update($, deskPick, () => 0)
     await update($, deskDetail, () => null)
@@ -634,7 +676,7 @@ export const registerGitLane: Register = on => {
       return base
     }
     await update($, held, () => ({ key: b.key, kind: b.kind, what: b.what, undo: b.undo, at: now }))
-    $.ui.toast('\u2016 Git guard held it: ' + b.what + ' \u00B7 \u25B8 in the Git band allows it once')
+    $.ui.toast('\u2016 Git guard held it: ' + b.what + ' \u00B7 \u25B8 in the Git band or the /git pane allows it once')
     return {
       decision: 'deny' as const,
       reason:
@@ -652,7 +694,11 @@ export const registerGitLane: Register = on => {
     if ((tool === 'Bash' || tool === 'PowerShell') && (await read($, guardOn))) {
       const command = String((e as Record<string, unknown>).command ?? '')
       const r = await read($, repo)
-      const why = guardReason(command, r.defaultBranch || 'main', await read($, protectMain))
+      const keep = await read($, protectMain)
+      // An untrusted folder is not asked, so its default branch may be unknown: main and master both count,
+      // and so does the name in .git\refs\remotes\origin\HEAD (read as a file, no git).
+      const names = r.untrusted ? [...new Set([r.defaultBranch || 'main', 'main', 'master', ...(await defaultBranchesFromFiles($, await $.session.cwd()))])]: [r.defaultBranch || 'main']
+      const why = names.map(n => guardReason(command, n, keep)).find(Boolean) ?? ''
       if (why) {
         $.ui.toast('✕ Git guard stopped Claude: ' + why)
         return { deny: 'Git lane guard stopped this command: ' + why + '. Explain to the person what you wanted to do and why; they can run it themselves or switch the guard off in /git.' }
@@ -700,7 +746,7 @@ export const registerGitLane: Register = on => {
           <Box flexShrink={0}>{chipRow($.ui.resolve(e) as unknown as Els, bandChips, light)}</Box>
           <Box flexShrink={1} minWidth={0}>
             <Text wrap="truncate-end">
-              <Text dimColor>{r.branch}</Text>
+              <Text dimColor>{drawnBranch(r.branch)}</Text>
               {needs > 0 ? <Text color="warning">{'  \u21C4 ' + needs + ' PR' + (needs > 1 ? 's' : '') + ' need you'}</Text> : ''}
             </Text>
           </Box>
@@ -764,6 +810,9 @@ export const registerGitLane: Register = on => {
     const toggles = chipRow(E, paneChips, light)
 
     if (!r.isRepo) {
+      // The guard still holds calls here, so the held call's buttons stay reachable.
+      const hold = r.untrusted ? await read($, held) : null
+      const shown = hold ? [...paneChips, ...heldChips($, 'p', r, hold)] : paneChips
       return (
         <Box flexDirection="column">
           <Box flexDirection="row" columnGap={2} alignItems="flex-start">
@@ -771,10 +820,11 @@ export const registerGitLane: Register = on => {
               <Text color={accent} bold>0N GIT</Text>
               <Text dimColor>{'  ' + r.project}</Text>
             </Text>
-            <Box flexShrink={0}>{toggles}</Box>
-            {tips(E, paneChips)}
+            <Box flexShrink={0}>{hold ? chipRow(E, shown, light) : toggles}</Box>
+            {tips(E, shown)}
           </Box>
-          <Text dimColor>This folder is not a git repository, so there is nothing to show.</Text>
+          {hold ? <Text color="warning">{'‖ held: ' + hold.what}</Text> : null}
+          {r.untrusted ? <Text color="warning">{untrustedLineFor(r.untrustedWhy ?? '')}</Text> : <Text dimColor>This folder is not a git repository, so there is nothing to show.</Text>}
         </Box>
       )
     }
@@ -855,7 +905,7 @@ export const registerGitLane: Register = on => {
               <Text dimColor>This runs:</Text>
               {p.argvs.map((a, i) => (
                 <Text key={'cmd-' + i} dimColor wrap="truncate-end">
-                  {'  ' + a.map(x => (/\s/.test(x) ? '"' + x + '"' : x)).join(' ')}
+                  {'  ' + a.map(x => (x === r.defaultBranch ? cleanBranch(x) : x)).map(x => (/\s/.test(x) ? '"' + x + '"' : x)).join(' ')}
                 </Text>
               ))}
             </Box>
@@ -1006,7 +1056,7 @@ export const registerGitLane: Register = on => {
           <Text wrap="truncate-end">
             <Text color={accent} bold>0N GIT</Text>
             <Text dimColor>{'  ' + r.project + '  on '}</Text>
-            <Text>{r.branch}</Text>
+            <Text>{drawnBranch(r.branch)}</Text>
             {r.behind > 0 && <Text color="warning">{'  ' + r.behind + ' new online'}</Text>}
           </Text>
           <Box flexShrink={0}>{toggles}</Box>
@@ -1079,7 +1129,7 @@ export const registerGitLane: Register = on => {
           E,
           r.files.length ? 'CHANGES \u00B7 ' + countsOf(r.files) : 'NO UNSAVED CHANGES',
           cols,
-          r.files.length > 0 ? chipRow(E, [{ key: 'diff', glyph: '\u00B1', tip: 'See all changes · /diff', onPress: () => $.command.run({ command: 'diff' }) }], light, 'left') : undefined,
+          r.files.length > 0 ? chipRow(E, [{ key: 'diff', glyph: '\u00B1', tip: 'See all changes · /diff', onPress: async () => { if (await trustedHere($)) $.command.run({ command: 'diff' }) } }], light, 'left') : undefined,
         )}
         {shown.map(f => {
           const [plus, minus, rest] = churnBar(f.added, f.removed, max, 8)

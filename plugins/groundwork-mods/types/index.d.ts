@@ -159,6 +159,10 @@ export type GitLaneRepo = {
   commits: GitLaneCommit[]
   hasGh: boolean
   pr: GitLanePr | null
+  /** the folder's own git config runs programs, so the lane runs no git there */
+  untrusted?: boolean
+  /** the setting that closed the lane, as git printed it (shown cleaned and cut) */
+  untrustedWhy?: string
 }
 export type GitLanePending = { kind: string; label: string; argvs: string[][]; warn: string; preview: string; outcome: 'pass' | 'refused' | 'blocked' | '' }
 export type GitLaneCheck = {

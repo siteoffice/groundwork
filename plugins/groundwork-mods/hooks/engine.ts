@@ -5,6 +5,7 @@
 // set it through its own settings), and the engine that runs is the resolved path. A repo's siteoffice.json and its sync folder are never engine sources.
 
 import type { EngineInterface } from 'claude-code'
+import { runGit } from './gitsafe'
 
 export type EngineIO = {
   env(name: string): Promise<string | undefined>
@@ -139,15 +140,8 @@ export function engineIO($: EngineInterface): EngineIO {
       }
     },
     worktrees: async root => {
-      try {
-        const r = await $.process.run(['git', '-C', root, 'worktree', 'list', '--porcelain'], {
-          timeoutMs: 5000,
-          env: { GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' },
-        })
-        return r.exitCode === 0 ? parseWorktrees(r.stdout) : []
-      } catch {
-        return []
-      }
+      const r = await runGit($, ['git', '-C', root, 'worktree', 'list', '--porcelain'], 5000)
+      return r.exitCode === 0 ? parseWorktrees(r.stdout) : []
     },
     bundled: () => bundledEnginePath($),
   }
