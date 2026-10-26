@@ -1,7 +1,7 @@
 {
   "name": "groundwork",
   "displayName": "Groundwork",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Folder structure, one loop skill from idea to close, and a read-only board for work done with AI agents.",
   "author": {
     "name": "Wilco de Tree",
