@@ -805,7 +805,7 @@ function laneWorld(on: On, cwd: string, config: () => { stdout: string; exitCode
       if (c === 'THROW') throw new Error('boom')
       return out(c.stdout, c.exitCode)
     }
-    if (a.includes('--is-inside-work-tree')) return out('true\n')
+    if (a.includes('--is-inside-work-tree')) return /not-a-repo/.test(cwd) ? out('', 128) : out('true\n')
     if (a.includes('--absolute-git-dir')) return out(cwd + '\n' + cwd + '/.git\n')
     if (a.includes('--show-toplevel')) return out(cwd + '\n')
     if (a.includes('status --porcelain=v2')) return out(STATUS)
@@ -933,6 +933,39 @@ describe('hardened lane', () => {
     const ok = await $.tool.call({ tool: 'Bash', command: 'git push origin feature-x' } as never)
     expect(String((ok as { deny?: string }).deny ?? '')).toBe('')
     expect(laneOnly(seen).filter(s => /symbolic-ref|rev-parse --abbrev|origin\/HEAD/.test(s.argv))).toEqual([])
+  })
+
+  // A linked worktree keeps a .git FILE; the remote refs live in the common dir its gitdir names.
+  test('in a linked worktree untrusted from the start the guard finds the default branch through gitdir and commondir', ON, async ($, on) => {
+    const clock = mock.clock(on)
+    mock.store(on)
+    const seen: Seen[] = []
+    const cwd = '/work/wt-develop'
+    const files = {
+      [cwd + '/.git']: 'gitdir: /work/main/.git/worktrees/wt-develop\n',
+      '/work/main/.git/worktrees/wt-develop/commondir': '../..\n',
+      '/work/main/.git/refs/remotes/origin/HEAD': 'ref: refs/remotes/origin/develop\n',
+    }
+    laneWorld(on, cwd, () => ({ stdout: 'local\tfilter.evil.clean sh -c evil\n', exitCode: 0 }), seen, [], true, files)
+    await $.session.start({ cwd, surface: 'terminal', isInteractive: true })
+    await clock.advance(60100)
+    const result = await $.tool.call({ tool: 'Bash', command: 'git push origin develop' } as never)
+    expect(String((result as { deny?: string; text?: string }).deny ?? (result as { text?: string }).text)).toContain('skips the review')
+  })
+
+  // Before the first refresh, and after /clear, the lane has not decided yet: that is not "trusted".
+  test('where the lane has no repository yet the guard protects main and master as well', ON, async ($, on) => {
+    const clock = mock.clock(on)
+    mock.store(on)
+    const seen: Seen[] = []
+    const cwd = '/work/not-a-repo-yet'
+    laneWorld(on, cwd, CLEAN, seen, [], true)
+    await $.session.start({ cwd, surface: 'terminal', isInteractive: true })
+    await clock.advance(60100)
+    for (const branch of ['master', 'main']) {
+      const result = await $.tool.call({ tool: 'Bash', command: 'git push origin ' + branch } as never)
+      expect(String((result as { deny?: string; text?: string }).deny ?? (result as { text?: string }).text)).toContain('skips the review')
+    }
   })
 
   test('the pane diff chip does nothing once the folder turns untrusted', ON, async ($, on) => {
