@@ -11,14 +11,14 @@ Each step runs as `git_flow.ps1 <step>` (preview) and `git_flow.ps1 <step> --app
 
 - Preview: names the branch `work/<owner>/<slug>` it will create from the configured main branch, after a pull.
 - Refuses: the pull ended in `error` or `conflict`, or failed; the directory is not the git root.
-- Next move: fix the pull state by hand (Wilco), then run `start <slug>` again.
+- Next move: fix the pull state by hand (the person), then run `start <slug>` again.
 
 ### save
 
 - Preview: lists every changed path it would commit and the commit message it will use.
 - Subject rule: `--subject` is at most 50 characters, one line, with no closing period. A longer subject is refused with "Commit subject is N characters; the limit is 50." Put the rest in the files, not the subject.
 - Refuses: on a protected branch (main, master); a path breaks an owner rule; a path is on the denylist; content or a file name looks like a secret; a policy file changed (`siteoffice.json`, the denylist file, any `.gitignore`).
-- Next move: move to a work branch with `start`, or take the named path out of the change, or ask Wilco to commit the policy change by hand. Then run `save` again.
+- Next move: move to a work branch with `start`, or take the named path out of the change, or ask the person to commit the policy change by hand. Then run `save` again.
 
 ### check
 
@@ -54,14 +54,14 @@ Each step runs as `git_flow.ps1 <step>` (preview) and `git_flow.ps1 <step> --app
 
 - Voorbeeld: noemt de branch `work/<owner>/<slug>` die het maakt vanaf de ingestelde hoofdbranch, na een pull.
 - Weigert: de pull eindigde in `error` of `conflict`, of mislukte; de map is niet de git-root.
-- Volgende stap: los de pull-toestand met de hand op (Wilco) en voer `start <slug>` opnieuw uit.
+- Volgende stap: los de pull-toestand met de hand op (de persoon) en voer `start <slug>` opnieuw uit.
 
 ### save
 
 - Voorbeeld: toont elk gewijzigd pad dat het vastlegt en de commitmelding.
 - Onderwerpregel: `--subject` is hoogstens 50 tekens, een regel, zonder punt aan het eind. Een langer onderwerp wordt geweigerd met "Commit subject is N characters; the limit is 50." Zet de rest in de bestanden, niet in het onderwerp.
 - Weigert: op een beschermde branch (main, master); een pad breekt een eigenaarsregel; een pad staat op de denylist; inhoud of bestandsnaam lijkt op een geheim; een beleidsbestand is gewijzigd (`siteoffice.json`, het denylist-bestand, elke `.gitignore`).
-- Volgende stap: ga naar een werkbranch met `start`, haal het genoemde pad uit de wijziging, of vraag Wilco de beleidswijziging met de hand vast te leggen. Voer daarna `save` opnieuw uit.
+- Volgende stap: ga naar een werkbranch met `start`, haal het genoemde pad uit de wijziging, of vraag de persoon de beleidswijziging met de hand vast te leggen. Voer daarna `save` opnieuw uit.
 
 ### check
 

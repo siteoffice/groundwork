@@ -46,10 +46,10 @@ Wording of each preview, each refusal and the next move per step: [references/st
 
 The agent may run any step itself, always preview first, and applies only after the yes described above.
 
-- `land` (the merge): in an Attended sprint, run `land --apply` only after Wilco's explicit yes at the
+- `land` (the merge): in an Attended sprint, run `land --apply` only after the person's explicit yes at the
   closing touchpoint, in this session. Report the merge sha and the test result on main. In an
   Unattended run, do not apply: park a HAND line with the full `land --apply` snippet.
-- Tag: the launcher has no tag step, and the guard denies the push. Hand Wilco the tag snippet as a
+- Tag: the launcher has no tag step, and the guard denies the push. Hand the person the tag snippet as a
   HAND line, in both modes, until the launcher gains a tag step.
 - Raw git stays denied. Never set `SITEOFFICE_GIT_GUARD=off`.
 
@@ -58,13 +58,13 @@ The agent may run any step itself, always preview first, and applies only after 
 - Exit 2 (refused): state the refusal, give the next move, stop. Never retry with raw git.
 - Exit 3 (blocked): say what is blocked (a red check, a missing `gh`), give the next move, stop.
 - "Engine not found": tell the user to install the groundwork plugin or set `SITEOFFICE_SYNC_DIR` to a folder outside the repo, then stop.
-- The hook denies a git command: use the launcher step that covers it. If no step covers it, say so and stop. Wilco runs that git by hand.
+- The hook denies a git command: use the launcher step that covers it. If no step covers it, say so and stop. The person runs that git by hand.
 
 ## Guard check
 
 At the start of the first use in a session, run `git push --dry-run` typed raw once. The hook must deny it.
 
 - Denied: the guard is active, continue.
-- Not denied: report "guard: missing" to the user, and give this install sentence: "Install or update the plugin with `/plugin install znd-private@znd-skills` or `/plugin marketplace update znd-skills`, then restart Claude Code." Do not continue until the user says to.
+- Not denied: report "guard: missing" to the user, and give this install sentence: "Install or update the plugin with `/plugin install groundwork@groundwork` or `/plugin marketplace update groundwork`, then restart Claude Code." Do not continue until the user says to.
 
 The hook reads `SITEOFFICE_GIT_GUARD=off` from the environment Claude Code was started with and then allows everything. Only a human sets it, for example before running the `commit-and-push-all` skills.
