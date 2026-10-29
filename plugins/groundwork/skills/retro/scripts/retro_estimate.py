@@ -67,6 +67,9 @@ def estimate(session_count: int, transcript_bytes: int, digest_bytes: int,
         "deep_share_of_5h_window": share(deep, window),
         "standard_eur": eur(standard), "deep_eur": eur(deep),
         "rates_as_of": RATES_AS_OF,
+        "assumptions": ("Assumptions: USD per Mtok input %s, output %s; USD to EUR %s; 5-hour window %d tokens; "
+                        "output share %d%%; rates as of %s; assumptions, not live prices; override in config.json."
+                        % (rate_in, rate_out, fx, int(window), round(OUTPUT_SHARE * 100), RATES_AS_OF)),
     }
 
 
@@ -83,6 +86,7 @@ def format_estimate(est: Dict[str, Any]) -> List[str]:
         "- Deep pass: about %d tokens, %s of a 5-hour window, about EUR %.2f."
         % (est["deep_tokens"], _pct(est["deep_share_of_5h_window"]), est["deep_eur"]),
     ]
+    lines.append("- " + est["assumptions"])
     if est["ceiling_tokens"] is None:
         lines.append("- Ceiling: no ceiling set.")
     else:
