@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from retro_config import ConfigError, ceiling_problem, check_root, load_config, validate_config  # noqa: E402
+from retro_config import ConfigError, ceiling_problem, check_root, load_config, merge_worlds, normalise_worlds, validate_config  # noqa: E402
 from retro_digest import METRIC_VERSION, collect, discover_sources, fixture_locations, live_locations  # noqa: E402
 from retro_estimate import RATES_AS_OF, estimate, format_estimate  # noqa: E402
 from retro_scrub import FIX_TEXT, Scrubber  # noqa: E402
@@ -471,16 +471,21 @@ def main(argv: Optional[List[str]] = None) -> int:
     if cp:  # the ceiling is stored for R2 only, so a bad one must not stop the monthly scan
         print("token ceiling in config.json is invalid, ignoring it: %s" % cp, file=sys.stderr)
         config["token_ceiling"] = None
-    problems = validate_config(config, root)
-    if problems:
-        print("retro config error: %s" % "; ".join(problems), file=sys.stderr)
-        return 2
     worlds = []
     for w in args.world:
         folder, sep, out = w.partition("=")
         if not sep or not folder.strip() or not out.strip():
             ap.error("--world needs FOLDER=REPORTDIR, got %r" % w)
-        worlds.append({"folder": folder, "report_dir": out})
+        worlds.append({"folder": folder.strip(), "report_dir": out.strip()})
+    # CLI flags win; the CLI values then pass the same checks as the config, with the config worlds.
+    if isinstance(config["worlds"], list):
+        config["worlds"] = merge_worlds(worlds, config["worlds"])
+    config["gate_patterns"] = args.gate_pattern or config["gate_patterns"]
+    problems = validate_config(config, root)
+    if problems:
+        print("retro config error: %s" % "; ".join(problems), file=sys.stderr)
+        return 2
+    config["worlds"] = normalise_worlds(config["worlds"])
     if args.now:
         try:
             now = datetime.strptime(args.now, "%Y-%m-%d").replace(tzinfo=timezone.utc)
@@ -490,7 +495,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         now = datetime.now(timezone.utc)
     out = run_retro(root, now, fixtures=Path(args.fixtures) if args.fixtures else None,
                     days=args.days if args.days is not None else config["period_days"],
-                    worlds=worlds or config["worlds"], gate_patterns=args.gate_pattern or config["gate_patterns"],
+                    worlds=config["worlds"], gate_patterns=config["gate_patterns"],
                     config=config)
     for key in ("report_md", "report_html", "metrics"):
         print(out[key])

@@ -297,8 +297,8 @@ def test_init_reports_created_then_updated_and_replaced_lists(tmp_path, capsys):
     assert _init(tmp_path, "--world", _w(tmp_path, "c", "oc"), "--gate-pattern", "x", "--gate-pattern", "y") == 0
     lines = capsys.readouterr().out.splitlines()
     assert "updated %s" % path in lines
-    assert any(l.startswith("replaced worlds:") and "2" in l and "1" in l for l in lines)
-    assert any(l.startswith("replaced gate_patterns:") and "1" in l and "2" in l for l in lines)
+    assert "replaced worlds: 2 earlier entries replaced by 1" in lines
+    assert "replaced gate_patterns: 1 earlier entries replaced by 2" in lines
     assert _init(tmp_path, "--period", "9") == 0
     assert "replaced" not in capsys.readouterr().out
 
@@ -368,3 +368,61 @@ def test_init_prompt_blank_answers_take_defaults(tmp_path, monkeypatch):
     assert rc.main(["init", "--root", str(tmp_path / "r"), "--home", str(tmp_path / "home")]) == 0
     cfg = rc.load_config(tmp_path / "r")
     assert (cfg["period_days"], cfg["token_ceiling"]) == (30, None)
+
+
+def test_show_refuses_a_bad_root(tmp_path, capsys):
+    assert rc.main(["show", "--root", str(tmp_path / ".envs" / "r")]) == 2
+    assert ".env" in capsys.readouterr().out
+    assert rc.main(["show", "--root", tmp_path.anchor]) == 2
+
+
+# --- CLI worlds and patterns go through the same checks as config -------------------------
+
+def _report(tmp_path, *extra):
+    fx = materialize_fixtures(tmp_path / "fx")
+    return rr.main(["--root", str(tmp_path / "root"), "--fixtures", str(fx), "--now", "2026-10-15"] + list(extra))
+
+
+@pytest.mark.parametrize("folder", ["ANCHORx/..", "ANCHOR", "ANCHORa/../..", "TMP/.envs/w"])
+def test_report_cli_world_goes_through_the_same_guards(tmp_path, capsys, folder):
+    folder = folder.replace("ANCHOR", tmp_path.anchor.replace("\\", "/")).replace("TMP", str(tmp_path))
+    assert _report(tmp_path, "--world", "%s=%s" % (folder, tmp_path / "out")) == 2
+    cap = capsys.readouterr()
+    assert cap.out == "" and cap.err.startswith("retro config error:")
+    assert not (tmp_path / "root").exists() and not (tmp_path / "out").exists()
+
+def test_report_cli_gate_pattern_is_vetted(tmp_path, capsys):
+    assert _report(tmp_path, "--gate-pattern", "x" * 81) == 2
+    assert "gate pattern" in capsys.readouterr().err
+    assert not (tmp_path / "root").exists()
+
+
+def test_report_cli_world_nested_with_config_world_is_refused(tmp_path, capsys):
+    _init(tmp_path, "--world", _w(tmp_path, "a", "oa"))
+    assert _report(tmp_path, "--world", _w(tmp_path, "a/b", "ob")) == 2
+    assert "nested" in capsys.readouterr().err
+    assert not (tmp_path / "ob").exists()
+
+
+def test_report_cli_world_shares_report_dir_with_config_world_is_refused(tmp_path):
+    _init(tmp_path, "--world", _w(tmp_path, "a", "oa"))
+    assert _report(tmp_path, "--world", _w(tmp_path, "b", "oa")) == 2
+
+
+def test_report_cli_world_wins_for_same_folder_and_other_config_worlds_stay(tmp_path):
+    _init(tmp_path, "--world", "%s=%s" % (EXP["world_folder"], tmp_path / "cfg-out"),
+          "--world", _w(tmp_path, "other", "other-out"))
+    assert _report(tmp_path, "--world", "%s=%s" % (EXP["world_folder"], tmp_path / "cli-out")) == 0
+    assert (tmp_path / "cli-out" / "2026-10" / "report.md").is_file()
+    assert not (tmp_path / "cfg-out").exists()
+
+
+def test_report_valid_cli_world_still_routes(tmp_path):
+    assert _report(tmp_path, "--world", "%s=%s" % (EXP["world_folder"], tmp_path / "w-out")) == 0
+    assert (tmp_path / "w-out" / "2026-10" / "report.md").is_file()
+
+def test_report_config_worlds_not_a_list_still_exits_2(tmp_path, capsys):
+    (tmp_path / "root" / "retro").mkdir(parents=True)
+    (tmp_path / "root" / "retro" / "config.json").write_text(json.dumps({"worlds": "x"}), encoding="utf-8")
+    assert _report(tmp_path) == 2
+    assert "worlds must be a list" in capsys.readouterr().err

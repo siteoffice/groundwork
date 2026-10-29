@@ -150,6 +150,15 @@ def normalise_worlds(worlds: List[Dict[str, str]]) -> List[Dict[str, str]]:
             for w in worlds]
 
 
+def merge_worlds(cli: List[Dict[str, str]], configured: Any) -> List[Dict[str, str]]:
+    """CLI worlds first, then configured worlds whose folder is not one the CLI already names."""
+    def key(w: Any) -> str:
+        norm = _checked(w.get("folder"), "folder", True)[0] if isinstance(w, dict) else ""
+        return norm.replace("\\", "/").casefold() if norm else ""
+    taken = set(key(w) for w in cli)
+    kept = [w for w in (configured if isinstance(configured, list) else []) if not (key(w) and key(w) in taken)]
+    return list(cli) + kept
+
 def ceiling_problem(cfg: Dict[str, Any]) -> Optional[str]:
     ceil = cfg.get("token_ceiling")
     if ceil is not None and (not _is_int(ceil) or ceil <= 0):
