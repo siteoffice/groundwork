@@ -17,7 +17,7 @@ PATTERNS: Tuple[Tuple[str, str], ...] = (
     ("slack_token", r"\bxox[baprs]-[A-Za-z0-9-]{10,}"),
     ("google_api_key", r"\bAIza[0-9A-Za-z_-]{35}"),
     ("jwt", r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"),
-    ("connection_string", r"\b[a-z][a-z0-9+.-]*://[^\s:/@]+:[^\s@/]+@"),
+    ("connection_string", r"(?<![A-Za-z0-9+.-])[a-z][a-z0-9+.-]*://[^\s:/@]+:[^\s@/]+@"),
     ("password_assignment",
      r"(?i)\b(?:password|passwd|pwd|secret|api[_-]?key|token)\s*[=:]\s*[\"']?[^\s\"']{8,}"),
 )
@@ -82,6 +82,8 @@ class Scrubber:
     def scrub_obj(self, obj: Any, session: str, date: str) -> Any:
         if isinstance(obj, str):
             return self.scrub(obj, session, date)
+        if isinstance(obj, tuple):
+            return tuple(self.scrub_obj(v, session, date) for v in obj)
         if isinstance(obj, list):
             return [self.scrub_obj(v, session, date) for v in obj]
         if isinstance(obj, dict):

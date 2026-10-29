@@ -6,9 +6,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "plugins" / "groundwork" / "skills" / "retro" / "scripts"
-FIX = ROOT / "tests" / "fixtures" / "retro"
 sys.path.insert(0, str(SCRIPTS))
-EXP = json.loads((FIX / "expected.json").read_text(encoding="utf-8"))
 
 from retro_scrub import PATTERNS, Scrubber, FIX_TEXT
 
@@ -71,3 +69,30 @@ def test_scrub_obj_recurses_and_dedupes():
     out = s.scrub_obj({"a": [SAMPLES["aws_access_key"], {"b": SAMPLES["aws_access_key"]}]}, "s1", "2026-10-01")
     assert SAMPLES["aws_access_key"] not in json.dumps(out)
     assert len(s.findings) == 1
+
+
+def test_scrub_obj_recurses_into_tuples():
+    s = Scrubber()
+    aws = SAMPLES["aws_access_key"]
+    out = s.scrub_obj((aws, ["x", (aws, "ok")], {"k": (aws,)}), "s1", "2026-10-01")
+    assert isinstance(out, tuple) and isinstance(out[1][1], tuple)
+    assert aws not in json.dumps(out)
+    assert out[1][1][1] == "ok"
+
+
+@pytest.mark.parametrize("unit", ["a.", "a-", "a+", "a:", "a/", "a=", "a_"])
+def test_no_quadratic_scan_on_long_runs(unit):
+    import time
+    for text in (unit * 50000, unit * 50000 + "://", "Aa1" * 33000):
+        t0 = time.perf_counter()
+        Scrubber().scrub(text, "s1", "2026-10-01")
+        assert time.perf_counter() - t0 < 1.0
+
+
+def test_connection_string_still_redacted_in_context():
+    cs = SAMPLES["connection_string"]
+    for text in (cs, "see " + cs, "prose, then " + cs + " end", "x-" + cs):
+        s = Scrubber()
+        out = s.scrub(text, "s1", "2026-10-01")
+        assert "s3cretpass" not in out
+        assert [f["kind"] for f in s.findings] == ["connection_string"]
