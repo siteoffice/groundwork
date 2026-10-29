@@ -1,0 +1,5 @@
+# Monthly retro scan on Linux or macOS, 09:00 on the 1st. Placeholders only: replace the
+# angle-bracket parts, then add the line with: crontab -e
+# Prerequisite: run retro_config.py init for <your root> once. The scan never prompts.
+# Output is appended to the log, so a failure leaves a trace.
+0 9 1 * * python3 -I "<path to groundwork plugin>/skills/retro/scripts/retro_report.py" --root "<your root>" >> "<your root>/retro/scheduled_runs.log" 2>&1
