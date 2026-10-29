@@ -329,3 +329,43 @@ def write_digest(digest: Dict[str, Any], out_dir: Path) -> Path:
     p = out_dir / ("%s-%s.json" % (digest["source"], digest["session_id"]))
     p.write_text(json.dumps(digest, sort_keys=True, indent=1), encoding="utf-8")
     return p
+
+
+def _norm(p: str) -> str:
+    return p.replace("\\", "/").rstrip("/").casefold()
+
+
+def is_under(path: str, folder: str) -> bool:
+    p, f = _norm(path), _norm(folder)
+    return p == f or p.startswith(f + "/")
+
+
+def route(digest: Dict[str, Any], worlds: List[Dict[str, str]]) -> Optional[Dict[str, str]]:
+    for world in worlds:
+        if any(is_under(f, world["folder"]) for f in digest.get("folders", []) if isinstance(f, str)):
+            return world
+    return None
+
+
+def collect(sources: List[Source], month_dir: Path, month: str, worlds: List[Dict[str, str]],
+            gate_patterns: List[str]) -> Dict[str, Any]:
+    month_dir = Path(month_dir)
+    audit = OpenAudit(month_dir / "opened.log")
+    main = []  # type: List[Dict[str, Any]]
+    held = []  # type: List[Dict[str, Any]]
+    for world in worlds:
+        held.append({"world": world, "digests": [], "transcript_bytes": 0})
+    main_bytes = 0
+    for src in sources:
+        digest = digest_session(src, audit, gate_patterns)
+        world = route(digest, worlds)
+        if world is None:
+            write_digest(digest, month_dir / "digests")
+            main.append(digest)
+            main_bytes += digest["transcript_bytes"]
+            continue
+        entry = held[worlds.index(world)]
+        write_digest(digest, Path(world["report_dir"]) / month / "digests")
+        entry["digests"].append(digest)
+        entry["transcript_bytes"] += digest["transcript_bytes"]
+    return {"main": main, "worlds": held, "transcript_bytes": main_bytes}
