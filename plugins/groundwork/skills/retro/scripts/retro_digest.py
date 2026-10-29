@@ -4,6 +4,7 @@ OpenAudit.open_text is the only place in this module that opens a file for readi
 """
 import io
 import json
+import posixpath
 import re
 import sys
 from datetime import datetime, timezone
@@ -326,13 +327,16 @@ def digest_session(src: Source, audit: OpenAudit, gate_patterns: List[str]) -> D
 def write_digest(digest: Dict[str, Any], out_dir: Path) -> Path:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    p = out_dir / ("%s-%s.json" % (digest["source"], digest["session_id"]))
+    sid = re.sub(r"[^A-Za-z0-9._-]", "_", str(digest["session_id"])).lstrip(".") or "session"
+    kind = re.sub(r"[^A-Za-z0-9._-]", "_", str(digest["source"])).lstrip(".") or "source"
+    p = out_dir / ("%s-%s.json" % (kind, sid))
     p.write_text(json.dumps(digest, sort_keys=True, indent=1), encoding="utf-8")
     return p
 
 
 def _norm(p: str) -> str:
-    return p.replace("\\", "/").rstrip("/").casefold()
+    q = p.replace("\\", "/").casefold()
+    return posixpath.normpath(q).rstrip("/") if q.strip() else ""
 
 
 def is_under(path: str, folder: str) -> bool:
@@ -340,32 +344,56 @@ def is_under(path: str, folder: str) -> bool:
     return p == f or p.startswith(f + "/")
 
 
-def route(digest: Dict[str, Any], worlds: List[Dict[str, str]]) -> Optional[Dict[str, str]]:
-    for world in worlds:
+def _route_index(digest: Dict[str, Any], worlds: List[Dict[str, str]]) -> Optional[int]:
+    for i, world in enumerate(worlds):
         if any(is_under(f, world["folder"]) for f in digest.get("folders", []) if isinstance(f, str)):
-            return world
+            return i
     return None
+
+
+def route(digest: Dict[str, Any], worlds: List[Dict[str, str]]) -> Optional[Dict[str, str]]:
+    i = _route_index(digest, worlds)
+    return None if i is None else worlds[i]
+
+
+def _overlaps(a: Path, b: Path) -> bool:
+    for x, y in ((a, b), (b, a)):
+        try:
+            x.relative_to(y)
+            return True
+        except ValueError:
+            pass
+    return False
+
+
+def _check_worlds(worlds: List[Dict[str, str]], month_dir: Path, month: str) -> None:
+    main = Path(month_dir).resolve()
+    for world in worlds:
+        if _norm(world["folder"]) in ("", ".", "/"):
+            raise ValueError("a world folder is empty or the filesystem root, set a real folder")
+        out = Path(world["report_dir"]).resolve()
+        if _overlaps(out / month / "digests", main) or _overlaps(out, main):
+            raise ValueError("the report location of the world at %s overlaps the main report "
+                             "folder %s, choose a separate location" % (world["folder"], main))
 
 
 def collect(sources: List[Source], month_dir: Path, month: str, worlds: List[Dict[str, str]],
             gate_patterns: List[str]) -> Dict[str, Any]:
     month_dir = Path(month_dir)
+    _check_worlds(worlds, month_dir, month)
     audit = OpenAudit(month_dir / "opened.log")
     main = []  # type: List[Dict[str, Any]]
-    held = []  # type: List[Dict[str, Any]]
-    for world in worlds:
-        held.append({"world": world, "digests": [], "transcript_bytes": 0})
+    held = [{"world": w, "digests": [], "transcript_bytes": 0} for w in worlds]
     main_bytes = 0
     for src in sources:
         digest = digest_session(src, audit, gate_patterns)
-        world = route(digest, worlds)
-        if world is None:
+        i = _route_index(digest, worlds)
+        if i is None:
             write_digest(digest, month_dir / "digests")
             main.append(digest)
             main_bytes += digest["transcript_bytes"]
             continue
-        entry = held[worlds.index(world)]
-        write_digest(digest, Path(world["report_dir"]) / month / "digests")
-        entry["digests"].append(digest)
-        entry["transcript_bytes"] += digest["transcript_bytes"]
+        write_digest(digest, Path(worlds[i]["report_dir"]) / month / "digests")
+        held[i]["digests"].append(digest)
+        held[i]["transcript_bytes"] += digest["transcript_bytes"]
     return {"main": main, "worlds": held, "transcript_bytes": main_bytes}
