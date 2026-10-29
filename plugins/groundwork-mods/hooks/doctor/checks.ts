@@ -149,16 +149,6 @@ export function buildReport(f: DoctorFacts): Probe[] {
     })
   }
   out.push({
-    id: 'sessionstart',
-    title: 'Session start events reach the mods',
-    level: 'recommended',
-    ok: sessionStartReaches(f),
-    why:
-      'Claude Code started this session, but no SessionStart event reached the mods. Where an organisation manages Claude Code, these events skip the plugins you install, and only the managed settings can change that. The mods lose only the reset after /clear and /resume; the agent policy keeps working. If you only just installed Groundwork, restart Claude Code and check again.',
-    fix: '/plugin',
-    fixWhere: 'Inside Claude Code: the Errors tab names each plugin that was skipped. You cannot fix this by installing something; only whoever manages Claude Code can change it',
-  })
-  out.push({
     id: 'fullscreen',
     title: 'Fullscreen layout',
     level: 'recommended',
@@ -216,13 +206,6 @@ export function buildReport(f: DoctorFacts): Probe[] {
   }
   out.push(probe)
   return out
-}
-
-// The skipped-hook state: the session did start (session.start reached the mods) but the
-// classic SessionStart event never did. Only that combination is a problem; a session where
-// neither arrived, for example one the mods were loaded into mid-way, says nothing.
-export function sessionStartReaches(f: DoctorFacts): boolean {
-  return !(f.hooks.sessionStart && !f.hooks.classicSessionStart)
 }
 
 export function summary(probes: Probe[]): { required: number; recommended: number } {

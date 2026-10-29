@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 
-import { BURNMON_MAX_AGE_SECONDS, BURNMON_RELEASES_URL, atLeast, buildReport, sessionStartReaches, snapshotAgeSeconds, summary } from '../hooks/doctor/checks'
+import { BURNMON_MAX_AGE_SECONDS, BURNMON_RELEASES_URL, atLeast, buildReport, snapshotAgeSeconds, summary } from '../hooks/doctor/checks'
 import type { DoctorFacts } from '../types'
 
 const good: DoctorFacts = {
@@ -13,7 +13,6 @@ const good: DoctorFacts = {
   repo: { inside: true, root: 'C:/work/shop' },
   manifest: { found: true, valid: true, checks: 1, engineOk: true },
   plugin: true,
-  hooks: { sessionStart: true, classicSessionStart: true },
   notif: 'terminal_bell',
   needsBell: true,
   statusLine: true,
@@ -67,21 +66,7 @@ describe('checks', () => {
     expect(atLeast('2.2.0', '2.1.287')).toBe(true)
   })
 
-  test('a skipped SessionStart hook is named when session.start arrived and the classic event did not', async () => {
-    const skipped = buildReport({ ...good, hooks: { sessionStart: true, classicSessionStart: false } })
-    const probe = skipped.find(p => p.id === 'sessionstart')
-    expect(probe?.ok).toBe(false)
-    expect(probe?.level).toBe('recommended')
-    expect(probe?.why).toContain('no SessionStart event reached the mods')
-    expect(probe?.why).toContain('an organisation manages Claude Code')
-    expect(probe?.why).toContain('the agent policy keeps working')
-    expect(summary(skipped)).toEqual({ required: 0, recommended: 1 })
-  })
-
-  test('no skipped-hook warning when both events arrived, or when neither did', async () => {
-    expect(sessionStartReaches({ ...good, hooks: { sessionStart: true, classicSessionStart: true } })).toBe(true)
-    expect(sessionStartReaches({ ...good, hooks: { sessionStart: false, classicSessionStart: false } })).toBe(true)
-    expect(buildReport(good).find(p => p.id === 'sessionstart')?.ok).toBe(true)
+  test('a good setup has nothing to fix', async () => {
     expect(summary(buildReport(good))).toEqual({ required: 0, recommended: 0 })
   })
 })

@@ -12,6 +12,15 @@ import { BURNMON_RELEASES_URL } from '../hooks/doctor/checks'
 const TMP = 'C:\\Temp\\gw-fleet'
 const ON = { options: { fleet: true } } as const
 
+
+// A session starts in /work/siteoffice, with the bottoms its session.start hooks need.
+// It replaces the old classic.SessionStart raise: no mod hooks that event any more.
+async function startSession($: any, on: On) {
+  on('command.register', () => ({ value: {} }) as never)
+  on('session.start', ($: unknown, e: unknown) => ({ cwd: (e as { cwd: string }).cwd }) as never)
+  await $.session.start({ cwd: '/work/siteoffice', surface: 'terminal', isInteractive: true })
+}
+
 describe('plain language', () => {
   test('tool calls read as short human phrases', async () => {
     expect(phraseFor('Edit', { file_path: TMP + '\\shop\\checkout.ts' })).toBe('changing checkout.ts')
@@ -308,9 +317,12 @@ describe('wire', () => {
 
 describe('after /clear', () => {
   test('the pane still names the project', ON, async ($, on) => {
-    mock.clock(on)
-    on('classic.SessionStart', () => ({}))
-    await $.classic.SessionStart({ source: 'clear', cwd: '/work/siteoffice' } as never)
+    const clock = mock.clock(on)
+    mock.store(on)
+    on('session.end', ($: unknown, e: unknown) => ({ sessionId: (e as { sessionId: string }).sessionId }) as never)
+    await startSession($, on)
+    await $.session.end({ reason: 'clear', sessionId: 's1', resume: { id: 's1' } })
+    await clock.advance(4000)
     const ui = await $.ui.mount({
       plugin: 'groundwork-mods',
       surface: 'terminal',
@@ -346,8 +358,7 @@ describe('BurnMon switch', () => {
     mock.clock(on)
     on('ui.render', ($, e) => ({ type: 'engine', ref: 0 }) as never)
     mock.store(on, { 'fleet.burnOn': false })
-    on('classic.SessionStart', () => ({}))
-    await $.classic.SessionStart({ source: 'resume', cwd: '/work/siteoffice' } as never)
+    await startSession($, on)
     const ui = await $.ui.mount({ ...BAND, surface: 'terminal' } as never)
     expect(await ui.find({ type: 'Text', text: /^BURN$/ })).toBeUndefined()
     expect(await ui.find({ key: 'burn' })).toBeDefined()
@@ -365,8 +376,7 @@ describe('Plain Mode', () => {
   test('a tool row becomes one plain sentence, on terminal and desktop', ON, async ($, on) => {
     mock.clock(on)
     mock.store(on, { 'fleet.plainOn': true })
-    on('classic.SessionStart', () => ({}))
-    await $.classic.SessionStart({ source: 'resume', cwd: '/work/siteoffice' } as never)
+    await startSession($, on)
     for (const surface of ['terminal', 'desktop'] as const) {
       const ui = await $.ui.mount({ ...TOOLUSE('Edit', { file_path: '/work/siteoffice/checkout.ts' }), surface } as never)
       expect(await ui.find({ type: 'Text', text: /changing checkout\.ts/ })).toBeDefined()
@@ -380,8 +390,7 @@ describe('Plain Mode', () => {
   test('a routine result is hidden while Plain Mode is on', ON, async ($, on) => {
     mock.clock(on)
     mock.store(on, { 'fleet.plainOn': true })
-    on('classic.SessionStart', () => ({}))
-    await $.classic.SessionStart({ source: 'resume', cwd: '/work/siteoffice' } as never)
+    await startSession($, on)
     const ui = await $.ui.mount({
       plugin: 'groundwork-mods',
       surface: 'terminal',
@@ -399,9 +408,8 @@ describe('Quiet transcript', () => {
   test('a row folds its output away and unfolds it on a press', ON, async ($, on) => {
     mock.clock(on)
     mock.store(on, { 'fleet.plainOn': true })
-    on('classic.SessionStart', () => ({}))
     on('ui.render', () => ({ type: 'engine', ref: 0 }) as never)
-    await $.classic.SessionStart({ source: 'resume', cwd: '/work/siteoffice' } as never)
+    await startSession($, on)
     const row = await $.ui.mount({ ...TOOLUSE('Bash', { command: 'npm test', description: 'run the tests' }, { output: { stdout: '12 passed', stderr: '' } }), surface: 'terminal' } as never)
     expect(await row.find({ type: 'Text', text: /tests green, 12 passed/ })).toBeDefined()
     const RESULT = { plugin: 'groundwork-mods', surface: 'terminal', component: 'ToolResult', props: { tool_use_id: 't1', tool: 'Bash', output: { stdout: '12 passed', stderr: '' }, isErrored: false } }
@@ -420,9 +428,8 @@ describe('Quiet transcript, plain lines', () => {
   test('a one-call group reads as that call, and a guard hold reads as held, not failed', ON, async ($, on) => {
     mock.clock(on)
     mock.store(on, { 'fleet.plainOn': true })
-    on('classic.SessionStart', () => ({}))
     on('ui.render', () => ({ type: 'engine', ref: 0 }) as never)
-    await $.classic.SessionStart({ source: 'resume', cwd: '/work/siteoffice' } as never)
+    await startSession($, on)
     const ui = await $.ui.mount({
       plugin: 'groundwork-mods',
       surface: 'terminal',
@@ -442,9 +449,8 @@ describe('Quiet transcript, plain lines', () => {
   test('plugin and hook notices shrink to one short line each; other notices stay', ON, async ($, on) => {
     mock.clock(on)
     mock.store(on, { 'fleet.plainOn': true })
-    on('classic.SessionStart', () => ({}))
     on('ui.render', () => ({ type: 'engine', ref: 0 }) as never)
-    await $.classic.SessionStart({ source: 'resume', cwd: '/work/siteoffice' } as never)
+    await startSession($, on)
     const N = (text: string) => ({ plugin: 'groundwork-mods', surface: 'terminal', component: 'InfoNotice', props: { text, command: null } })
     const a = await $.ui.mount(N('ecc: hooks.json: unknown keys "description" in hooks.PreToolUse[0] and 51 more ignored') as never)
     expect(await a.find({ type: 'Text', text: /setup note from ecc/ })).toBeDefined()

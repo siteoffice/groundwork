@@ -3,6 +3,14 @@
 All notable changes. The version is one clock for the whole repository: `groundwork`,
 `groundwork-mods` and the marketplace move together.
 
+## 0.2.4
+
+- **No more "its classic.SessionStart hook was skipped" line at session start.** Claude Code's
+  built-in `cc-plugin-sec-default` passes the classic SessionStart event on past every installed
+  plugin, so a hook there never runs. No mod hooks that event any more. The Fleet and the Git lane
+  already restore what /clear, /resume and /branch reset on their next tick, and now rely on that
+  alone. Setup Doctor drops its `sessionstart` check, which only detected this case.
+
 ## 0.2.3
 
 - **The trust check no longer closes every folder in a live Claude Code session.** Claude Code adds

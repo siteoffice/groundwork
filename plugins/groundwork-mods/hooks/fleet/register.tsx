@@ -1062,12 +1062,9 @@ export const registerFleet: Register = on => {
     return started
   })
 
-  // /clear, /resume and /branch reset $.state and fire no session.start:
-  // give the session its name and keys back.
-  on('classic.SessionStart', { source: ['clear', 'resume', 'fork'] }, async ($, e, next) => {
-    await ensureIdentity($, e.cwd)
-    return next(e)
-  })
+  // /clear, /resume and /branch reset $.state and fire no session.start. No
+  // classic.SessionStart hook: cc-plugin-sec-default forwards it past every
+  // installed plugin. tick() restores the name and keys.
 
   on('session.end', async ($, e, next) => {
     await record($, 'session', { to: 'end', reason: e.reason })

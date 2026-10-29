@@ -637,11 +637,9 @@ export const registerGitLane: Register = on => {
     return next(e)
   })
 
-  on('classic.SessionStart', { source: ['clear', 'resume', 'fork'] }, async ($, e, next) => {
-    await loadSwitches($)
-    await update($, isDirty, () => true)
-    return next(e)
-  })
+  // No classic.SessionStart hook: cc-plugin-sec-default forwards it past every
+  // installed plugin. After /clear, /resume or /branch $.state is reset, so
+  // isLoaded is false and isDirty is true again, and tick() reloads both.
 
   on('command.run', { command: 'git' }, async $ => {
     await $.ui.open({ id: PANE, title: 'Git' })

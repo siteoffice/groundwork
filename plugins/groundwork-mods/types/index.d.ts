@@ -9,8 +9,6 @@ export type DoctorFacts = {
   repo: { inside: boolean; root: string }
   manifest: { found: boolean; valid: boolean; checks: number; engineOk: boolean; syncDirReason?: '' | 'inside' | 'invalid-form' | 'unresolved' }
   plugin: boolean
-  /** Which SessionStart events reached these mods in this session. */
-  hooks: { sessionStart: boolean; classicSessionStart: boolean }
   notif: string
   needsBell: boolean
   statusLine: boolean
@@ -214,8 +212,6 @@ declare module 'claude-code' {
       isLight: boolean
       isFullscreen: boolean | null
       checkedAt: number
-      sawSessionStart: boolean
-      sawClassicSessionStart: boolean
       'fleet.sessionKey': string
       'fleet.sessionId': string
       'fleet.project': string

@@ -21,10 +21,6 @@ const isChecking = atom({ plugin: 'groundwork-mods', key: 'isChecking' } as cons
 const isLight = atom({ plugin: 'groundwork-mods', key: 'isLight' } as const, false)
 const isFullscreen = atom({ plugin: 'groundwork-mods', key: 'isFullscreen' } as const, null as boolean | null)
 const checkedAt = atom({ plugin: 'groundwork-mods', key: 'checkedAt' } as const, 0)
-// Which SessionStart events reached this module. The pair tells the doctor whether an earlier
-// plugin passed the event on past the mods.
-const sawSessionStart = atom({ plugin: 'groundwork-mods', key: 'sawSessionStart' } as const, false)
-const sawClassicSessionStart = atom({ plugin: 'groundwork-mods', key: 'sawClassicSessionStart' } as const, false)
 
 async function run($: EngineInterface, argv: string[], cwd?: string) {
   try {
@@ -95,7 +91,6 @@ async function gather($: EngineInterface): Promise<DoctorFacts> {
     repo: { inside: !!root, root },
     manifest,
     plugin,
-    hooks: { sessionStart: await read($, sawSessionStart), classicSessionStart: await read($, sawClassicSessionStart) },
     notif: typeof settings.preferredNotifChannel === 'string' ? settings.preferredNotifChannel : '',
     needsBell,
     statusLine: !!settings.statusLine,
@@ -130,15 +125,7 @@ async function nudge($: EngineInterface) {
 }
 
 export const registerDoctor: Register = on => {
-  // No matcher: every source, startup included. If this never fires while session.start does,
-  // something ahead of the mods is not passing the event on.
-  on('classic.SessionStart', async ($, e, next) => {
-    await update($, sawClassicSessionStart, () => true)
-    return next(e)
-  })
-
   on('session.start', async ($, e, next) => {
-    await update($, sawSessionStart, () => true)
     await $.command.register({ name: 'setup-doctor', description: 'Check that Groundwork is set up on this computer, with a copyable fix for each gap' })
     $.clock.after(3000, () => nudge($).catch(() => undefined))
     return next(e)
