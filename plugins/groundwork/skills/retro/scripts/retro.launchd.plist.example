@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Monthly retro scan on macOS, 09:00 on the 1st. Placeholders only: replace the
+     parts shown as &lt;...&gt; (XML escapes for angle brackets) with your real values, save
+     under ~/Library/LaunchAgents/, then load it with launchctl.
+     Prerequisite: run retro_config.py init for your root once. The scan never prompts. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>groundwork.retro.monthly</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>python3</string>
+    <string>-I</string>
+    <string>&lt;path to groundwork plugin&gt;/skills/retro/scripts/retro_report.py</string>
+    <string>--root</string>
+    <string>&lt;your root&gt;</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Day</key>
+    <integer>1</integer>
+    <key>Hour</key>
+    <integer>9</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>&lt;your root&gt;/retro/scheduled_runs.log</string>
+  <key>StandardErrorPath</key>
+  <string>&lt;your root&gt;/retro/scheduled_runs.log</string>
+</dict>
+</plist>
