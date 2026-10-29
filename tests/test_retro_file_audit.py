@@ -52,3 +52,42 @@ def test_opened_log_lists_only_transcript_and_metadata_files(tmp_path):
 def test_digest_module_opens_files_in_one_place():
     src = (SCRIPTS / "retro_digest.py").read_text(encoding="utf-8")
     assert len(re.findall(r"\b(?:open|read_text|read_bytes)\(", src)) == 1
+
+
+def _refused(audit, p, reason="env file"):
+    with pytest.raises(rd.RefusedPath):
+        audit.open_text(p)
+    last = (audit.log_path).read_text(encoding="utf-8").splitlines()[-1]
+    assert last.startswith("REFUSED\t") and last.endswith("\t" + reason)
+
+
+def test_symlink_alias_to_env_file_is_refused(tmp_path):
+    target = tmp_path / ".env"
+    target.write_text("X=1\n", encoding="ascii")
+    link = tmp_path / "s.jsonl"
+    try:
+        link.symlink_to(target)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip("symlinks not permitted on this account: %s" % exc)
+    _refused(rd.OpenAudit(tmp_path / "opened.log"), link)
+
+
+def test_resolved_env_name_is_refused_with_patched_resolve(tmp_path, monkeypatch):
+    alias = tmp_path / "s.jsonl"
+    alias.write_text("{}\n", encoding="ascii")
+    real = Path.resolve
+
+    def fake(self, *a, **k):
+        return real(tmp_path / ".env") if self.name == "s.jsonl" else real(self, *a, **k)
+
+    monkeypatch.setattr(Path, "resolve", fake)
+    _refused(rd.OpenAudit(tmp_path / "opened.log"), alias)
+
+
+@pytest.mark.parametrize("comp", [".env-x", ".ENV-Y"])
+def test_env_directory_component_is_refused(tmp_path, comp):
+    d = tmp_path / comp / "proj"
+    d.mkdir(parents=True)
+    p = d / "s.jsonl"
+    p.write_text("{}\n", encoding="ascii")
+    _refused(rd.OpenAudit(tmp_path / "opened.log"), p)

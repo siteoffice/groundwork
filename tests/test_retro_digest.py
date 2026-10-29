@@ -123,3 +123,48 @@ def test_live_locations(tmp_path):
     assert len(rd.live_locations(tmp_path, tmp_path / "la", "win32")[1]) == 1
     assert rd.live_locations(tmp_path, None, "linux")[1:] == ([], False)
     assert rd.live_locations(tmp_path, None, "darwin")[2] is True
+
+
+def _code_transcript(tmp_path, lines):
+    proj = tmp_path / "code" / "p"
+    proj.mkdir(parents=True, exist_ok=True)
+    t = proj / "s-x.jsonl"
+    t.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return rd.Source("code", t, None)
+
+
+def test_non_string_record_type_is_counted_not_fatal(tmp_path):
+    src = _code_transcript(tmp_path, ['{"type": ["a"]}', '{"type": {"b": 1}}', '{"type": "user", "message": {"content": "hi"}}'])
+    d = rd.digest_session(src, rd.OpenAudit(tmp_path / "opened.log"), [])
+    assert d["unknown_record_types"] == {"non_string_type": 2} and d["user_turns"] == 1
+
+
+def test_deeply_nested_line_is_malformed_not_fatal(tmp_path):
+    deep = "[" * 200000 + "]" * 200000
+    src = _code_transcript(tmp_path, [deep, '{"type": "user", "message": {"content": "hi"}}'])
+    d = rd.digest_session(src, rd.OpenAudit(tmp_path / "opened.log"), [])
+    assert d["malformed_lines"] == 1 and d["user_turns"] == 1
+
+
+def test_non_string_metadata_cwd_is_ignored(tmp_path):
+    meta = tmp_path / "local_x.json"
+    meta.write_text('{"sessionId": "x", "cwd": 5, "userSelectedFolders": [7, "/a/b"]}', encoding="utf-8")
+    src = _code_transcript(tmp_path, ['{"type": "user", "message": {"content": "hi"}}'])
+    d = rd.digest_session(rd.Source("cowork", src.transcript, meta), rd.OpenAudit(tmp_path / "opened.log"), [])
+    assert d["cwd"] is None and d["folders"] == ["/a/b"] and d["project"] == "b"
+
+
+def test_since_tolerates_a_file_vanishing_before_stat(tmp_path, monkeypatch):
+    from datetime import datetime
+    fx = materialize_fixtures(tmp_path / "fx")
+    code, cowork, inner = rd.fixture_locations(fx)
+    real = Path.stat
+
+    def fake(self, *a, **k):
+        if self.name == "s-headless.jsonl":
+            raise FileNotFoundError(str(self))
+        return real(self, *a, **k)
+
+    monkeypatch.setattr(Path, "stat", fake)
+    got = rd.discover_sources(code, cowork, datetime(2000, 1, 1), inner)
+    assert len(got) == 4 and "s-headless" not in {s.transcript.stem for s in got}

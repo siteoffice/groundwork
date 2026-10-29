@@ -56,10 +56,11 @@ class OpenAudit:
 
     def open_text(self, path: Path) -> TextIO:
         path = Path(path)
-        shown = str(path.resolve())
+        resolved = path.resolve()
+        shown = str(resolved)
         name = path.name
         reason = None
-        if name.lower().startswith(".env"):
+        if any(p.lower().startswith(".env") for p in path.parts + resolved.parts):
             reason = "env file"
         elif not ((path.suffix == ".jsonl" and name != "audit.jsonl") or _META_NAME.fullmatch(name)):
             reason = "not a transcript or metadata file"
@@ -101,7 +102,14 @@ def discover_sources(code_projects: Path, cowork_roots: List[Path], since: Optio
                 out.append(Source("cowork", t, meta))
     if since is not None:
         cut = since.timestamp()
-        out = [s for s in out if s.transcript.stat().st_mtime >= cut]
+        kept = []
+        for s in out:
+            try:
+                if s.transcript.stat().st_mtime >= cut:
+                    kept.append(s)
+            except OSError:
+                continue
+        out = kept
     return out
 
 
@@ -182,7 +190,7 @@ def digest_session(src: Source, audit: OpenAudit, gate_patterns: List[str]) -> D
                 continue
             try:
                 rec = json.loads(line)
-            except ValueError:
+            except (ValueError, RecursionError):
                 malformed += 1
                 continue
             if not isinstance(rec, dict):
@@ -196,7 +204,8 @@ def digest_session(src: Source, audit: OpenAudit, gate_patterns: List[str]) -> D
         for s in _strings(rec):
             scr.scan(s, sid, ts[:10] if isinstance(ts, str) else "")
 
-    cwd = next((r["cwd"] for r in recs if isinstance(r.get("cwd"), str)), None) or meta.get("cwd")
+    meta_cwd = meta.get("cwd") if isinstance(meta.get("cwd"), str) else None
+    cwd = next((r["cwd"] for r in recs if isinstance(r.get("cwd"), str)), None) or meta_cwd
     extra = meta.get("userSelectedFolders")
     folders = [cwd] if cwd else []
     if isinstance(extra, list):
@@ -229,8 +238,10 @@ def digest_session(src: Source, audit: OpenAudit, gate_patterns: List[str]) -> D
         typ = rec.get("type")
         if not entry and isinstance(rec.get("entrypoint"), str):
             entry = rec["entrypoint"]
-        if typ not in KNOWN_TYPES:
-            _bump(unknown, str(typ))
+        if not isinstance(typ, str):
+            _bump(unknown, "non_string_type")
+        elif typ not in KNOWN_TYPES:
+            _bump(unknown, typ)
         he = rec.get("hookErrors")
         if isinstance(he, list):
             for h in he:
