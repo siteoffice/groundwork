@@ -15,6 +15,18 @@ param(
     [string]$ReportScript = (Join-Path $PSScriptRoot 'retro_report.py')
 )
 $ErrorActionPreference = 'Stop'
+
+# A trailing backslash (tab completion) would escape the closing quote of a quoted argument.
+# Trim it, except on a bare drive root, and double it when one has to stay.
+function Get-CleanRoot([string]$Path) {
+    if ($Path.Length -gt 3) { $Path = $Path.TrimEnd(([char]92), '/') }
+    return $Path
+}
+function Format-Arg([string]$Value) {
+    if ($Value.EndsWith([string][char]92)) { $Value = $Value + [char]92 }
+    return '"' + $Value + '"'
+}
+$Root = Get-CleanRoot $Root
 $retroDir = Join-Path $Root 'retro'
 $log = Join-Path $retroDir 'scheduled_runs.log'
 
@@ -31,11 +43,16 @@ try {
     }
     $argList = @()
     if ((Split-Path -Leaf $Python) -match '^py(\.exe)?$') { $argList += '-3' }
-    $argList += @('-I', ('"{0}"' -f $ReportScript), '--root', ('"{0}"' -f $Root))
+    $argList += @('-I', (Format-Arg $ReportScript), '--root', (Format-Arg $Root))
     $outFile = Join-Path $retroDir 'last_run.out.txt'
     $errFile = Join-Path $retroDir 'last_run.err.txt'
-    $p = Start-Process -FilePath $Python -ArgumentList $argList -Wait -PassThru -WindowStyle Hidden `
-        -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+    try {
+        $p = Start-Process -FilePath $Python -ArgumentList $argList -Wait -PassThru -WindowStyle Hidden `
+            -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+    } catch {
+        Write-RunLog ('retro monthly scan FAILED exit 1: python not found or could not start ({0})' -f $_.Exception.GetType().Name)
+        exit 1
+    }
     $rc = [int]$p.ExitCode
     if ($rc -eq 0) {
         Write-RunLog 'retro monthly scan OK exit 0'

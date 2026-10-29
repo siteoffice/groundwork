@@ -15,6 +15,7 @@ PLIST = SCRIPTS / "retro.launchd.plist.example"
 CRON = SCRIPTS / "retro.cron.example"
 PWSH = shutil.which("pwsh")
 SCHEDULE_FILES = [PS1, WRAP, PLIST, CRON]
+EM = chr(0x2014)
 FORBIDDEN = ["wmi", "cim", "win32_process", "psexec", "wmic", "invoke-cimmethod", "claude -p", "claude"]
 
 
@@ -32,7 +33,7 @@ def test_every_script_file_is_pure_ascii():
 def test_no_forbidden_terms_in_schedule_files():
     for p in SCHEDULE_FILES:
         low = _text(p).lower()
-        assert "—" not in low
+        assert EM not in low
         for term in FORBIDDEN:
             assert term not in low, (p.name, term)
         assert "s4u" not in low and "/ru system" not in low, p.name
@@ -114,3 +115,92 @@ def test_unix_examples_use_placeholders_only():
     for t in (plist, cron):
         assert not re.search(r"[A-Za-z]:\\", t)
         assert not re.search(r"/(Users|home)/(?!<)", t)
+
+
+def _pwsh(*args):
+    return subprocess.run([PWSH, "-NoProfile", "-File"] + [str(a) for a in args],
+                          capture_output=True, text=True, timeout=120)
+
+
+def test_this_test_file_is_pure_ascii():
+    assert all(b < 128 for b in Path(__file__).read_bytes())
+
+
+ODD_NAMES = ["plain\\", "with space\\", "it's here\\"]
+
+
+@pytest.mark.skipif(PWSH is None, reason="pwsh is not installed")
+@pytest.mark.parametrize("name", ODD_NAMES)
+def test_plan_and_vbs_survive_trailing_backslash_space_apostrophe(tmp_path, name):
+    root = str(tmp_path) + "\\" + name
+    Path(root).mkdir(parents=True, exist_ok=True)
+    r = _pwsh(PS1, "-Root", root)
+    assert r.returncode == 0, r.stdout + r.stderr
+    vbs_path = tmp_path / name.rstrip("\\") / "retro" / "run_retro_hidden.vbs"
+    vbs = vbs_path.read_text(encoding="ascii")
+    assert '\\""' not in vbs
+    assert '-Root ""%s""' % str(tmp_path / name.rstrip("\\")) in vbs
+    low = vbs.lower()
+    assert all(b < 128 for b in vbs.encode("ascii"))
+    for term in FORBIDDEN + ["s4u"]:
+        assert term not in low, term
+
+
+@pytest.mark.skipif(PWSH is None, reason="pwsh is not installed")
+@pytest.mark.parametrize("name", ODD_NAMES)
+def test_wrapper_runs_with_trailing_backslash_space_apostrophe(tmp_path, name):
+    root = tmp_path / name.rstrip("\\")
+    (root / "retro").mkdir(parents=True)
+    (root / "retro" / "config.json").write_text("{}", encoding="utf-8")
+    seen = tmp_path / "argv.txt"
+    fake = tmp_path / "fake report.py"
+    code = "import sys\nopen(%r, 'w').write('|'.join(sys.argv[1:]))\nsys.exit(0)\n"
+    fake.write_text(code % str(seen), encoding="utf-8")
+    r = _pwsh(WRAP, "-Root", str(tmp_path) + "\\" + name, "-Python", sys.executable, "-ReportScript", fake)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert seen.read_text(encoding="utf-8") == "--root|%s" % root
+
+
+@pytest.mark.skipif(PWSH is None, reason="pwsh is not installed")
+def test_wrapper_logs_python_not_found(tmp_path):
+    root = tmp_path / "r"
+    (root / "retro").mkdir(parents=True)
+    (root / "retro" / "config.json").write_text("{}", encoding="utf-8")
+    r = _pwsh(WRAP, "-Root", root, "-Python", str(tmp_path / "no_such_python.exe"))
+    assert r.returncode == 1
+    log = (root / "retro" / "scheduled_runs.log").read_text(encoding="ascii")
+    assert "FAILED exit 1: python not found or could not start (" in log
+
+
+@pytest.mark.skipif(PWSH is None, reason="pwsh is not installed")
+@pytest.mark.parametrize("val,code,word", [("0", 0, "success"), ("267011", 267011, "never run"),
+                                           ("3", 3, "3"), ("2147943726", -2147023570, "2147943726")])
+def test_verify_is_locale_independent(val, code, word):
+    r = _pwsh(PS1, "-Verify", "-VerifyUseResult", val)
+    assert r.returncode == code % (2 ** 32) or r.returncode == code, r.stdout + r.stderr
+    assert word in r.stdout
+
+
+@pytest.mark.skipif(PWSH is None, reason="pwsh is not installed")
+@pytest.mark.parametrize("args", [["-Day", "0"], ["-Day", "29"], ["-Time", "25:00"], ["-Time", "9am"],
+                                  ["-TaskName", 'bad"name']])
+def test_invalid_day_time_taskname_are_refused(tmp_path, args):
+    r = _pwsh(PS1, "-Root", tmp_path, *args)
+    assert r.returncode == 2, r.stdout + r.stderr
+    assert "Not registered" not in r.stdout
+    assert "must be" in r.stdout
+
+
+@pytest.mark.skipif(PWSH is None, reason="pwsh is not installed")
+def test_plan_quotes_taskname_and_has_notes(tmp_path):
+    r = _pwsh(PS1, "-Root", tmp_path, "-TaskName", "My Task")
+    assert r.returncode == 0
+    assert '/TN "My Task"' in r.stdout
+    low = r.stdout.lower()
+    assert "battery" in low and "plugin install folder" in low and "xcode" in low
+
+
+def test_verify_does_not_use_english_label():
+    text = _text(PS1)
+    assert "Get-ScheduledTaskInfo" in text and "LastTaskResult" in text
+    assert "Last Result:" not in text
