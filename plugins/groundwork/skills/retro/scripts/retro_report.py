@@ -6,6 +6,7 @@ contributes one line (its count and configured report folder) and gets its own f
 import argparse
 import html
 import json
+import math
 import os
 import re
 import sys
@@ -22,6 +23,7 @@ HOOK_MIN_SESSIONS = 3
 MCP_MIN_SESSIONS = 3
 COUNTS_ONLY_LINE = "**counts only**: script counts, no agent analysis. The deep pass arrives in R2."
 LIVE_TEST_LINE = "live test SKIPPED (not armed): structural pass is necessary-but-not-sufficient"
+LIVE_ARMED_LINE = "live test armed (GROUNDWORK_RETRO_LIVE=1): its result is in the pytest output, not in this report"
 FINISHED_UNIT = "finished piece of work"
 
 
@@ -85,9 +87,11 @@ def load_previous(retro_dir: Path, month: str) -> Tuple[Optional[Dict[str, Any]]
         return None, "corrupt"
     if ver != METRIC_VERSION:
         return data, "version"
-    if not _is_num(data.get("headline")):
-        return None, "corrupt"
-    return data, "ok"
+    try:
+        ok = _is_num(data.get("headline")) and math.isfinite(float(data["headline"]))
+    except OverflowError:
+        ok = False
+    return (data, "ok") if ok else (None, "corrupt")
 
 
 def _add_counts(into: Dict[str, int], src: Any) -> None:
@@ -164,7 +168,7 @@ def build_model(digests: List[Dict[str, Any]], month: str, previous: Tuple[Optio
     scr = Scrubber()
 
     def clean(t: Any, n: int = 120) -> str:
-        return quote_snippet(t, scr, "", "", n)
+        return quote_snippet(t, scr, "", "", n).replace("[", "\\[").replace("]", "\\]")
 
     metrics = build_metrics(digests, month)
     by_project = {}  # type: Dict[str, int]
@@ -199,7 +203,7 @@ def build_model(digests: List[Dict[str, Any]], month: str, previous: Tuple[Optio
         "by_project": by_project, "tool_errors": errors, "totals": totals,
         "silent": find_silent_failures(digests), "findings": _findings(digests),
         "hooks": hooks, "mcp_used": mcp_used, "mcp_failed": mcp_failed,
-        "skills_used": used, "skills_unused": [s for s in installed if clean(s) not in used],
+        "skills_used": used, "skills_unused": [clean(s) for s in installed if clean(s) not in used],
         "skills_installed": len(installed), "est": est, "assumptions": assumptions,
         "rejected": [clean(r, 80) for r in rejected], "worlds_line": worlds_line,
         "clean": clean,
@@ -235,7 +239,7 @@ def _limitations(model: Dict[str, Any]) -> List[str]:
         "holds REFUSED lines.",
         "The macOS path for Cowork transcripts is unverified%s." % (
             " (this run used it)" if model["platform"] == "darwin" else ""),
-        LIVE_TEST_LINE,
+        LIVE_TEST_LINE if os.environ.get("GROUNDWORK_RETRO_LIVE") != "1" else LIVE_ARMED_LINE,
     ]
 
 
@@ -458,6 +462,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--gate-pattern", action="append", default=[], metavar="GLOB")
     ap.add_argument("--now", help="YYYY-MM-DD, default today (UTC)")
     args = ap.parse_args(argv)
+    if not 1 <= args.days <= 3650:
+        ap.error("--days must be between 1 and 3650")
     worlds = []
     for w in args.world:
         folder, sep, out = w.partition("=")

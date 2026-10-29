@@ -200,7 +200,8 @@ def test_installed_skills_checks_folders_with_skill_md_only(tmp_path):
     assert rr.installed_skills([tmp_path, tmp_path / "missing"]) == ["a"]
 
 
-def test_limitations_state_the_required_facts(tmp_path):
+def test_limitations_state_the_required_facts(tmp_path, monkeypatch):
+    monkeypatch.delenv("GROUNDWORK_RETRO_LIVE", raising=False)
     from retro_estimate import RATES_AS_OF
     md = _text(_run(tmp_path))
     lim = md.split("## Limitations")[1]
@@ -234,3 +235,112 @@ def test_cli_world_option_and_bad_world(tmp_path):
     assert (tmp_path / "w" / "2026-10" / "report.md").is_file()
     bad = subprocess.run(base + ["--world", "nofolder"], capture_output=True, text=True, timeout=120)
     assert bad.returncode == 2
+
+
+XSS = "<script>alert(1)</script>"
+BS = chr(92)
+ESC = "&lt;script&gt;alert(1)&lt;/script&gt;"
+
+
+def _jl(path, recs):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(json.dumps(r) for r in recs) + "\n", encoding="utf-8")
+
+
+def _inject_session(fx, sid, task, hook, skill, final, headless=True):
+    first = "<scheduled-task name=" + chr(34) + task + chr(34) + "> run"
+    base = {"sessionId": sid, "cwd": "/home/demo/p", "entrypoint": "sdk-cli" if headless else "cli"}
+    ts = "2026-10-07T10:00:0%dZ"
+    recs = [
+        dict(base, type="user", timestamp=ts % 1, message={"role": "user", "content": first}),
+        dict(base, type="system", timestamp=ts % 2, content="x", hookErrors=[hook]),
+        dict(base, type="assistant", timestamp=ts % 3, message={"role": "assistant", "content": [
+            {"type": "tool_use", "id": "t1", "name": "Skill", "input": {"skill": skill}}]}),
+        dict(base, type="assistant", timestamp=ts % 4, message={"role": "assistant", "content": [
+            {"type": "text", "text": final}]}),
+    ]
+    _jl(fx / "code" / sid / (sid + ".jsonl"), recs)
+
+
+def test_script_text_is_escaped_in_every_html_branch(tmp_path):
+    fx = materialize_fixtures(tmp_path / "fx")
+    _inject_session(fx, "s-inj", XSS, "hook " + XSS, XSS, "API Error: 400 " + XSS)
+    out = rr.run_retro(tmp_path / "root", NOW, fixtures=fx, gate_patterns=[XSS + "x" * 80])
+    html = _text(out, "report_html")
+    assert "<script>" not in html and "</script>" not in html.replace("</script></head>", "")
+    assert html.count(ESC) >= 5   # task, snippet, hook, skill, refused gate pattern
+    md = _text(out)
+    assert "<script>" in md       # Markdown is plain text; only HTML must be escaped
+
+
+def test_render_html_escapes_title_and_heading():
+    m = rr.build_model([], "2026-10<b>", (None, "missing"), [], None, "a", [], None, "linux")
+    html = rr.render_html(m)
+    assert "<b>" not in html and html.count("2026-10&lt;b&gt;") == 2
+
+
+@pytest.mark.parametrize("kind", ["aws_access_key", "anthropic_key", "jwt", "connection_string", "github_pat"])
+def test_secret_in_hook_and_final_error_absent_from_all_outputs(tmp_path, kind):
+    from retro_fixture_util import secret_values
+    secret = secret_values()[kind]
+    fx = materialize_fixtures(tmp_path / "fx")
+    _inject_session(fx, "s-sec2", "t", "hook failed " + secret, "plain", "API Error: 400 " + secret)
+    out = rr.run_retro(tmp_path / "root", NOW, fixtures=fx)
+    for key in ("report_md", "report_html", "metrics"):
+        assert secret not in _text(out, key), key
+    assert "s-sec2, 2026-10-07, %s. Fix:" % kind in _text(out)
+
+
+@pytest.mark.parametrize("kind", ["aws_access_key", "jwt", "connection_string"])
+def test_render_scrubs_an_unscrubbed_digest(kind):
+    from retro_fixture_util import secret_values
+    secret = secret_values()[kind]
+    d = {"session_id": "s1", "start": "2026-10-01T00:00:00Z", "headless": True, "final_error": "E " + secret,
+         "hook_errors": {"H " + secret: 1}, "mcp_failures": [], "touches": {}, "project": "p " + secret,
+         "skills": {"sk " + secret: 1}, "scheduled_task": "t " + secret, "success_line": False}
+    m = rr.build_model([d], "2026-10", (None, "missing"), [], None, "a", [], None, "linux")
+    for text in (rr.render_md(m), rr.render_html(m)):
+        assert secret not in text
+
+
+@pytest.mark.parametrize("value", ["9" * 400, "1e999", "NaN"])
+def test_previous_headline_overflow_or_nonfinite_is_no_trend(tmp_path, value):
+    prev = tmp_path / "root" / "retro" / "2026-09"
+    prev.mkdir(parents=True)
+    (prev / "metrics.json").write_text('{"metric_version": 1, "headline": %s}' % value, encoding="utf-8")
+    assert "no trend: previous metrics.json unreadable" in _text(_run(tmp_path))
+
+
+@pytest.mark.parametrize("days", ["0", "3651", "99999999999999999999"])
+def test_cli_rejects_out_of_range_days(tmp_path, days):
+    cmd = [sys.executable, "-I", str(SCRIPTS / "retro_report.py"), "--root", str(tmp_path), "--days", days]
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    assert r.returncode == 2 and "--days must be between 1 and 3650" in r.stderr
+    assert "Traceback" not in r.stderr
+
+
+def test_unused_skill_names_are_cleaned(tmp_path):
+    fx = materialize_fixtures(tmp_path / "fx")
+    name = "unused[x](evil)"
+    (fx / "skills" / name).mkdir()
+    (fx / "skills" / name / "SKILL.md").write_text("x", encoding="utf-8")
+    md = _text(rr.run_retro(tmp_path / "root", NOW, fixtures=fx))
+    assert "unused" + BS + "[x" + BS + "](evil)" in md and "[x](evil)" not in md
+
+
+@pytest.mark.parametrize("project", ["[x](evil)", "![i](evil)"])
+def test_markdown_links_in_project_names_are_inert(tmp_path, project):
+    fx = materialize_fixtures(tmp_path / "fx")
+    _session_file(fx, "s-link", "/home/demo/" + project, "yes")
+    md = _text(rr.run_retro(tmp_path / "root", NOW, fixtures=fx))
+    assert project.replace("[", BS + "[").replace("]", BS + "]") in md
+    assert "[x](evil)" not in md and "[i](evil)" not in md
+
+
+def test_live_test_line_follows_the_guard(tmp_path, monkeypatch):
+    skipped = "live test SKIPPED (not armed): structural pass is necessary-but-not-sufficient"
+    monkeypatch.delenv("GROUNDWORK_RETRO_LIVE", raising=False)
+    assert skipped in _text(_run(tmp_path / "a"))
+    monkeypatch.setenv("GROUNDWORK_RETRO_LIVE", "1")
+    md = _text(_run(tmp_path / "b"))
+    assert skipped not in md and "live test armed (GROUNDWORK_RETRO_LIVE=1)" in md
