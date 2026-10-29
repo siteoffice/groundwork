@@ -190,3 +190,10 @@ def test_outside_a_repository_an_ignore_file_is_not_honoured(tmp_path):
     (tmp_path / "local").mkdir()
     (tmp_path / "local" / "brief.md").write_text(PRIVATE + "\n", encoding="ascii")
     assert run_gate(tmp_path).returncode == 1
+
+
+@needs_pwsh
+@pytest.mark.parametrize("rel", ["plugins/groundwork/skills/retro", "tests/fixtures/retro"])
+def test_the_retro_skill_and_fixtures_are_public_clean(rel):
+    r = run_gate(ROOT / rel)
+    assert r.returncode == 0, out(r)
