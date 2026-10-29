@@ -22,6 +22,7 @@ _RELAY = re.compile(r"(?i)\b(other|previous|parallel|second|first) (session|chat
                     r"|^(relay|forwarding)\b")
 _COMMIT = re.compile(r"\bgit\s+commit\b|\bgh\s+pr\s+create\b"
                      r"|git_flow\.ps1\b.*\b(save|propose|land)\b.*--apply")
+_SHELL_TOOLS = ("bash", "powershell")
 _RECEIPT = re.compile(r"receipts[/\\]step-")
 
 
@@ -117,7 +118,7 @@ def is_finished_record(record: Dict[str, Any]) -> bool:
         kind = b.get("type")
         if kind == "tool_use":
             inp = b.get("input")
-            if b.get("name") == "Bash" and isinstance(inp, dict) \
+            if str(b.get("name")).lower() in _SHELL_TOOLS and isinstance(inp, dict) \
                     and isinstance(inp.get("command"), str) and _COMMIT.search(inp["command"]):
                 return True
             if any(_RECEIPT.search(s) for s in _strings(inp)):
