@@ -175,7 +175,7 @@ default. See the [issue list](https://github.com/siteoffice/groundwork/issues).
 - **Retro on Cowork for macOS is unverified, and its touch classes are heuristics.** They are
   `metric_version 1`, so read the counts as a trend, not as a score.
 - **Retro refuses any path with a component starting `.env`.** That includes a parent folder, so
-  such a home path gives zero sessions.
+  such a home path gives zero sessions, and the report says how many files were refused.
 - **The retro report estimate shows assumptions, not live prices.**
 - **The board follows folders upward.** It looks for a funnel folder in the parent folders. Put
   your checkout somewhere with no `00_funnel` above it, or the board shows that funnel too.

@@ -87,7 +87,7 @@ and it changes nothing. Applying fixes arrives in R2.
 - Launch `claude -p` or any agent, or upload anything. Transcripts are read locally only.
 - Register the scheduled task by itself.
 - Open a `.env*` file. Any path with a component starting `.env` is refused, so a home path with
-  such a component yields zero sessions.
+  such a component yields zero sessions, and the report says how many files were refused.
 - Store a secret. A hit is scrubbed and becomes a `secret_exposure` finding with session, date, kind.
 - Put a separate world's content into the main report.
 

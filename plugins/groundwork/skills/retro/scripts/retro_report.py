@@ -165,13 +165,16 @@ def _signed(x: float) -> str:
 
 def build_model(digests: List[Dict[str, Any]], month: str, previous: Tuple[Optional[Dict[str, Any]], str],
                 skill_dirs: List[Path], est: Optional[Dict[str, Any]], assumptions: str,
-                rejected: List[str], worlds_line: Optional[str], platform: str) -> Dict[str, Any]:
+                rejected: List[str], worlds_line: Optional[str], platform: str,
+                refused: int = 0, unreadable: int = 0) -> Dict[str, Any]:
     scr = Scrubber()
 
     def clean(t: Any, n: int = 120) -> str:
         return quote_snippet(t, scr, "", "", n).replace("[", "\\[").replace("]", "\\]")
 
     metrics = build_metrics(digests, month)
+    metrics["refused"] = refused
+    metrics["unreadable"] = unreadable
     by_project = {}  # type: Dict[str, int]
     errors = {}  # type: Dict[str, int]
     hooks = {}  # type: Dict[str, List[int]]
@@ -229,15 +232,23 @@ def _trend(model: Dict[str, Any]) -> str:
         _signed(m["headline"] - float(prev["headline"])), note)
 
 
+def _skipped_line(m: Dict[str, Any]) -> List[str]:
+    refused, unread = m.get("refused", 0), m.get("unreadable", 0)
+    if not refused and not unread:
+        return []
+    return ["%d transcript files were refused (a path component starts with .env) and %d could not be read; "
+            "they are not in these counts." % (refused, unread)]
+
+
 def _limitations(model: Dict[str, Any]) -> List[str]:
-    return [
+    return _skipped_line(model["metrics"]) + [
         "Counts only: script counts, no agent analysis, no judgment of quality.",
         "Touch heuristics are metric_version %d; a touch is a guess from the shape of a user turn." % METRIC_VERSION,
         "The estimate rates are assumptions as of %s, not live prices. %s" % (RATES_AS_OF, model["assumptions"]),
         "opened.log also lists world transcript paths (paths only, never content).",
         "The file audit refuses any path with a component starting \".env\", even above the scan root. A user whose "
-        "home path has such a component gets zero digests, which shows here as zero sessions; opened.log then "
-        "holds REFUSED lines.",
+        "home path has such a component gets zero digests, which shows here as zero sessions, and the report says "
+        "how many files were refused; opened.log then holds REFUSED lines.",
         "The macOS path for Cowork transcripts is unverified%s." % (
             " (this run used it)" if model["platform"] == "darwin" else ""),
         LIVE_TEST_LINE if os.environ.get("GROUNDWORK_RETRO_LIVE") != "1" else LIVE_ARMED_LINE,
@@ -436,7 +447,8 @@ def run_retro(root: Path, now: datetime, fixtures: Optional[Path] = None, home: 
                    if analysed else None)
     common = dict(skill_dirs=skill_dirs, assumptions=est["assumptions"], rejected=res["rejected_gate_patterns"],
                   platform=platform)
-    model = build_model(main, month, load_previous(retro_dir, month), est=est, worlds_line=worlds_line, **common)
+    main_only = dict(refused=res["refused"], unreadable=res["unreadable"])
+    model = build_model(main, month, load_previous(retro_dir, month), est=est, worlds_line=worlds_line, **main_only, **common)
     paths = _write_report(month_dir, model)
     for h in analysed:
         out = Path(h["world"]["report_dir"])

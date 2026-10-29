@@ -397,8 +397,16 @@ def collect(sources: List[Source], month_dir: Path, month: str, worlds: List[Dic
     main = []  # type: List[Dict[str, Any]]
     held = [{"world": w, "digests": [], "transcript_bytes": 0} for w in worlds]
     main_bytes = 0
+    refused = unreadable = 0
     for src in sources:
-        digest = digest_session(src, audit, gate_patterns)
+        try:
+            digest = digest_session(src, audit, gate_patterns)
+        except RefusedPath:
+            refused += 1
+            continue
+        except (OSError, UnicodeError):
+            unreadable += 1
+            continue
         i = _route_index(digest, worlds)
         if i is None:
             write_digest(digest, month_dir / "digests")
@@ -409,4 +417,4 @@ def collect(sources: List[Source], month_dir: Path, month: str, worlds: List[Dic
         held[i]["digests"].append(digest)
         held[i]["transcript_bytes"] += digest["transcript_bytes"]
     return {"main": main, "worlds": held, "transcript_bytes": main_bytes,
-            "rejected_gate_patterns": rejected}
+            "rejected_gate_patterns": rejected, "refused": refused, "unreadable": unreadable}
