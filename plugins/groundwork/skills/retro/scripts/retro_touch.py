@@ -4,7 +4,7 @@ A touch is a user turn that steers or relays instead of asking for something new
 Only the class name leaves this module, never the text.
 """
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Pattern, Tuple
 
 TOUCH_CLASSES = ("pasted_shell_output", "approval_word", "relay", "continue_restart",
                  "permission_answer")
@@ -25,6 +25,28 @@ _COMMIT = re.compile(r"\bgit\s+commit\b|\bgh\s+pr\s+create\b"
 _RECEIPT = re.compile(r"receipts[/\\]step-")
 
 
+MAX_PATTERN_LEN = 80
+MAX_GATE_TEXT = 200
+MAX_RELAY_TEXT = 200
+_UNSAFE = re.compile(r"\)[*+?{]|\\[1-9]|\(\?P=|\(\?<?[=!]|\(\?\(")
+
+
+def load_gate_patterns(patterns: List[str]) -> Tuple[List[Pattern], List[str]]:
+    """Vet user gate patterns: no quantified group, backreference, lookaround or conditional,
+    at most 80 characters. Returns (compiled, rejected); rejected holds the pattern text."""
+    compiled = []  # type: List[Pattern]
+    rejected = []  # type: List[str]
+    for pat in patterns:
+        if not isinstance(pat, str) or len(pat) > MAX_PATTERN_LEN or _UNSAFE.search(pat):
+            rejected.append(pat if isinstance(pat, str) else repr(pat))
+            continue
+        try:
+            compiled.append(re.compile(pat))
+        except re.error:
+            rejected.append(pat)
+    return compiled, rejected
+
+
 def classify_touch(text: str, gate_patterns: List[str]) -> Optional[str]:
     t = text.strip() if isinstance(text, str) else ""
     if not t or t.startswith("[Request interrupted") or "<command-name>" in t:
@@ -32,12 +54,10 @@ def classify_touch(text: str, gate_patterns: List[str]) -> Optional[str]:
     words = t.split()
     if words and words[0].lower().strip(".,!:;") in GATE_VERDICTS and len(words) <= 12:
         return GATE_VERDICT
-    for pat in gate_patterns:
-        try:
-            if re.fullmatch(pat, t):
+    if len(t) <= MAX_GATE_TEXT:
+        for rx in load_gate_patterns(gate_patterns)[0]:
+            if rx.fullmatch(t):
                 return GATE_VERDICT
-        except (re.error, TypeError):
-            continue
     if _PERMISSION.fullmatch(t):
         return "permission_answer"
     if t.lower().rstrip(".!") in _APPROVAL:
@@ -47,7 +67,7 @@ def classify_touch(text: str, gate_patterns: List[str]) -> Optional[str]:
     lines = [ln for ln in t.splitlines() if ln.strip()]
     if len(lines) >= 3 and sum(1 for ln in lines if _SHELL_LINE.search(ln)) * 2 >= len(lines):
         return "pasted_shell_output"
-    if _RELAY.search(t):
+    if len(t) <= MAX_RELAY_TEXT and _RELAY.search(t):
         return "relay"
     return None
 

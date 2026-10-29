@@ -179,3 +179,22 @@ def test_finished_and_gate_exclusion(tmp_path):
     ds = _all(tmp_path)
     assert ds["s-interactive"]["finished"] is True and ds["s-interactive"]["gate_verdicts_excluded"] == 1
     assert ds["s-headless"]["finished"] is False
+
+
+def test_injected_turns_are_not_touches(tmp_path):
+    import retro_digest as rdg
+    proj = tmp_path / "p" / "proj"
+    proj.mkdir(parents=True)
+    lines = [{"type": "user", "message": {"role": "user", "content": c}, "sessionId": "inj", "cwd": "/home/demo/x"}
+             for c in ("<scheduled-task name=\"t\">yes", "<system-reminder>the other session is green</system-reminder>", "yes")]
+    (proj / "inj.jsonl").write_text("\n".join(json.dumps(x) for x in lines), encoding="utf-8")
+    d = rdg.digest_session(rdg.Source("code", proj / "inj.jsonl", None), rdg.OpenAudit(tmp_path / "o.log"), [])
+    assert d["touches"] == {"approval_word": 1}
+
+
+def test_collect_reports_rejected_gate_patterns(tmp_path):
+    fx = materialize_fixtures(tmp_path / "fx")
+    code, cowork, inner = rd.fixture_locations(fx)
+    res = rd.collect(rd.discover_sources(code, cowork, None, inner), tmp_path / "m", "2026-10", [],
+                     ["(a+)+$", "^ok$"])
+    assert res["rejected_gate_patterns"] == ["(a+)+$"]

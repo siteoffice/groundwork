@@ -49,3 +49,30 @@ def _bash(cmd):
 ])
 def test_finished(record, expected):
     assert is_finished_record(record) is expected
+
+
+def test_redos_patterns_are_refused_and_fast():
+    import time
+    from retro_touch import load_gate_patterns
+    cases = [("a" * 30 + "!", "(a+)+$"), ("a" * 28 + "!", "(a*)*b")]
+    for text, pat in cases:
+        t0 = time.perf_counter()
+        classify_touch(text, [pat])
+        assert time.perf_counter() - t0 < 1.0
+    compiled, rejected = load_gate_patterns([c[1] for c in cases] + ["^ok to ship$", "(", r"(a)\1", "(?=x)", "x" * 81])
+    assert [p.pattern for p in compiled] == ["^ok to ship$"]
+    assert rejected[:2] == ["(a+)+$", "(a*)*b"] and len(rejected) == 6
+
+
+def test_safe_pattern_still_excludes_and_long_turn_never_does():
+    assert classify_touch("ok to ship", ["^ok to ship$", "lgtm"]) == "gate_verdict"
+    assert classify_touch("lgtm", ["^ok to ship$", "lgtm"]) == "gate_verdict"
+    long_text = "a" * 201
+    assert classify_touch(long_text, ["a+"]) is None
+    assert classify_touch("a" * 200, ["a+"]) == "gate_verdict"
+
+
+def test_relay_only_on_short_turns():
+    assert classify_touch("the other session says it is green", []) == "relay"
+    long_req = "please refactor the parser module so that " + "it handles every edge case " * 10 + "the other session agreed"
+    assert len(long_req) > 200 and classify_touch(long_req, []) is None

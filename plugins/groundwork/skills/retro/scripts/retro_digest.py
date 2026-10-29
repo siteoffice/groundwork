@@ -13,7 +13,7 @@ from typing import Any, Dict, List, NamedTuple, Optional, TextIO, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from retro_scrub import Scrubber  # noqa: E402
-from retro_touch import GATE_VERDICT, classify_touch, is_finished_record  # noqa: E402
+from retro_touch import GATE_VERDICT, classify_touch, is_finished_record, load_gate_patterns  # noqa: E402
 
 METRIC_VERSION = 1
 KNOWN_TYPES = frozenset({
@@ -281,7 +281,8 @@ def digest_session(src: Source, audit: OpenAudit, gate_patterns: List[str]) -> D
                     interrupts += 1
                 for c in _SLASH.findall(text):
                     _bump(slashes, c)
-                touch = classify_touch(text, gate_patterns)
+                injected = text.startswith(("<scheduled-task", "<system-reminder"))
+                touch = None if injected else classify_touch(text, gate_patterns)
                 if touch == GATE_VERDICT:
                     gate_excluded += 1
                 elif touch:
@@ -392,6 +393,7 @@ def collect(sources: List[Source], month_dir: Path, month: str, worlds: List[Dic
     month_dir = Path(month_dir)
     _check_worlds(worlds, month_dir, month)
     audit = OpenAudit(month_dir / "opened.log")
+    _, rejected = load_gate_patterns(gate_patterns)
     main = []  # type: List[Dict[str, Any]]
     held = [{"world": w, "digests": [], "transcript_bytes": 0} for w in worlds]
     main_bytes = 0
@@ -406,4 +408,5 @@ def collect(sources: List[Source], month_dir: Path, month: str, worlds: List[Dic
         write_digest(digest, Path(worlds[i]["report_dir"]) / month / "digests")
         held[i]["digests"].append(digest)
         held[i]["transcript_bytes"] += digest["transcript_bytes"]
-    return {"main": main, "worlds": held, "transcript_bytes": main_bytes}
+    return {"main": main, "worlds": held, "transcript_bytes": main_bytes,
+            "rejected_gate_patterns": rejected}
