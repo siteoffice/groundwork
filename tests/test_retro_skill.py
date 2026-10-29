@@ -44,3 +44,9 @@ def test_cited_flags_exist_in_the_scripts():
         assert flag in py, flag
     for flag in set(re.findall(r"(?<![\w-])-(?:Root|Register|Verify)\b", text)):
         assert flag[1:] in sources["register_retro_task.ps1"], flag
+
+
+def test_readme_has_a_retro_section():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "### Retro" in readme and "plugins\\groundwork\\skills\\retro" in readme
+    assert chr(0x2014) not in readme

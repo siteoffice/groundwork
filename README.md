@@ -62,6 +62,23 @@ Do not switch on the Fleet or the Git lane in a session that also loads another 
 registers `/fleet`, `/git` or a git guard. Both would register the same commands. Both
 register their commands on every surface (terminal, Desktop, mobile and VS Code).
 
+### Retro
+
+`retro` (in `plugins\groundwork\skills\retro`) is a monthly check-up of your own sessions of the
+last N days (30 by default). It measures how many times you had to step in per finished piece of
+work, silent failures, secret exposures, hook and MCP health, and which skills you used and which
+you did not. It reads only your own transcripts on your machine, uploads nothing and never opens
+a `.env` file. Secrets are scrubbed and never stored: the report keeps the session, the date and
+the kind, nothing else.
+
+The report lands in `<root>\retro\YYYY-MM\` as `report.md`, `report.html` and `metrics.json`. Each
+separate world you name gets its own report in its own folder and is never mixed into the main
+report. Gate patterns you declare are simple globs (`*` and `?`), not regular expressions. This
+release only counts. The agent analysis and the guided apply come later. To start, say "retro".
+
+A monthly scan can be set up. A script prints the plan; you run the register command yourself,
+and nothing is registered for you.
+
 ## 2. Goals and benefits
 
 - **The record lives in your folder.** A flow is plain files: `flow.json` and a log. Look at
@@ -155,6 +172,11 @@ default. See the [issue list](https://github.com/siteoffice/groundwork/issues).
 
 - **macOS is untested.** The code has no Windows-only calls and the guide has a macOS path, but
   nobody has run it on a Mac.
+- **Retro on Cowork for macOS is unverified, and its touch classes are heuristics.** They are
+  `metric_version 1`, so read the counts as a trend, not as a score.
+- **Retro refuses any path with a component starting `.env`.** That includes a parent folder, so
+  such a home path gives zero sessions.
+- **The retro report estimate shows assumptions, not live prices.**
 - **The board follows folders upward.** It looks for a funnel folder in the parent folders. Put
   your checkout somewhere with no `00_funnel` above it, or the board shows that funnel too.
 - **The agent policy is a guardrail, not a lock.** It cannot see a link that leads out of a
