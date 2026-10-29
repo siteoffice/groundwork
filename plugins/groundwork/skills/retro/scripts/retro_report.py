@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from retro_config import ConfigError, load_config, validate_config  # noqa: E402
+from retro_config import ConfigError, ceiling_problem, check_root, load_config, validate_config  # noqa: E402
 from retro_digest import METRIC_VERSION, collect, discover_sources, fixture_locations, live_locations  # noqa: E402
 from retro_estimate import RATES_AS_OF, estimate, format_estimate  # noqa: E402
 from retro_scrub import FIX_TEXT, Scrubber  # noqa: E402
@@ -458,14 +458,22 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.days is not None and not 1 <= args.days <= 3650:
         ap.error("--days must be between 1 and 3650")
     root = Path(args.root)
+    bad_root = check_root(root)
+    if bad_root:
+        print("retro config error: %s" % bad_root, file=sys.stderr)
+        return 2
     try:
         config = load_config(root)
-        problems = validate_config(config, root)
     except ConfigError as exc:
-        print("retro config error: %s" % exc)
+        print("retro config error: %s" % exc, file=sys.stderr)
         return 2
+    cp = ceiling_problem(config)
+    if cp:  # the ceiling is stored for R2 only, so a bad one must not stop the monthly scan
+        print("token ceiling in config.json is invalid, ignoring it: %s" % cp, file=sys.stderr)
+        config["token_ceiling"] = None
+    problems = validate_config(config, root)
     if problems:
-        print("retro config error: %s" % "; ".join(problems))
+        print("retro config error: %s" % "; ".join(problems), file=sys.stderr)
         return 2
     worlds = []
     for w in args.world:

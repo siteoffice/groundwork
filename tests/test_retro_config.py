@@ -204,11 +204,167 @@ def test_report_cli_world_wins_over_config(tmp_path):
     assert not (tmp_path / "cfg-out").exists()
 
 
-def test_report_main_bad_config_exits_2(tmp_path, capsys):
+def test_report_main_bad_config_exits_2_on_stderr(tmp_path, capsys):
     root = tmp_path / "root"
     (root / "retro").mkdir(parents=True)
     (root / "retro" / "config.json").write_text("{nope", encoding="utf-8")
     assert rr.main(["--root", str(root), "--fixtures", str(tmp_path)]) == 2
-    assert len(capsys.readouterr().out.strip().splitlines()) == 1
-    (root / "retro" / "config.json").write_text(json.dumps({"token_ceiling": 0}), encoding="utf-8")
+    cap = capsys.readouterr()
+    assert cap.out == "" and len(cap.err.strip().splitlines()) == 1
+    (root / "retro" / "config.json").write_text(json.dumps({"period_days": 0}), encoding="utf-8")
     assert rr.main(["--root", str(root), "--fixtures", str(tmp_path)]) == 2
+    assert "period_days" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("bad", [0, -1, True, "x", float("nan")])
+def test_bad_ceiling_warns_on_stderr_and_scan_continues(tmp_path, capsys, bad):
+    root = tmp_path / "root"
+    (root / "retro").mkdir(parents=True)
+    (root / "retro" / "config.json").write_text(json.dumps({"token_ceiling": bad}), encoding="utf-8")
+    assert rr.main(["--root", str(root), "--fixtures", str(tmp_path), "--now", "2026-10-15"]) == 0
+    err = capsys.readouterr().err
+    assert err.startswith("token ceiling in config.json is invalid, ignoring it: ") and len(err.strip().splitlines()) == 1
+
+
+def test_report_main_refuses_bad_root(tmp_path, capsys):
+    assert rr.main(["--root", str(tmp_path / ".envs" / "r"), "--fixtures", str(tmp_path)]) == 2
+    assert ".env" in capsys.readouterr().err
+
+
+# --- review fixes: normalise first, then check -------------------------------------------
+
+def _folder_problems(tmp_path, folder):
+    return _bad_world(tmp_path, (folder, str(tmp_path / "o")))
+
+
+def _report_problems(tmp_path, out):
+    return _bad_world(tmp_path, (str(tmp_path / "w"), out))
+
+
+@pytest.mark.parametrize("suffix", ["x/..", "a/../.."])
+def test_dotdot_to_a_drive_root_is_refused_for_both_paths(tmp_path, suffix):
+    bad = tmp_path.anchor + suffix
+    assert _folder_problems(tmp_path, bad)
+    assert _report_problems(tmp_path, bad)
+    assert _init(tmp_path, "--world", "%s=%s" % (bad, tmp_path / "o")) == 2
+    assert not (tmp_path / "root" / "retro" / "config.json").exists()
+
+
+def test_dotdot_cannot_hide_or_fake_a_dot_env_component(tmp_path):
+    assert not _folder_problems(tmp_path, str(tmp_path / ".env" / ".." / "ok"))
+    assert not _report_problems(tmp_path, str(tmp_path / ".env" / ".." / "ok"))
+    assert _folder_problems(tmp_path, str(tmp_path / "ok" / ".." / ".env" / "z"))
+    assert _report_problems(tmp_path, str(tmp_path / "ok" / ".." / ".env" / "z"))
+
+
+def test_posix_folder_accepted_after_normalising(tmp_path):
+    cfg = dict(rc.DEFAULTS, worlds=[{"folder": "/home/demo/a/../x", "report_dir": str(tmp_path / "o")}])
+    assert rc.validate_config(cfg, tmp_path / "root") == []
+    assert _init(tmp_path, "--world", "/home/demo/a/../x=%s" % (tmp_path / "o")) == 0
+    assert rc.load_config(tmp_path / "root")["worlds"][0]["folder"] == "/home/demo/x"
+
+
+def test_posix_folder_root_is_refused(tmp_path):
+    assert _folder_problems(tmp_path, "/")
+    assert _folder_problems(tmp_path, "/..")
+    assert _folder_problems(tmp_path, "/home/..")
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="drive-style POSIX folders only matter on Windows")
+@pytest.mark.parametrize("folder", ["/c/users/x", "/x/..", "/c", "/C/"])
+def test_posix_drive_style_folder_is_refused_on_windows(tmp_path, folder):
+    assert _folder_problems(tmp_path, folder)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="drive-style POSIX folders only matter on Windows")
+def test_drive_style_message_says_to_use_the_windows_form(tmp_path):
+    assert any("Windows" in m for m in _folder_problems(tmp_path, "/c/users/x"))
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="a POSIX-rooted path is only relative on Windows")
+def test_report_dir_stays_strictly_absolute(tmp_path):
+    assert _report_problems(tmp_path, "/home/demo/out")
+
+
+# --- re-run messages ----------------------------------------------------------------------
+
+def test_init_reports_created_then_updated_and_replaced_lists(tmp_path, capsys):
+    path = tmp_path / "root" / "retro" / "config.json"
+    assert _init(tmp_path, "--world", _w(tmp_path, "a", "oa"), "--world", _w(tmp_path, "b", "ob"),
+                 "--gate-pattern", "ok") == 0
+    out = capsys.readouterr().out
+    assert "created %s" % path in out and "replaced" not in out
+    assert _init(tmp_path, "--world", _w(tmp_path, "c", "oc"), "--gate-pattern", "x", "--gate-pattern", "y") == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert "updated %s" % path in lines
+    assert any(l.startswith("replaced worlds:") and "2" in l and "1" in l for l in lines)
+    assert any(l.startswith("replaced gate_patterns:") and "1" in l and "2" in l for l in lines)
+    assert _init(tmp_path, "--period", "9") == 0
+    assert "replaced" not in capsys.readouterr().out
+
+
+# --- validate_config extras ---------------------------------------------------------------
+
+def test_report_dir_inside_own_folder_is_refused(tmp_path):
+    assert _bad_world(tmp_path, (str(tmp_path / "w"), str(tmp_path / "w" / "out")))
+    assert _bad_world(tmp_path, (str(tmp_path / "w"), str(tmp_path / "w")))
+
+
+def test_nested_world_folders_are_refused(tmp_path):
+    assert _bad_world(tmp_path, (str(tmp_path / "a"), str(tmp_path / "oa")), (str(tmp_path / "a" / "b"), str(tmp_path / "ob")))
+    assert _bad_world(tmp_path, (str(tmp_path / "a" / "b"), str(tmp_path / "oa")), (str(tmp_path / "a"), str(tmp_path / "ob")))
+    assert _bad_world(tmp_path, (str(tmp_path / "a"), str(tmp_path / "oa")), (str(tmp_path / "A"), str(tmp_path / "ob")))
+
+
+# --- ROOT validation ----------------------------------------------------------------------
+
+def test_init_refuses_bad_roots(tmp_path, capsys):
+    assert _init(tmp_path, root=tmp_path / ".envs" / "r") == 2
+    assert _init(tmp_path, root=tmp_path.anchor) == 2
+    assert _init(tmp_path, root=tmp_path.anchor + "x/..") == 2
+    assert not (tmp_path / "home").exists()
+    assert ".env" in capsys.readouterr().out
+
+
+def test_bad_pointer_shapes_fall_back_to_default(tmp_path):
+    home, start = tmp_path / "home", tmp_path / "e"
+    start.mkdir()
+    (home / ".groundwork").mkdir(parents=True)
+    ptr = home / ".groundwork" / "retro.json"
+    for body in ('["x"]', '{"root": 5}', '{"root": ""}', '{"root": "relative/dir"}',
+                 json.dumps({"root": str(tmp_path / ".envs" / "r")}), json.dumps({"root": tmp_path.anchor})):
+        ptr.write_text(body, encoding="utf-8")
+        assert rc.resolve_root(start, home) == (home / "Documents", "default"), body
+
+
+def test_groundwork_root_with_dot_env_component_is_skipped(tmp_path):
+    root = tmp_path / ".envs" / "gw"
+    (root / "flows").mkdir(parents=True)
+    (root / "x").mkdir()
+    assert rc.resolve_root(root / "x", tmp_path / "home") == (tmp_path / "home" / "Documents", "default")
+
+
+# --- prompts ------------------------------------------------------------------------------
+
+class _Tty:
+    def isatty(self):
+        return True
+
+
+def test_init_prompts_only_on_a_tty(tmp_path, monkeypatch):
+    answers = iter([str(tmp_path / "asked"), "14", "777"])
+    asked = []
+    monkeypatch.setattr(sys, "stdin", _Tty())
+    monkeypatch.setattr("builtins.input", lambda prompt="": asked.append(prompt) or next(answers))
+    assert rc.main(["init", "--home", str(tmp_path / "home")]) == 0
+    assert len(asked) == 3
+    cfg = rc.load_config(tmp_path / "asked")
+    assert (cfg["period_days"], cfg["token_ceiling"]) == (14, 777)
+
+
+def test_init_prompt_blank_answers_take_defaults(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "stdin", _Tty())
+    monkeypatch.setattr("builtins.input", lambda prompt="": "")
+    assert rc.main(["init", "--root", str(tmp_path / "r"), "--home", str(tmp_path / "home")]) == 0
+    cfg = rc.load_config(tmp_path / "r")
+    assert (cfg["period_days"], cfg["token_ceiling"]) == (30, None)
