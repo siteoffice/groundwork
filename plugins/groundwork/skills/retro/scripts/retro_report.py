@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from retro_config import ConfigError, load_config, validate_config  # noqa: E402
 from retro_digest import METRIC_VERSION, collect, discover_sources, fixture_locations, live_locations  # noqa: E402
 from retro_estimate import RATES_AS_OF, estimate, format_estimate  # noqa: E402
 from retro_scrub import FIX_TEXT, Scrubber  # noqa: E402
@@ -445,25 +446,27 @@ def run_retro(root: Path, now: datetime, fixtures: Optional[Path] = None, home: 
     return paths
 
 
-def _load_config(root: Path) -> Dict[str, Any]:
-    try:
-        data = json.loads((root / "retro" / "config.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError, RecursionError):
-        return {}
-    return data if isinstance(data, dict) else {}
-
-
 def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="Write the retro report, report.html and metrics.json.")
     ap.add_argument("--root", required=True)
     ap.add_argument("--fixtures", help="read transcripts from this fixture folder instead of the live ones")
-    ap.add_argument("--days", type=int, default=30)
+    ap.add_argument("--days", type=int, help="period in days, default from retro/config.json or 30")
     ap.add_argument("--world", action="append", default=[], metavar="FOLDER=REPORTDIR")
     ap.add_argument("--gate-pattern", action="append", default=[], metavar="GLOB")
     ap.add_argument("--now", help="YYYY-MM-DD, default today (UTC)")
     args = ap.parse_args(argv)
-    if not 1 <= args.days <= 3650:
+    if args.days is not None and not 1 <= args.days <= 3650:
         ap.error("--days must be between 1 and 3650")
+    root = Path(args.root)
+    try:
+        config = load_config(root)
+        problems = validate_config(config, root)
+    except ConfigError as exc:
+        print("retro config error: %s" % exc)
+        return 2
+    if problems:
+        print("retro config error: %s" % "; ".join(problems))
+        return 2
     worlds = []
     for w in args.world:
         folder, sep, out = w.partition("=")
@@ -477,9 +480,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             ap.error("--now needs YYYY-MM-DD")
     else:
         now = datetime.now(timezone.utc)
-    root = Path(args.root)
-    out = run_retro(root, now, fixtures=Path(args.fixtures) if args.fixtures else None, days=args.days,
-                    worlds=worlds, gate_patterns=args.gate_pattern, config=_load_config(root))
+    out = run_retro(root, now, fixtures=Path(args.fixtures) if args.fixtures else None,
+                    days=args.days if args.days is not None else config["period_days"],
+                    worlds=worlds or config["worlds"], gate_patterns=args.gate_pattern or config["gate_patterns"],
+                    config=config)
     for key in ("report_md", "report_html", "metrics"):
         print(out[key])
     return 0
