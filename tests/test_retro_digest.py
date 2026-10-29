@@ -168,3 +168,14 @@ def test_since_tolerates_a_file_vanishing_before_stat(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "stat", fake)
     got = rd.discover_sources(code, cowork, datetime(2000, 1, 1), inner)
     assert len(got) == 4 and "s-headless" not in {s.transcript.stem for s in got}
+
+
+def test_touch_classes_per_fixture_expectation(tmp_path):
+    for sid, d in _all(tmp_path).items():
+        assert d["touches"] == EXP["sessions"][sid]["touches"], sid
+
+
+def test_finished_and_gate_exclusion(tmp_path):
+    ds = _all(tmp_path)
+    assert ds["s-interactive"]["finished"] is True and ds["s-interactive"]["gate_verdicts_excluded"] == 1
+    assert ds["s-headless"]["finished"] is False

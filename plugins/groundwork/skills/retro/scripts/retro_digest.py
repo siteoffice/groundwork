@@ -13,6 +13,7 @@ from typing import Any, Dict, List, NamedTuple, Optional, TextIO, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from retro_scrub import Scrubber  # noqa: E402
+from retro_touch import GATE_VERDICT, classify_touch, is_finished_record  # noqa: E402
 
 METRIC_VERSION = 1
 KNOWN_TYPES = frozenset({
@@ -227,6 +228,9 @@ def digest_session(src: Source, audit: OpenAudit, gate_patterns: List[str]) -> D
     skills = {}  # type: Dict[str, int]
     slashes = {}  # type: Dict[str, int]
     unknown = {}  # type: Dict[str, int]
+    touches = {}  # type: Dict[str, int]
+    gate_excluded = 0
+    finished = False
     mcp_fail = set()
     first_user = None
     last_assistant = None
@@ -243,6 +247,7 @@ def digest_session(src: Source, audit: OpenAudit, gate_patterns: List[str]) -> D
             _bump(unknown, "non_string_type")
         elif typ not in KNOWN_TYPES:
             _bump(unknown, typ)
+        finished = finished or is_finished_record(rec)
         he = rec.get("hookErrors")
         if isinstance(he, list):
             for h in he:
@@ -276,6 +281,11 @@ def digest_session(src: Source, audit: OpenAudit, gate_patterns: List[str]) -> D
                     interrupts += 1
                 for c in _SLASH.findall(text):
                     _bump(slashes, c)
+                touch = classify_touch(text, gate_patterns)
+                if touch == GATE_VERDICT:
+                    gate_excluded += 1
+                elif touch:
+                    _bump(touches, touch)
         elif typ == "assistant":
             last_assistant = rec
             msg = rec.get("message") if isinstance(rec.get("message"), dict) else {}
@@ -317,7 +327,7 @@ def digest_session(src: Source, audit: OpenAudit, gate_patterns: List[str]) -> D
         "interrupts": interrupts, "compactions": compactions, "skills": skills,
         "slash_commands": slashes, "ask_user_question": ask, "output_tokens": out_tokens,
         "unknown_record_types": unknown, "malformed_lines": malformed, "final_error": final_error,
-        "success_line": success, "touches": {}, "gate_verdicts_excluded": 0, "finished": False,
+        "success_line": success, "touches": touches, "gate_verdicts_excluded": gate_excluded, "finished": finished,
     }
     digest = scr.scrub_obj(digest, sid, day)
     digest["secret_findings"] = list(scr.findings)
