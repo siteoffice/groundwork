@@ -31,7 +31,7 @@ def test_classify(text, expected):
 
 
 def test_user_gate_pattern_excludes_and_bad_pattern_is_skipped():
-    assert classify_touch("LGTM-G2", [r"LGTM-G\d"]) == "gate_verdict"
+    assert classify_touch("LGTM-G2", ["lgtm-g?"]) == "gate_verdict"
     assert classify_touch("yes", ["("]) == "approval_word"
 
 
@@ -51,25 +51,35 @@ def test_finished(record, expected):
     assert is_finished_record(record) is expected
 
 
-def test_redos_patterns_are_refused_and_fast():
+def test_measured_patterns_act_as_globs_and_are_fast():
     import time
-    from retro_touch import load_gate_patterns
-    cases = [("a" * 30 + "!", "(a+)+$"), ("a" * 28 + "!", "(a*)*b")]
-    for text, pat in cases:
+    for pat in [r"\w*\w*\w*\w*\w*!", "[ab]*[ab]*[ab]*[ab]*[ab]*c", "a*a*a*a*a*b", ".*.*.*.*.*x",
+                "*" * 40 + "z"]:
         t0 = time.perf_counter()
-        classify_touch(text, [pat])
-        assert time.perf_counter() - t0 < 1.0
-    compiled, rejected = load_gate_patterns([c[1] for c in cases] + ["^ok to ship$", "(", r"(a)\1", "(?=x)", "x" * 81])
-    assert [p.pattern for p in compiled] == ["^ok to ship$"]
-    assert rejected[:2] == ["(a+)+$", "(a*)*b"] and len(rejected) == 6
+        assert classify_touch("a" * 200, [pat]) is None
+        assert time.perf_counter() - t0 < 0.2
+
+
+def test_glob_semantics():
+    for pat, text, hit in [("lgtm", "LGTM", True), ("lgtm", "lgtm please", False),
+                           ("ok to ship", "OK to ship", True), ("ok*ship*", "ok then ship it now", True),
+                           ("ok*ship*", "ok then hold", False), ("g?", "g1", True), ("g?", "g", False),
+                           ("v1.0", "v1x0", False), ("v1.0", "v1.0", True), ("(x)", "(x)", True),
+                           ("(x)", "x", False)]:
+        assert (classify_touch(text, [pat]) == "gate_verdict") is hit, (pat, text)
+
+
+def test_pattern_length_cap_and_rejected_list():
+    from retro_touch import load_gate_patterns
+    accepted, rejected = load_gate_patterns(["LGTM*", "x" * 81, "", "ok"])
+    assert accepted == ["lgtm*", "ok"] and rejected == ["x" * 81, ""]
 
 
 def test_safe_pattern_still_excludes_and_long_turn_never_does():
-    assert classify_touch("ok to ship", ["^ok to ship$", "lgtm"]) == "gate_verdict"
-    assert classify_touch("lgtm", ["^ok to ship$", "lgtm"]) == "gate_verdict"
+    assert classify_touch("ok to ship", ["ok to ship", "lgtm"]) == "gate_verdict"
     long_text = "a" * 201
-    assert classify_touch(long_text, ["a+"]) is None
-    assert classify_touch("a" * 200, ["a+"]) == "gate_verdict"
+    assert classify_touch(long_text, ["a*"]) is None
+    assert classify_touch("a" * 200, ["a*"]) == "gate_verdict"
 
 
 def test_relay_only_on_short_turns():

@@ -196,5 +196,5 @@ def test_collect_reports_rejected_gate_patterns(tmp_path):
     fx = materialize_fixtures(tmp_path / "fx")
     code, cowork, inner = rd.fixture_locations(fx)
     res = rd.collect(rd.discover_sources(code, cowork, None, inner), tmp_path / "m", "2026-10", [],
-                     ["(a+)+$", "^ok$"])
-    assert res["rejected_gate_patterns"] == ["(a+)+$"]
+                     ["x" * 81, "ok"])
+    assert res["rejected_gate_patterns"] == ["x" * 81]

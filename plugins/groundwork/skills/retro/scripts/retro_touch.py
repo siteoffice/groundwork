@@ -4,7 +4,7 @@ A touch is a user turn that steers or relays instead of asking for something new
 Only the class name leaves this module, never the text.
 """
 import re
-from typing import Any, Dict, List, Optional, Pattern, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 TOUCH_CLASSES = ("pasted_shell_output", "approval_word", "relay", "continue_restart",
                  "permission_answer")
@@ -28,23 +28,45 @@ _RECEIPT = re.compile(r"receipts[/\\]step-")
 MAX_PATTERN_LEN = 80
 MAX_GATE_TEXT = 200
 MAX_RELAY_TEXT = 200
-_UNSAFE = re.compile(r"\)[*+?{]|\\[1-9]|\(\?P=|\(\?<?[=!]|\(\?\(")
 
 
-def load_gate_patterns(patterns: List[str]) -> Tuple[List[Pattern], List[str]]:
-    """Vet user gate patterns: no quantified group, backreference, lookaround or conditional,
-    at most 80 characters. Returns (compiled, rejected); rejected holds the pattern text."""
-    compiled = []  # type: List[Pattern]
+def load_gate_patterns(patterns: List[str]) -> Tuple[List[str], List[str]]:
+    """Vet user gate patterns, which are case-insensitive globs (see glob_match).
+    Returns (accepted, rejected): accepted holds lower-cased globs, rejected holds the
+    pattern text of any that is empty, not a string, or longer than 80 characters."""
+    accepted = []  # type: List[str]
     rejected = []  # type: List[str]
     for pat in patterns:
-        if not isinstance(pat, str) or len(pat) > MAX_PATTERN_LEN or _UNSAFE.search(pat):
+        if not isinstance(pat, str) or not pat or len(pat) > MAX_PATTERN_LEN:
             rejected.append(pat if isinstance(pat, str) else repr(pat))
-            continue
-        try:
-            compiled.append(re.compile(pat))
-        except re.error:
-            rejected.append(pat)
-    return compiled, rejected
+        else:
+            accepted.append(pat.lower())
+    return accepted, rejected
+
+
+def glob_match(pattern: str, text: str) -> bool:
+    """Whole-text match. '*' is any run of characters, '?' exactly one, all else literal.
+    Iterative, no recursion and no re module: worst case O(len(text) * len(pattern))."""
+    p = s = 0
+    star = -1
+    mark = 0
+    while s < len(text):
+        if p < len(pattern) and pattern[p] != "*" and (pattern[p] == "?" or pattern[p] == text[s]):
+            p += 1
+            s += 1
+        elif p < len(pattern) and pattern[p] == "*":
+            star = p
+            mark = s
+            p += 1
+        elif star != -1:
+            p = star + 1
+            mark += 1
+            s = mark
+        else:
+            return False
+    while p < len(pattern) and pattern[p] == "*":
+        p += 1
+    return p == len(pattern)
 
 
 def classify_touch(text: str, gate_patterns: List[str]) -> Optional[str]:
@@ -55,8 +77,9 @@ def classify_touch(text: str, gate_patterns: List[str]) -> Optional[str]:
     if words and words[0].lower().strip(".,!:;") in GATE_VERDICTS and len(words) <= 12:
         return GATE_VERDICT
     if len(t) <= MAX_GATE_TEXT:
-        for rx in load_gate_patterns(gate_patterns)[0]:
-            if rx.fullmatch(t):
+        low = t.lower()
+        for g in load_gate_patterns(gate_patterns)[0]:
+            if glob_match(g, low):
                 return GATE_VERDICT
     if _PERMISSION.fullmatch(t):
         return "permission_answer"
