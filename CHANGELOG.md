@@ -3,6 +3,22 @@
 All notable changes. The version is one clock for the whole repository: `groundwork`,
 `groundwork-mods` and the marketplace move together.
 
+## 0.3.0
+
+- **New skill `retro`: a monthly check-up of your own Claude Code and Cowork sessions.** It reads
+  the sessions of the last N days (default 30) from your own disk and counts where time and output
+  leak: pasted shell output, approvals, relays between sessions, restarts and permission answers per
+  finished piece of work, plus silent failures (headless or scheduled runs that ended in an API
+  error, hooks and MCP servers that keep failing, scheduled runs with no success line). It writes
+  `report.md`, `report.html` and `metrics.json` with a trend against last month. This release
+  measures only: the report is marked "counts only", and the agent analysis and guided apply come
+  in a later release.
+- **Private by design.** Everything stays on your machine. The collector never opens a `.env*`
+  file and logs every file it opens in `opened.log`. Every string passes a secret scrubber first: a
+  secret found in a transcript becomes a finding with its location and kind, never its value.
+  Folders you mark as a separate world get their own report and never mix into the main one.
+- **Optional monthly scheduled scan.** `register_retro_task.ps1` (Windows, hidden window, proven
+  by its exit code) plus `launchd` and `cron` examples. Nothing is registered unless you run it.
 ## 0.2.4
 
 - **No more "its classic.SessionStart hook was skipped" line at session start.** Claude Code's
