@@ -37,7 +37,8 @@ def test_no_forbidden_terms_in_schedule_files():
         for term in FORBIDDEN:
             assert term not in low, (p.name, term)
         assert "s4u" not in low and "/ru system" not in low, p.name
-        assert "\r" not in _text(p), p.name
+        # core.autocrlf may turn the committed LF into CRLF in a working copy: only a lone CR is a defect.
+        assert "\r" not in _text(p).replace("\r\n", "\n"), p.name
 
 
 def test_register_script_uses_hidden_shim_and_interactive_logon():
