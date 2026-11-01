@@ -180,7 +180,12 @@ Python, Node and Claude Code versions it used, the date and a link to the run.
 
 | OS image | Python | Node | Claude Code | Date | Run |
 |---|---|---|---|---|---|
-| pending first green run | | | | | |
+| windows-latest | 3.9.13 | v22.23.4 | 2.1.316 | 2026-11-01 | [run](https://github.com/siteoffice/groundwork/actions/runs/41332885453) |
+| windows-latest | 3.13.16 | v22.23.4 | 2.1.316 | 2026-11-01 | [run](https://github.com/siteoffice/groundwork/actions/runs/41332885453) |
+| macos-latest | 3.9.13 | v22.23.4 | 2.1.316 | 2026-11-01 | [run](https://github.com/siteoffice/groundwork/actions/runs/41332885453) |
+| macos-latest | 3.13.17 | v22.23.4 | 2.1.316 | 2026-11-01 | [run](https://github.com/siteoffice/groundwork/actions/runs/41332885453) |
+| ubuntu-24.04 | 3.9.25 | v22.23.4 | 2.1.316 | 2026-11-01 | [run](https://github.com/siteoffice/groundwork/actions/runs/41332885453) |
+| ubuntu-24.04 | 3.13.17 | v22.23.4 | 2.1.316 | 2026-11-01 | [run](https://github.com/siteoffice/groundwork/actions/runs/41332885453) |
 
 ## What CI proves
 

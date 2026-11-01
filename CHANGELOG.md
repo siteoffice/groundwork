@@ -21,6 +21,10 @@ All notable changes. The version is one clock for the whole repository: `groundw
   both plugins.
 - **Engine resynced from Siteoffice v0.10.4; sprint run modes and notices are vendored, unused by
   one-loop.**
+- **Tour dates follow the render day.** `scripts/render-tour.py` shifts the dates in its temporary
+  copy of the Molenwerk example, so the board shows no overdue line and a filled next two weeks.
+  `docs/tour.md` explains the panels that stay empty in a local example and lists three known
+  issues from the vendored engine.
 
 ## 0.3.0
 

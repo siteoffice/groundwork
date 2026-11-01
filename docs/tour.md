@@ -32,12 +32,19 @@ refresh only the command output in this page, without Playwright.
 
 ## 1. The board
 
-![The Molenwerk board in the light theme: status with three overdue dates, next two weeks, waiting on you and a roadmap with three items](../assets/screenshots/tour-01-board-light.png)
+![The Molenwerk board in the light theme: an empty status panel, next two weeks listing the investor demo and the webshop go-live, waiting on you and a roadmap with three items](../assets/screenshots/tour-01-board-light.png)
 ![The same Molenwerk board in the dark theme](../assets/screenshots/tour-01-board-dark.png)
 
-**What you see:** The company page for Molenwerk BV. Panels for status, the next two weeks, what waits on you, the roadmap, receipts and recent activity. Panels with no data say "Nothing to show yet" or "Source unavailable".
+**What you see:** The company page for Molenwerk BV. Panels for status, the next two weeks, what waits on you, the roadmap, receipts and recent activity. The next two weeks lists two dated rows, the investor demo and the webshop go-live, and the roadmap lists three priorities. Panels with no data say "Nothing to show yet", "Source unavailable" or "Loading".
 
-**What it means:** This is the whole company at a glance, read from plain files in the folder. The dates in the example are in the past, so they show as overdue. The new flow does not show here yet: its gate lives on the flow page.
+**What it means:** This is the whole company at a glance, read from plain files in the folder. The render script moves every date in its temporary copy so the first deadline lands two days after the day you render, and keeps the order and spacing. So nothing is overdue and the next two weeks fills. The example in `templates/molenwerk` keeps its original dates, because the board tests read it. The VAT filing and the lease renewal fall after the two weeks, so they are not listed. The new flow does not show here yet: its gate lives on the flow page.
+
+Some panels are empty in this local example, and that is the truthful answer, not a fault:
+
+- **Status** lists only overdue dates. Nothing is overdue, so it is empty.
+- **Funnel** needs a funnel folder, **Activity** reads the `_log` folder, and **Children** needs child nodes. The example has none of them, so Funnel and Activity say "Source unavailable" and Children says "Nothing to show yet".
+- **Sync status** waits for a `sync_status.js` file that the sync layer writes after a sync. The example never syncs, so the picture stays on "Loading".
+- **Hours** has no logged hours, **Receipts** has none yet at this point of the tour, and **Waiting on you** is empty here because the gate lives on the flow page.
 
 **What you do next:** Nothing on this page. Open the flow page to answer the plan gate, or ask Claude for the flow status.
 
@@ -143,3 +150,17 @@ stage=execute status=decided step=1/1 phase=learn | GATE G3 decided: proceed. Ru
 <!-- /tour:G3 -->
 
 After the last proceed, one more advance closes the flow. That is the whole loop.
+
+## Known issues
+
+Three things on these pages come from the engine as vendored from Siteoffice v0.10.4. Groundwork
+has not changed them, so the pictures show them as they are.
+
+- **The Next line offers `approve|reject` at G4.** The verdicts that count at G4 are the ones the
+  command prints: ship, hold or park. G3 shows the same Next line, where the verdicts are proceed,
+  adapt, close or park. Fix comes from Siteoffice.
+- **The first step is numbered 0.** The steps table counts from 0, while the command output says
+  `step=1/1`. Fix comes from Siteoffice.
+- **A `/sprint` line appears in the activity of a one-loop flow.** After G2 the activity shows a
+  `sprint_emitted` line with a `/sprint` command. Groundwork starts no sprint and no agent. Fix
+  comes from Siteoffice.

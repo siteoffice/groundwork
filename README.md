@@ -100,8 +100,8 @@ and nothing is registered for you.
 What it costs you: the gates are slower than letting an agent run. That is on purpose. If you
 want a machine that ships without asking you, this is the wrong tool.
 
-I measured what I claim here by running it. The engine carries 987 passing tests, the board 185,
-the repository's pytest suite 628, the `siteoffice-git` engine 448 and the mods suite 209, all green on Windows at this release. macOS and Linux are covered by the CI install matrix once it runs green; until then they are not verified, and [docs/install-matrix.md](docs/install-matrix.md) shows the state per step. Not verified: a live Claude Code session (the mods tests mock the host). The trust
+I measured what I claim here by running it. The engine carries 1021 passing tests, the board 187,
+the repository's pytest suite 628, the `siteoffice-git` engine 451 and the mods suite 209, all green on Windows at this release. macOS and Ubuntu are verified in CI as well: install-matrix run [41332885453](https://github.com/siteoffice/groundwork/actions/runs/41332885453) on commit `da04fd3` passed the engine, board, repository and mods suites and the plugin install steps on all three systems, and the install steps passed without a Claude login. [docs/install-matrix.md](docs/install-matrix.md) shows each step. The `siteoffice-git` engine suite is not in CI. Not verified: the Claude Desktop app install, and a live Claude Code session (the mods tests mock the host). The trust
 tests that drive real git through the real `gitsafe.ts` need Node 22.18 or newer and are skipped when it is missing or older. That last
 suite builds real git repositories and takes about 25 minutes. Claude Code wrote most of the code
 and text of this release. I set the scope and I decide what ships.

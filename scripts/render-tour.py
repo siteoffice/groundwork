@@ -1,6 +1,7 @@
 """Render the guided tour: one demo flow through the engine, screenshotted light and dark.
 
-Copies the Molenwerk example into a temp folder, drives one flow from idea to close with
+Copies the Molenwerk example into a temp folder, shifts its dates to the render day (the board
+then shows no overdue line and a filled next two weeks), drives one flow from idea to close with
 gw.py, renders the board, the flow page at each gate and the receipt, and screenshots each
 page in a light and a dark theme with Playwright (Chromium). The temp copy is always removed.
 
@@ -16,6 +17,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+from datetime import date, timedelta
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -102,6 +104,45 @@ def normalize(text: str, work_root) -> str:
     for form in _root_forms(work_root):
         text = text.replace(form, "<copy>")
     return STAMP.sub("<stamp>", text)
+
+
+ISO_DATE = re.compile(r"(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)")  # not \b: it would miss 2026-08-20_name.md
+TEXT_SUFFIXES = (".md", ".json", ".txt")
+FIRST_DEADLINE_IN_DAYS = 2
+
+
+def _shift_text(text: str, delta: timedelta) -> str:
+    def move(match):
+        try:
+            return (date.fromisoformat(match.group(0)) + delta).isoformat()
+        except ValueError:
+            return match.group(0)
+
+    return ISO_DATE.sub(move, text)
+
+
+def shift_dates(copy: Path, today: date) -> int:
+    """Shift every ISO date in the copy (text and file-name prefixes) by one number of days.
+
+    The earliest deadline lands FIRST_DEADLINE_IN_DAYS after today, so the board shows no overdue
+    line and the next two weeks fill. One shift for all dates keeps their order and spacing, and
+    keeps every Updated date in the past. Returns the shift in days. Files are rewritten, so the
+    board's freshness check (file age) sees them as just updated. The template is never touched.
+    """
+    rows = ISO_DATE.findall((copy / "DEADLINES.md").read_text(encoding="utf-8").split("| Date |")[-1])
+    first = min(date(int(y), int(m), int(d)) for y, m, d in rows)
+    delta = timedelta(days=(today + timedelta(days=FIRST_DEADLINE_IN_DAYS) - first).days)
+    for path in sorted(copy.rglob("*")):
+        if path.is_file() and path.suffix.lower() in TEXT_SUFFIXES:
+            raw = path.read_bytes().decode("utf-8")
+            moved = _shift_text(raw, delta)
+            if moved != raw:
+                path.write_bytes(moved.encode("utf-8"))
+    for path in sorted(copy.rglob("*"), key=lambda p: len(p.parts), reverse=True):
+        name = _shift_text(path.name, delta)
+        if name != path.name:
+            path.rename(path.with_name(name))
+    return delta.days
 
 
 def playwright_available() -> tuple:
@@ -221,12 +262,13 @@ def _on_rm_error(func, path, _exc) -> None:
     func(path)
 
 
-def render_tour(out_dir, *, screenshots=True, work_parent=None) -> dict:
+def render_tour(out_dir, *, screenshots=True, work_parent=None, today=None) -> dict:
     out_dir = Path(out_dir)
     work = Path(tempfile.mkdtemp(prefix="groundwork-tour-", dir=work_parent))
     try:
         copy = work / PROJECT
         shutil.copytree(MOLENWERK, copy)
+        shift_dates(copy, today or date.today())
         tour_dir = copy / "_tour"
         tour_dir.mkdir()
         raw = _drive(copy, tour_dir)

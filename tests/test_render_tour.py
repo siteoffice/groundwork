@@ -4,7 +4,9 @@ from __future__ import annotations
 import importlib.util
 import os
 import re
+import shutil
 import tempfile
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -45,6 +47,27 @@ def test_png_names_are_twelve_pairs(tour):
         assert light.endswith("-light.png")
         assert dark == light[: -len("-light.png")] + "-dark.png"
     assert [n for n, _ in tour.SCREENS] == ["01", "02", "03", "04", "05", "06"]
+
+
+def test_shift_dates_puts_deadlines_ahead_and_leaves_the_template_alone(tour, tmp_path):
+    before = (tour.MOLENWERK / "DEADLINES.md").read_bytes()
+    copy = tmp_path / "molenwerk"
+    shutil.copytree(tour.MOLENWERK, copy)
+    today = date(2027, 3, 10)
+    days = tour.shift_dates(copy, today)
+    rows = [date.fromisoformat(d) for d in re.findall(
+        r"^\| (\d{4}-\d\d-\d\d) \|", (copy / "DEADLINES.md").read_text(encoding="utf-8"), re.M)]
+    assert rows[0] == today + timedelta(days=2)
+    assert rows == sorted(rows) and all(r > today for r in rows)
+    # spacing kept: the template's own gaps between deadlines
+    original = [date.fromisoformat(d) for d in re.findall(
+        r"^\| (\d{4}-\d\d-\d\d) \|", before.decode("utf-8"), re.M)]
+    assert [b - a for a, b in zip(rows, rows[1:])] == [b - a for a, b in zip(original, original[1:])]
+    assert (original[0] + timedelta(days=days)) == rows[0]
+    # an Updated date stays in the past, and the dated file name moves with its date
+    assert "Updated: 2026-08-28" not in (copy / "DEADLINES.md").read_text(encoding="utf-8")
+    assert not any(p.name.startswith("2026-08-20_") for p in copy.rglob("*"))
+    assert (tour.MOLENWERK / "DEADLINES.md").read_bytes() == before
 
 
 def test_six_pages_render_and_one_receipt(tour, rendered):

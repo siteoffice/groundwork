@@ -29,8 +29,21 @@ def _cells(line: str) -> list:
 def test_tested_on_table():
     lines = _read(GUIDE).splitlines()
     assert TESTED_ON_HEADER in lines
-    assert TESTED_ON_PLACEHOLDER in lines
     assert "## Tested on" in lines
+    start = lines.index(TESTED_ON_HEADER) + 2
+    rows = []
+    for line in lines[start:]:
+        if not line.startswith("|"):
+            break
+        rows.append(line)
+    assert rows, "the Tested on table has no rows"
+    if rows != [TESTED_ON_PLACEHOLDER]:
+        # A recorded run: every row names a system and links its run.
+        for row in rows:
+            cells = _cells(row)
+            assert len(cells) == 6, row
+            assert cells[0] in ("windows-latest", "macos-latest", "ubuntu-24.04"), row
+            assert cells[5].startswith("[run](https://"), row
 
 
 def test_tested_on_header_matches_ci_row():
