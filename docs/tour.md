@@ -86,7 +86,7 @@ stage=execute status=decided step=1/1 phase=grill | GATE G2 decided: approve. Ru
 ![The flow page in the light theme with gate G4 open after the work, and ten activity lines ending with the G4 token](../assets/screenshots/tour-04-flow-g4-light.png)
 ![The same flow page at gate G4 in the dark theme](../assets/screenshots/tour-04-flow-g4-dark.png)
 
-**What you see:** Gate G4 is open. The activity list shows the spec was approved and the work step was recorded. The line under Next still reads approve or reject: the verdicts that count here are the ones the command prints, ship, hold or park.
+**What you see:** Gate G4 is open. The activity list shows your G2 approval, then a `sprint_emitted` line with a `/sprint` command. That line is engine wording carried over from Siteoffice. Groundwork does not start a sprint or any agent: the work happens in your own session. The line under Next still reads approve or reject: the verdicts that count here are the ones the command prints, ship, hold or park.
 
 **What it means:** G4 is the ship gate, and you meet it before G3. Only ship accepts the change and writes a receipt. Hold keeps the work but does not accept it. Park sets the flow aside.
 
