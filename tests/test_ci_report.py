@@ -160,3 +160,32 @@ def test_probe_cli_missing_executable_is_failed_not_a_crash(tmp_path):
 
 def test_script_is_ascii():
     SCRIPT.read_bytes().decode("ascii")
+
+
+BUN_WITH_SKIP = " 206 pass\n 6 skip\n 0 fail\n 512 expect() calls\nRan 206 tests across 9 files. [1.23s]\n"
+BUN_NO_SKIP = " 206 pass\n 0 fail\n 512 expect() calls\nRan 206 tests across 9 files. [1.23s]\n"
+
+
+def test_parse_counts_bun_style_block_with_skip():
+    assert triple(load().parse_counts(BUN_WITH_SKIP)) == (206, 6, 0)
+
+
+def test_parse_counts_bun_style_block_without_skip():
+    assert triple(load().parse_counts(BUN_NO_SKIP)) == (206, 0, 0)
+
+
+def test_parse_counts_bun_style_block_after_other_output():
+    text = "(pass) a > b [1ms]\n(fail) c > d [2ms]\n\n 205 pass\n 1 fail\n 512 expect() calls\nRan 206 tests across 9 files.\n"
+    assert triple(load().parse_counts(text)) == (205, 0, 1)
+
+
+@pytest.mark.parametrize("text", ["see the log in /tmp/x", "writing log info",
+                                  "plugin catalog index missing", "dialog init failed"])
+def test_probe_login_lookalikes_fail(text):
+    assert load().classify_probe(1, text) == "failed"
+
+
+@pytest.mark.parametrize("text", ["Please run /login", "Invalid API key", "Not logged in",
+                                  "authentication_error", "set ANTHROPIC_API_KEY", "Please log in to continue"])
+def test_probe_login_variants_are_skipped(text):
+    assert load().classify_probe(1, text) == "skipped: needs a Claude login"

@@ -26,20 +26,46 @@ COUNT_RE = re.compile(
 KIND = {"passed": "passed", "pass": "passed", "skipped": "skipped", "skip": "skipped",
         "failed": "failed", "fail": "failed", "error": "failed", "errors": "failed"}
 SKIP_RE = re.compile(r"^SKIPPED \[\d+\] (.+)$")
-LOGIN_RE = re.compile(r"(?i)log ?in|authenticat|api key|ANTHROPIC_API_KEY")
+# Word-bounded so "see the log in /tmp/x" or "catalog index" do not count as a login prompt.
+LOGIN_RE = re.compile(
+    r"(?i)\blogin\b|\blog in (?:to|with|first|again)\b|\blogged (?:in|out)\b"
+    r"|\bauthenticat|\bapi key\b|ANTHROPIC_API_KEY"
+)
+# A bun-style runner prints each count on its own line: " 206 pass", " 6 skip", " 0 fail".
+GENERIC_LINE_RE = re.compile(r"^\s*(\d+)\s+(pass|skip|fail)\s*$")
+# Other summary lines that may sit inside or around that block.
+GENERIC_EXTRA_RE = re.compile(r"^\s*\d+\s+(?:todo|expect\(\) calls?|snapshots?)\b")
 PROBE_TIMEOUT = 600
 
 
 def parse_counts(text: str) -> dict:
     """Counts from the last line that carries a passed/skipped/failed/error count."""
-    for line in reversed(text.splitlines()):
+    lines = text.splitlines()
+    for i in range(len(lines) - 1, -1, -1):
+        line = lines[i]
         found = [(int(n), KIND[w]) for n, w in COUNT_RE.findall(line) if w in KIND]
+        if found and GENERIC_LINE_RE.match(line):
+            return _generic_block(lines, i)
         if found:
             counts = {"passed": 0, "skipped": 0, "failed": 0}
             for n, kind in found:
                 counts[kind] += n
             return counts
     raise ValueError("no test count found")
+
+
+def _generic_block(lines: list, end: int) -> dict:
+    """Merge the consecutive one-count-per-line block that ends at lines[end]."""
+    counts = {"passed": 0, "skipped": 0, "failed": 0}
+    i = end
+    while i >= 0:
+        m = GENERIC_LINE_RE.match(lines[i])
+        if m:
+            counts[KIND[m.group(2)]] += int(m.group(1))
+        elif not GENERIC_EXTRA_RE.match(lines[i]):
+            break
+        i -= 1
+    return counts
 
 
 def parse_skips(text: str) -> list:
