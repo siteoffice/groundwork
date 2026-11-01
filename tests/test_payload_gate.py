@@ -197,3 +197,9 @@ def test_outside_a_repository_an_ignore_file_is_not_honoured(tmp_path):
 def test_the_retro_skill_and_fixtures_are_public_clean(rel):
     r = run_gate(ROOT / rel)
     assert r.returncode == 0, out(r)
+
+
+@needs_pwsh
+def test_the_repo_itself_passes():
+    r = run_gate(ROOT)
+    assert r.returncode == 0, out(r)
