@@ -26,7 +26,7 @@ pick it up tomorrow. When you accept the work at the last gate, you get a receip
 - `ROOT`: the folder where this work's records should live. Use the project folder you are in.
   The engine writes to `ROOT\flows\<project>\<slug>\`.
 
-It needs Python 3.8 or newer and nothing else.
+It needs Python 3.9 or newer and nothing else.
 
 ```powershell
 # runs in: PowerShell on Windows. cwd: the project folder.
@@ -104,6 +104,6 @@ log up to that point.
 
 - `refused: ...`: the engine rejected the call. Read the reason. Common ones: a verdict that
   does not fit the open gate, an unfinished gate, a missing step list at G1.
-- `python` not found: install Python 3.8 or newer, then rerun.
+- `python` not found: install Python 3.9 or newer, then rerun.
 - Windows only, for the time-window sweep: `python -m pip install tzdata`. The loop above does
   not need it.

@@ -10,7 +10,7 @@ on a Mac. Windows is what I tested.
 
 - **Claude Code or Claude Desktop.** Claude Code is the main route; the skills are plain Markdown
   and other tools can read them, but the hooks only work in Claude Code.
-- **Python 3.8 or newer.** The engine and the board run on it and need nothing else.
+- **Python 3.9 or newer.** The engine and the board run on it and need nothing else.
 - **A folder for your work.** Any folder. Git is useful but not required.
 
 Check Python first.

@@ -122,7 +122,7 @@ All four are rendered from this release. The receipt page is what you get when y
 2. Paste `siteoffice/groundwork`.
 3. Install `groundwork`. Install `groundwork-mods` as well for the Setup Doctor and the agent
    policy.
-4. You need Python 3.8 or newer on the computer. If you are not sure, the Setup Doctor tells you.
+4. You need Python 3.9 or newer on the computer. If you are not sure, the Setup Doctor tells you.
 
 The full steps for Windows and macOS are in [docs/setup-guide.md](docs/setup-guide.md).
 
