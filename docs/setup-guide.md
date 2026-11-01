@@ -3,8 +3,8 @@
 Groundwork needs two plugin installs and one folder. Nothing runs by itself: the agent works
 inside your session, and you decide at each gate.
 
-macOS is untested. The steps below are written for it from the code and the docs, not from a run
-on a Mac. Windows is what I tested.
+The steps below cover Windows, macOS and Linux. Which systems a CI run has proven is in the
+[Tested on](#tested-on) table below and, step by step, in [install-matrix.md](install-matrix.md).
 
 ## What you need
 
@@ -25,6 +25,11 @@ py -3 --version
 python3 --version
 ```
 
+```bash
+# runs in: Terminal on Linux. cwd: any.
+python3 --version
+```
+
 No version printed? Install Python, then check again.
 
 ```powershell
@@ -36,6 +41,36 @@ winget install --id Python.Python.3.12 -e
 # runs in: Terminal on macOS. cwd: any. Needs Homebrew.
 brew install python
 ```
+
+```bash
+# runs in: Terminal on Linux (Ubuntu or Debian). cwd: any. Needs sudo.
+sudo apt install python3
+```
+
+On another Linux distribution, install `python3` with its own package manager (for example
+`sudo dnf install python3` on Fedora). The version it prints must be 3.9 or newer.
+
+## Install Claude Code from a terminal
+
+Skip this if you use Claude Desktop or already have Claude Code. The terminal install needs
+Node.js 22.18 or newer, and the command is the same on every system.
+
+```powershell
+# runs in: PowerShell on Windows. cwd: any. Needs Node.js 22.18 or newer.
+node --version
+npm install -g @anthropic-ai/claude-code
+claude --version
+```
+
+```bash
+# runs in: Terminal on macOS or Linux. cwd: any. Needs Node.js 22.18 or newer.
+node --version
+npm install -g @anthropic-ai/claude-code
+claude --version
+```
+
+On Linux, if `npm install -g` fails with a permission error, point npm's global folder at a
+folder in your home directory rather than running it with `sudo`.
 
 ## Install the plugins
 
@@ -50,6 +85,17 @@ then Add marketplace, and paste `siteoffice/groundwork`. Install `groundwork`. I
 /plugin marketplace add siteoffice/groundwork
 /plugin install groundwork@groundwork
 /plugin install groundwork-mods@groundwork
+```
+
+The same steps from a terminal, outside a session. These are the commands CI runs on
+Windows, macOS and Linux:
+
+```bash
+# runs in: a terminal on Windows (PowerShell or Git Bash), macOS or Linux. cwd: any.
+claude plugin marketplace add siteoffice/groundwork
+claude plugin install groundwork@groundwork --scope user
+claude plugin install groundwork-mods@groundwork --scope user
+claude plugin list
 ```
 
 Pick **user scope** when Claude Code asks where to install, or add `--scope user` to
@@ -104,7 +150,7 @@ py -3 .\plugins\groundwork\board\render_board.py node .\templates\molenwerk
 ```
 
 ```bash
-# runs in: Terminal on macOS. cwd: the folder of this checkout.
+# runs in: Terminal on macOS or Linux. cwd: the folder of this checkout.
 python3 ./plugins/groundwork/board/render_board.py node ./templates/molenwerk
 ```
 
@@ -121,6 +167,24 @@ or delete without a named person. That is the agent policy in `groundwork-mods`;
 The policy is a guardrail, not a lock. It stops an agent doing the work the normal way. It does not
 stop you, and it cannot see a command it does not recognise once you are in work mode.
 
+## Tested on
+
+One row per green run of the install matrix, copied from the run summary: the runner image, the
+Python, Node and Claude Code versions it used, the date and a link to the run.
+
+| OS image | Python | Node | Claude Code | Date | Run |
+|---|---|---|---|---|---|
+| pending first green run | | | | | |
+
+## What CI proves
+
+CI proves the command-line install and the tests. On Windows, macOS and Linux, each with
+Python 3.9 and 3.13, it installs Claude Code with npm, runs the `claude plugin` commands above,
+and runs the engine, board and repository test suites. The plugin steps need a Claude login; a
+run without one marks them "skipped: needs a Claude login", not passed.
+Claude Desktop app install is not tested by CI: the Desktop steps above come from the app, not
+from a run. The result per step and per system is in [install-matrix.md](install-matrix.md).
+
 ## Why it is built this way
 
 Chat windows lose things. A decision made in a chat is gone when the chat is. Groundwork keeps the
@@ -130,7 +194,8 @@ ships without asking is a risk you did not choose.
 
 ## If something goes wrong
 
-- `python` is not found: install Python, restart the terminal, try again.
+- `python` is not found: install Python, restart the terminal, try again. On macOS and Linux
+  the command is `python3`, not `python`.
 - A command prints `refused: ...`: the engine rejected the call. Read the reason; it names the
   gate or the missing step.
 - The doctor shows nothing: you are not in Claude Code, or `groundwork-mods` is not installed.

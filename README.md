@@ -101,7 +101,7 @@ What it costs you: the gates are slower than letting an agent run. That is on pu
 want a machine that ships without asking you, this is the wrong tool.
 
 I measured what I claim here by running it. The engine carries 987 passing tests, the board 185,
-the mods 206, the repository's pytest suite 539 and the `siteoffice-git` engine 448, all green on Windows at this release. Not verified: macOS and Linux, and a live Claude Code session (the mods tests mock the host). The trust
+the mods 206, the repository's pytest suite 627 and the `siteoffice-git` engine 448, all green on Windows at this release. macOS and Linux are covered by the CI install matrix once it runs green; until then they are not verified, and [docs/install-matrix.md](docs/install-matrix.md) shows the state per step. Not verified: a live Claude Code session (the mods tests mock the host). The trust
 tests that drive real git through the real `gitsafe.ts` need Node 22.18 or newer and are skipped when it is missing or older. That last
 suite builds real git repositories and takes about 25 minutes. Claude Code wrote most of the code
 and text of this release. I set the scope and I decide what ships.
@@ -126,7 +126,8 @@ The guided tour in [docs/tour.md](docs/tour.md) explains every screen of a runni
    policy.
 4. You need Python 3.9 or newer on the computer. If you are not sure, the Setup Doctor tells you.
 
-The full steps for Windows and macOS are in [docs/setup-guide.md](docs/setup-guide.md).
+The full steps for Windows, macOS and Linux are in [docs/setup-guide.md](docs/setup-guide.md).
+What CI proves on each system is in [docs/install-matrix.md](docs/install-matrix.md).
 
 ## 5. Install, developers
 
@@ -138,7 +139,9 @@ The full steps for Windows and macOS are in [docs/setup-guide.md](docs/setup-gui
 ```
 
 Choose user scope, or add `--scope user` to `claude plugin install`. A project-scope install loads
-only in that folder.
+only in that folder. Installing Claude Code itself, Python per system and the same steps as
+terminal commands are in [docs/setup-guide.md](docs/setup-guide.md); the per-system CI results are
+in [docs/install-matrix.md](docs/install-matrix.md).
 
 Build and test from source:
 
@@ -165,15 +168,16 @@ by hand. The payload gate `scripts\check-public-payload.ps1` must exit 0 before 
 
 ## 7. Roadmap
 
-Next: a test run on a Mac, install screenshots for both systems, and a first run by someone who
+Next: a first green run of the install matrix on Windows, macOS and Linux, install screenshots for both systems, and a first run by someone who
 did not build it, with their findings filed as issues. Not planned here: signing receipts and a
 verify page (that is a separate product), a hosted version, a sprint runner, and Slack as the
 default. See the [issue list](https://github.com/siteoffice/groundwork/issues).
 
 ## 8. Known bugs and limits
 
-- **macOS is untested.** The code has no Windows-only calls and the guide has a macOS path, but
-  nobody has run it on a Mac.
+- **macOS and Linux wait on the first green CI run.** The install matrix runs the command-line
+  install and the tests there; until a run is green, see [docs/install-matrix.md](docs/install-matrix.md).
+  The Claude Desktop app install is not tested by CI on any system.
 - **Retro on Cowork for macOS is unverified, and its touch classes are heuristics.** They are
   `metric_version 1`, so read the counts as a trend, not as a score.
 - **Retro refuses any path with a component starting `.env`.** That includes a parent folder, so

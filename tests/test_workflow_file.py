@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "install-matrix.yml"
 
 # Root suite floor; Task 8 raises it when the tour tests land.
-ROOT_FLOOR = 556
+ROOT_FLOOR = 628
 
 
 def _text() -> str:

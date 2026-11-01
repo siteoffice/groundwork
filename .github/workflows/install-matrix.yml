@@ -77,7 +77,7 @@ jobs:
           python -m pytest tests -q -rs | tee "$RUNNER_TEMP/root.txt"
 
       - name: Root floor
-        run: python scripts/ci_report.py floor --suite root --floor 556 --log "$RUNNER_TEMP/root.txt"
+        run: python scripts/ci_report.py floor --suite root --floor 628 --log "$RUNNER_TEMP/root.txt"
 
       - name: Mods plugin test probe
         id: mods
