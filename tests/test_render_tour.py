@@ -140,3 +140,70 @@ def test_twelve_pngs(tour, tmp_path):
 
 def test_script_is_ascii():
     SCRIPT.read_bytes().decode("ascii")
+
+
+DOC = ROOT / "docs" / "tour.md"
+GATES = ("G1", "G2", "G4", "G3")
+
+
+def read_doc() -> str:
+    assert DOC.is_file(), "docs/tour.md is missing"
+    return DOC.read_text(encoding="utf-8")
+
+
+def test_tour_doc_references_twelve_pngs_in_pairs(tour):
+    text = read_doc()
+    positions = []
+    for name in tour.png_names():
+        link = "](../assets/screenshots/{})".format(name)
+        assert text.count(link) == 1, name
+        positions.append(text.index(link))
+    assert positions == sorted(positions)
+    images = re.findall(r"!\[([^\]]*)\]\(\.\./assets/screenshots/([^)]+)\)", text)
+    assert len(images) == 12
+    for alt, name in images:
+        assert len(alt) >= 20, name
+
+
+def test_tour_doc_has_three_lines_per_screen(tour):
+    text = read_doc()
+    sections = re.split(r"^## ", text, flags=re.M)[1:]
+    labels = ("**What you see:**", "**What it means:**", "**What you do next:**")
+    screen_sections = [s for s in sections if "../assets/screenshots/tour-" in s]
+    assert len(screen_sections) == len(tour.SCREENS)
+    for (nn, name), section in zip(tour.SCREENS, screen_sections):
+        assert "tour-{}-{}-light.png".format(nn, name) in section, name
+        lines = [line for line in section.splitlines() if line.startswith("**What ")]
+        assert [line.split("**")[1] for line in lines] == [l.strip("*") for l in labels], name
+
+
+def test_tour_doc_transcripts_match_a_real_run(tour, rendered):
+    result, _ = rendered
+    text = read_doc()
+    for gate in GATES:
+        match = re.search(
+            r"<!-- tour:{0} -->\n(.*?)<!-- /tour:{0} -->".format(gate), text, flags=re.S
+        )
+        assert match, gate
+        expected = tour.doc_block(result["transcript"][gate])
+        assert match.group(1) == expected, gate
+
+
+def test_write_doc_rewrites_only_the_marker_blocks(tour, rendered, tmp_path):
+    result, _ = rendered
+    doc = tmp_path / "tour.md"
+    doc.write_text(
+        "intro\n<!-- tour:G1 -->\nold\n<!-- /tour:G1 -->\nmiddle\n"
+        "<!-- tour:G3 -->\n<!-- /tour:G3 -->\nend\n",
+        encoding="utf-8",
+    )
+    tour.write_doc(doc, result["transcript"])
+    out = doc.read_text(encoding="utf-8")
+    assert out.startswith("intro\n<!-- tour:G1 -->\n```text\n> gw ")
+    assert "old" not in out
+    assert "\nmiddle\n" in out and out.endswith("<!-- /tour:G3 -->\nend\n")
+    assert tour.doc_block(result["transcript"]["G3"]) in out
+
+
+def test_tour_doc_has_no_em_dash():
+    assert "\u2014" not in read_doc()

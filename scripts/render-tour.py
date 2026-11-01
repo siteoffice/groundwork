@@ -4,7 +4,7 @@ Copies the Molenwerk example into a temp folder, drives one flow from idea to cl
 gw.py, renders the board, the flow page at each gate and the receipt, and screenshots each
 page in a light and a dark theme with Playwright (Chromium). The temp copy is always removed.
 
-Usage: python scripts/render-tour.py [--out DIR] [--no-screenshots]
+Usage: python scripts/render-tour.py [--out DIR] [--no-screenshots] [--write-doc DOC]
 """
 from __future__ import annotations
 
@@ -253,10 +253,30 @@ def render_tour(out_dir, *, screenshots=True, work_parent=None) -> dict:
             shutil.rmtree(work, onerror=_on_rm_error)
 
 
+def doc_block(transcript: str) -> str:
+    """The fenced block for docs/tour.md: forward slashes so every OS writes the same text."""
+    return "```text\n" + transcript.replace("\\", "/").rstrip("\n") + "\n```\n"
+
+
+def write_doc(doc, transcript: dict) -> None:
+    """Rewrite only the text between each <!-- tour:GX --> and <!-- /tour:GX --> pair."""
+    doc = Path(doc)
+    text = doc.read_text(encoding="utf-8")
+    for key, value in transcript.items():
+        pattern = re.compile(
+            r"(<!-- tour:{0} -->\n).*?(<!-- /tour:{0} -->)".format(re.escape(key)), re.S
+        )
+        block = doc_block(value)
+        text = pattern.sub(lambda m: m.group(1) + block + m.group(2), text)
+    with open(doc, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(text)
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="render-tour.py", description=__doc__.splitlines()[0])
     parser.add_argument("--out", default=str(DEFAULT_OUT), help="where the PNGs go")
     parser.add_argument("--no-screenshots", action="store_true", help="render pages only")
+    parser.add_argument("--write-doc", metavar="DOC", help="refill the transcript blocks in DOC")
     args = parser.parse_args(argv)
     try:
         if not args.no_screenshots:
@@ -264,6 +284,8 @@ def main(argv=None) -> int:
             if not ok:
                 raise RuntimeError(reason)
         result = render_tour(Path(args.out), screenshots=not args.no_screenshots)
+        if args.write_doc:
+            write_doc(args.write_doc, result["transcript"])
     except Exception as exc:
         print("render-tour: {}".format(exc), file=sys.stderr)
         return 1

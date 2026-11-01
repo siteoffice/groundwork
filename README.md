@@ -110,6 +110,8 @@ and text of this release. I set the scope and I decide what ships.
 
 All four are rendered from this release. The receipt page is what you get when you ship.
 
+The guided tour in [docs/tour.md](docs/tour.md) explains every screen of a running flow and what to do next.
+
 ![The Molenwerk example company on the board, light theme: status, next two weeks, waiting on you and roadmap panels](assets/screenshots/board-molenwerk-light.png)
 ![The Molenwerk example company on the board, dark theme](assets/screenshots/board-molenwerk-dark.png)
 ![A receipt for an accepted change, light theme: a table with project, decision, time and a hash of the flow log, labelled self-issued, not signed](assets/screenshots/receipt-light.png)
