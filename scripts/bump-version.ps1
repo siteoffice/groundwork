@@ -91,8 +91,8 @@ foreach ($m in $manifests) {
 
 $touched = ($manifests | ForEach-Object { $_.rel }) -join ' '
 ''
-'Next, in PowerShell on the laptop:'
-"  cd $Root"
+'Next, in PowerShell, cwd the repo root:'
+"  cd `"$Root`""
 "  git add -- $touched"
 "  git commit -m `"release: v$new`""
 "  git tag -a v$new -m `"v$new`""

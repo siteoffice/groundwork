@@ -11,7 +11,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "install-matrix.yml"
 
-# Root suite floor; Task 8 raises it when the tour tests land.
+# Root suite floor (passed plus skipped of the root suite); raise it when root tests are added.
 ROOT_FLOOR = 628
 
 
@@ -132,3 +132,9 @@ def test_mods_probe_matches_readme():
     text = "\n".join(block)
     assert re.search(r"claude plugin test \.\s*$", text, re.M), text
     assert any(_strip_comment(l) == "working-directory: plugins/groundwork-mods" for l in block), text
+
+
+def test_ci_requirements_carry_tzdata():
+    req = ROOT / "scripts" / "requirements-ci.txt"
+    lines = [l.strip() for l in req.read_text(encoding="utf-8").splitlines()]
+    assert any(re.match(r"^tzdata==\d", l) for l in lines), lines

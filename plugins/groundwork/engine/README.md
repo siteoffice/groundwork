@@ -44,7 +44,7 @@ pytest installed:
 
 ```powershell
 # runs in: PowerShell on Windows. cwd: plugins\groundwork\engine in the repo checkout
-py -3 -m pytest foreman -q
+py -3 -m pytest foreman groundwork -q
 ```
 
 Expect `987 passed, 4 skipped` for engine 0.1.0. macOS is untested.

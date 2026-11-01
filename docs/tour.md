@@ -39,7 +39,15 @@ refresh only the command output in this page, without Playwright.
 
 **What it means:** This is the whole company at a glance, read from plain files in the folder. The dates in the example are in the past, so they show as overdue. The new flow does not show here yet: its gate lives on the flow page.
 
-**What you do next:** Nothing on this page. Open the flow page to answer the plan gate.
+**What you do next:** Nothing on this page. Open the flow page to answer the plan gate, or ask Claude for the flow status.
+
+The flow page is rendered by `render_board.py flows` on your `flows` folder and lands at
+`_board\flows\<project>\<slug>\index.html`, next to that `flows` folder:
+
+```powershell
+# runs in: PowerShell on Windows. cwd: the repo root of your checkout. <your folder> is your project folder.
+py -3 .\plugins\groundwork\board\render_board.py flows <your folder>\flows
+```
 
 ## 2. The plan gate (G1)
 

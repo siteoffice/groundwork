@@ -18,7 +18,7 @@ agents. Claude Code first; the skills are plain Markdown and portable.
 - Nothing private ships. Run `scripts\check-public-payload.ps1` before any commit; it must exit 0.
 - Scripts are pure ASCII. No em dashes.
 - No binaries. BurnMon is linked, never copied.
-- Every change that reaches a user is a semver bump on the groundwork clock, through the publish
-  script, never by hand-editing manifests.
+- Every change that reaches a user is a semver bump on the groundwork clock, through
+  `scripts\bump-version.ps1`, never by hand-editing manifests.
 - Release: `pwsh -NoProfile -File .\scripts\bump-version.ps1 -Bump <level> -Apply`, then the commit and tag it prints.
 - The README follows the public repo standard and is updated in the same change as the feature.

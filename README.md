@@ -101,7 +101,7 @@ What it costs you: the gates are slower than letting an agent run. That is on pu
 want a machine that ships without asking you, this is the wrong tool.
 
 I measured what I claim here by running it. The engine carries 987 passing tests, the board 185,
-the mods 206, the repository's pytest suite 627 and the `siteoffice-git` engine 448, all green on Windows at this release. macOS and Linux are covered by the CI install matrix once it runs green; until then they are not verified, and [docs/install-matrix.md](docs/install-matrix.md) shows the state per step. Not verified: a live Claude Code session (the mods tests mock the host). The trust
+the repository's pytest suite 627 and the `siteoffice-git` engine 448, all green on Windows at this release. The mods suite was 206, measured at 0.3.0; the four new Setup Doctor tests in this release run in CI. macOS and Linux are covered by the CI install matrix once it runs green; until then they are not verified, and [docs/install-matrix.md](docs/install-matrix.md) shows the state per step. Not verified: a live Claude Code session (the mods tests mock the host). The trust
 tests that drive real git through the real `gitsafe.ts` need Node 22.18 or newer and are skipped when it is missing or older. That last
 suite builds real git repositories and takes about 25 minutes. Claude Code wrote most of the code
 and text of this release. I set the scope and I decide what ships.
@@ -151,6 +151,7 @@ Build and test from source:
 ```powershell
 # runs in: PowerShell on Windows. cwd: the repo root of your checkout.
 pwsh -NoProfile -File .\scripts\check-public-payload.ps1
+py -3 -m pip install tzdata
 cd .\plugins\groundwork\engine; py -3 -m pytest foreman groundwork -q
 cd ..\; py -3 -m pytest board -q
 cd ..\groundwork-mods; claude plugin test .
@@ -171,7 +172,7 @@ by hand. The payload gate `scripts\check-public-payload.ps1` must exit 0 before 
 
 ## 7. Roadmap
 
-Next: a first green run of the install matrix on Windows, macOS and Linux, install screenshots for both systems, and a first run by someone who
+Next: a first green run of the install matrix on Windows, macOS and Linux, install screenshots for all three systems (this release ships the guided tour, not install screenshots), and a first run by someone who
 did not build it, with their findings filed as issues. Not planned here: signing receipts and a
 verify page (that is a separate product), a hosted version, a sprint runner, and Slack as the
 default. See the [issue list](https://github.com/siteoffice/groundwork/issues).

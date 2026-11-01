@@ -54,17 +54,19 @@ On another Linux distribution, install `python3` with its own package manager (f
 ## Install Claude Code from a terminal
 
 Skip this if you use Claude Desktop or already have Claude Code. The terminal install needs
-Node.js 22.18 or newer, and the command is the same on every system.
+Node.js; Claude Code's own [setup page](https://docs.claude.com/en/docs/claude-code/setup) names
+its minimum version. The command is the same on every system. CI uses Node.js 22, and this
+repository's trust tests need Node.js 22.18 or newer.
 
 ```powershell
-# runs in: PowerShell on Windows. cwd: any. Needs Node.js 22.18 or newer.
+# runs in: PowerShell on Windows. cwd: any. Needs Node.js (see Claude Code's setup page).
 node --version
 npm install -g @anthropic-ai/claude-code
 claude --version
 ```
 
 ```bash
-# runs in: Terminal on macOS or Linux. cwd: any. Needs Node.js 22.18 or newer.
+# runs in: Terminal on macOS or Linux. cwd: any. Needs Node.js (see Claude Code's setup page).
 node --version
 npm install -g @anthropic-ai/claude-code
 claude --version
@@ -184,7 +186,7 @@ Python, Node and Claude Code versions it used, the date and a link to the run.
 
 CI proves the command-line install and the tests. On Windows, macOS and Linux, each with
 Python 3.9 and 3.13, it installs Claude Code with npm, runs the `claude plugin` commands above,
-and runs the engine, board and repository test suites. CI does not log in to Claude. A step that
+and runs the engine, board and repository test suites and the mods plugin test. CI does not log in to Claude. A step that
 asks for a login is marked "skipped: needs a Claude login", not passed, with its reason in the job
 summary. The matrix page shows which steps ran.
 Claude Desktop app install is not tested by CI: the Desktop steps above come from the app, not
