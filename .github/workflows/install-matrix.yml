@@ -27,6 +27,16 @@ jobs:
       matrix:
         os: [windows-latest, macos-latest, ubuntu-24.04]
         python: ['3.9', '3.13']
+        # Root suite floor per OS (passed plus skipped). Linux and macOS collect 8 fewer tests than
+        # Windows because of the os.name == "nt" test blocks in tests/. 621 is the count from run
+        # 4e079bf; Windows keeps 628.
+        include:
+          - os: windows-latest
+            root_floor: 628
+          - os: macos-latest
+            root_floor: 621
+          - os: ubuntu-24.04
+            root_floor: 621
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -78,7 +88,7 @@ jobs:
           python -m pytest tests -q -rs | tee "$RUNNER_TEMP/root.txt"
 
       - name: Root floor
-        run: python scripts/ci_report.py floor --suite root --floor 628 --log "$RUNNER_TEMP/root.txt"
+        run: python scripts/ci_report.py floor --suite root --floor ${{ matrix.root_floor }} --log "$RUNNER_TEMP/root.txt"
 
       - name: Mods plugin test probe
         id: mods

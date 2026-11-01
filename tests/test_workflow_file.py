@@ -12,7 +12,9 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "install-matrix.yml"
 
 # Root suite floor (passed plus skipped of the root suite); raise it when root tests are added.
+# Windows runs the os.name == "nt" test blocks, Linux and macOS collect 8 fewer (621, run 4e079bf).
 ROOT_FLOOR = 628
+ROOT_FLOOR_POSIX = 621
 
 
 def _text() -> str:
@@ -93,8 +95,14 @@ def test_triggers():
 
 def test_floors_in_workflow():
     text = _text()
-    for floor in (991, 190, 206, ROOT_FLOOR):
+    for floor in (991, 190, 206):
         assert re.search(r"--floor %d\b" % floor, text), "--floor %d missing" % floor
+    # The root floor is per OS, read from the matrix.
+    assert "--suite root --floor ${{ matrix.root_floor }}" in text
+    for os_name, floor in (("windows-latest", ROOT_FLOOR), ("macos-latest", ROOT_FLOOR_POSIX),
+                           ("ubuntu-24.04", ROOT_FLOOR_POSIX)):
+        pattern = r"-\s*os:\s*%s\s+root_floor:\s*%d\b" % (re.escape(os_name), floor)
+        assert re.search(pattern, text), "root_floor %d for %s missing" % (floor, os_name)
 
 
 def test_sync_suite_not_run():
