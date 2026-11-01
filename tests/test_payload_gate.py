@@ -109,7 +109,7 @@ def test_a_new_unignored_file_with_a_hit_fails(repo):
 def test_a_local_fsmonitor_program_is_not_run_by_the_gate(repo, tmp_path):
     marker = tmp_path / "fsmonitor-ran.txt"
     hook = tmp_path / "fsmon.sh"
-    hook.write_text("#!/bin/sh\necho ran > '" + marker.as_posix() + "'\n", encoding="ascii", newline="\n")
+    hook.write_bytes(("#!/bin/sh\necho ran > '" + marker.as_posix() + "'\n").encode("ascii"))  # bytes: no newline translation, and write_text(newline=) needs Python 3.10
     hook.chmod(0o755)
     git(repo, "config", "core.fsmonitor", hook.as_posix())
     # Prove this git runs the program at all, else the check below proves nothing.

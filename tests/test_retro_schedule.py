@@ -15,6 +15,8 @@ PLIST = SCRIPTS / "retro.launchd.plist.example"
 CRON = SCRIPTS / "retro.cron.example"
 PWSH = shutil.which("pwsh")
 SCHEDULE_FILES = [PS1, WRAP, PLIST, CRON]
+# The task wrapper and its VBS shim are the Windows route; Linux and macOS use the cron and launchd examples.
+WINDOWS_ONLY = pytest.mark.skipif(sys.platform != "win32", reason="the Windows scheduled-task wrapper; Linux and macOS use the cron and launchd examples")
 EM = chr(0x2014)
 FORBIDDEN = ["wmi", "cim", "win32_process", "psexec", "wmic", "invoke-cimmethod", "claude -p", "claude"]
 
@@ -70,6 +72,7 @@ def test_default_run_prints_plan_and_does_not_register(tmp_path):
     assert "WScript.Quit" in vbs and ", 0, True" in vbs and "run_retro_task.ps1" in vbs
 
 
+@WINDOWS_ONLY
 @pytest.mark.skipif(PWSH is None, reason="pwsh is not installed")
 def test_wrapper_propagates_python_exit_code_and_logs(tmp_path):
     root = tmp_path / "root"
@@ -130,6 +133,7 @@ def test_this_test_file_is_pure_ascii():
 ODD_NAMES = ["plain\\", "with space\\", "it's here\\"]
 
 
+@WINDOWS_ONLY
 @pytest.mark.skipif(PWSH is None, reason="pwsh is not installed")
 @pytest.mark.parametrize("name", ODD_NAMES)
 def test_plan_and_vbs_survive_trailing_backslash_space_apostrophe(tmp_path, name):
@@ -147,6 +151,7 @@ def test_plan_and_vbs_survive_trailing_backslash_space_apostrophe(tmp_path, name
         assert term not in low, term
 
 
+@WINDOWS_ONLY
 @pytest.mark.skipif(PWSH is None, reason="pwsh is not installed")
 @pytest.mark.parametrize("name", ODD_NAMES)
 def test_wrapper_runs_with_trailing_backslash_space_apostrophe(tmp_path, name):
@@ -174,8 +179,10 @@ def test_wrapper_logs_python_not_found(tmp_path):
 
 
 @pytest.mark.skipif(PWSH is None, reason="pwsh is not installed")
-@pytest.mark.parametrize("val,code,word", [("0", 0, "success"), ("267011", 267011, "never run"),
-                                           ("3", 3, "3"), ("2147943726", -2147023570, "2147943726")])
+@pytest.mark.parametrize("val,code,word", [("0", 0, "success"),
+                                           pytest.param("267011", 267011, "never run", marks=WINDOWS_ONLY),
+                                           ("3", 3, "3"),
+                                           pytest.param("2147943726", -2147023570, "2147943726", marks=WINDOWS_ONLY)])
 def test_verify_is_locale_independent(val, code, word):
     r = _pwsh(PS1, "-Verify", "-VerifyUseResult", val)
     assert r.returncode == code % (2 ** 32) or r.returncode == code, r.stdout + r.stderr
