@@ -21,6 +21,8 @@ CI proves the command-line install and the tests. Claude Desktop app install is 
 | `sync` | not tested | not tested | not tested |
 | Claude Desktop app install | not tested | not tested | not tested |
 
+The Claude Desktop app does not exist on Linux, so its Linux cell can never change.
+
 ## What each cell means
 
 - **proven by CI**: the step ran and passed on that system, with both Pythons.
@@ -34,7 +36,9 @@ CI proves the command-line install and the tests. Claude Desktop app install is 
 
 - `marketplace add`, `install groundwork`, `install groundwork-mods`, `plugin list`: the
   `claude plugin` commands from the setup guide, run in a terminal after `npm install -g
-  @anthropic-ai/claude-code`.
+  @anthropic-ai/claude-code`. One difference: `marketplace add` adds the marketplace from the
+  CI checkout of this repository, not from `siteoffice/groundwork`, so the GitHub shorthand
+  itself is not proven by CI.
 - `engine`: `python -m pytest foreman groundwork -q` in `plugins/groundwork/engine`.
 - `board`: `python -m pytest board -q` in `plugins/groundwork`.
 - `root`: `python -m pytest tests -q` at the repository root.

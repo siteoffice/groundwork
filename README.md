@@ -119,6 +119,9 @@ The guided tour in [docs/tour.md](docs/tour.md) explains every screen of a runni
 
 ## 4. Install, no terminal
 
+Claude Desktop runs on Windows and macOS. There is no Desktop app for Linux: on Linux, use Claude
+Code from a terminal (section 5 and the setup guide).
+
 1. Open Claude Desktop. Click your name (bottom left), then Settings, then Plugins, then Add
    marketplace.
 2. Paste `siteoffice/groundwork`.

@@ -9,7 +9,8 @@ The steps below cover Windows, macOS and Linux. Which systems a CI run has prove
 ## What you need
 
 - **Claude Code or Claude Desktop.** Claude Code is the main route; the skills are plain Markdown
-  and other tools can read them, but the hooks only work in Claude Code.
+  and other tools can read them, but the hooks only work in Claude Code. Claude Desktop runs on
+  Windows and macOS only. On Linux you use Claude Code from a terminal.
 - **Python 3.9 or newer.** The engine and the board run on it and need nothing else.
 - **A folder for your work.** Any folder. Git is useful but not required.
 
@@ -74,7 +75,8 @@ folder in your home directory rather than running it with `sudo`.
 
 ## Install the plugins
 
-**In Claude Desktop, no terminal:** click your name (bottom left), then Settings, then Plugins,
+**In Claude Desktop, no terminal (Windows and macOS; there is no Desktop app for Linux, so on
+Linux use Claude Code):** click your name (bottom left), then Settings, then Plugins,
 then Add marketplace, and paste `siteoffice/groundwork`. Install `groundwork`. Install
 `groundwork-mods` too if you want the Setup Doctor and the agent policy.
 
@@ -88,7 +90,9 @@ then Add marketplace, and paste `siteoffice/groundwork`. Install `groundwork`. I
 ```
 
 The same steps from a terminal, outside a session. These are the commands CI runs on
-Windows, macOS and Linux:
+Windows, macOS and Linux, with one difference: CI adds the marketplace from its own checkout of
+this repository instead of `siteoffice/groundwork`, so the GitHub shorthand itself is not proven
+by CI.
 
 ```bash
 # runs in: a terminal on Windows (PowerShell or Git Bash), macOS or Linux. cwd: any.
@@ -180,8 +184,9 @@ Python, Node and Claude Code versions it used, the date and a link to the run.
 
 CI proves the command-line install and the tests. On Windows, macOS and Linux, each with
 Python 3.9 and 3.13, it installs Claude Code with npm, runs the `claude plugin` commands above,
-and runs the engine, board and repository test suites. The plugin steps need a Claude login; a
-run without one marks them "skipped: needs a Claude login", not passed.
+and runs the engine, board and repository test suites. CI does not log in to Claude. A step that
+asks for a login is marked "skipped: needs a Claude login", not passed, with its reason in the job
+summary. The matrix page shows which steps ran.
 Claude Desktop app install is not tested by CI: the Desktop steps above come from the app, not
 from a run. The result per step and per system is in [install-matrix.md](install-matrix.md).
 
