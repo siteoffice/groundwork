@@ -10,6 +10,7 @@ const good: DoctorFacts = {
   git: { ok: true, name: 'Sam', email: 'sam@example.com' },
   gh: { installed: true, authed: true },
   python: 'py -3',
+  pythonVersion: '3.11.9',
   repo: { inside: true, root: 'C:/work/shop' },
   manifest: { found: true, valid: true, checks: 1, engineOk: true },
   plugin: true,
@@ -287,5 +288,33 @@ describe('pane', () => {
     const ui = await openWithSnapshot($, on, { home: '', snapshot: 'fresh' })
     expect(await ui.find({ type: 'Text', text: /not installed/ })).toBeDefined()
     await ui.unmount()
+  })
+})
+
+describe('python floor', () => {
+  const probe = (patch: Partial<DoctorFacts>) => buildReport({ ...good, ...patch }).find(p => p.id === 'python')
+
+  test('Python 3.8 fails the python check', async () => {
+    const py = probe({ pythonVersion: '3.8.10' })
+    expect(py?.ok).toBe(false)
+    expect(py?.why).toBe('Found Python 3.8.10; the engine needs Python 3.9 or newer.')
+    expect(py?.fix).toBe('winget install --id Python.Python.3.12 -e')
+  })
+
+  test('Python 3.9 and 3.13 pass', async () => {
+    expect(probe({ pythonVersion: '3.9.0' })?.ok).toBe(true)
+    expect(probe({ pythonVersion: '3.13.1' })?.ok).toBe(true)
+  })
+
+  test('a missing Python fails', async () => {
+    const py = probe({ python: '', pythonVersion: '' })
+    expect(py?.ok).toBe(false)
+    expect(py?.why).toBe('siteoffice-git and the engine behind the one loop run on Python.')
+  })
+
+  test('an unreadable version fails', async () => {
+    const py = probe({ python: 'py -3', pythonVersion: '' })
+    expect(py?.ok).toBe(false)
+    expect(py?.why).toBe('Found Python but could not read its version; the engine needs Python 3.9 or newer.')
   })
 })

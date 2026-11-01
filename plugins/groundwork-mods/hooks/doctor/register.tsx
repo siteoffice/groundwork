@@ -41,9 +41,13 @@ async function gather($: EngineInterface): Promise<DoctorFacts> {
   const ghInstalled = (await run($, ['gh', '--version'])).exitCode === 0
   const ghAuthed = ghInstalled && (await run($, ['gh', 'auth', 'status'])).exitCode === 0
   let python = ''
+  let pythonVersion = ''
   for (const c of isWindows ? [['py', '-3'], ['python'], ['python3']] : [['python3'], ['python']]) {
-    if ((await run($, [...c, '--version'])).exitCode === 0) {
+    const pv = await run($, [...c, '--version'])
+    if (pv.exitCode === 0) {
       python = c.join(' ')
+      // Python 3 prints its version on stdout, Python 2 on stderr: read both.
+      pythonVersion = ((pv.stdout ?? '') + ' ' + (pv.stderr ?? '')).match(/(\d+\.\d+(?:\.\d+)?)/)?.[1] ?? ''
       break
     }
   }
@@ -88,6 +92,7 @@ async function gather($: EngineInterface): Promise<DoctorFacts> {
     git: { ok: gitOk, name, email },
     gh: { installed: ghInstalled, authed: ghAuthed },
     python,
+    pythonVersion,
     repo: { inside: !!root, root },
     manifest,
     plugin,
