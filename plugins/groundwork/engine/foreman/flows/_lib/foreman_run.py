@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import ntpath
 import os
 import pathlib
 import re
@@ -595,7 +596,12 @@ def validate_launch_line(line, spec_path) -> str:
             LAUNCH_PREFIX, line))
     if not spec_path.lower().endswith(".md"):
         return ("the resolved spec path is not a .md file: {!r}".format(spec_path))
-    normalised_spec_path = os.path.normpath(spec_path)
+    # A drive-lettered path is a Windows path on any host: os.path on POSIX
+    # would not read "\" as a separator and so would not resolve "..".
+    if re.match(r"^[A-Za-z]:[\\/]", spec_path):
+        normalised_spec_path = ntpath.normpath(spec_path)
+    else:
+        normalised_spec_path = os.path.normpath(spec_path)
     if not normalised_spec_path.lower().startswith(_DEV_ROOT_PREFIX.lower()):
         # Plain, not !r: repr() doubles each backslash in a Windows path,
         # which would hide the offending "D:\..." prefix from a substring

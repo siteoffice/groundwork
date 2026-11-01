@@ -95,6 +95,7 @@ def test_main_noop_without_open_gates(tmp_path, monkeypatch):
     _write_flow(tmp_path, "p1", "closed-flow", None)
     log = tmp_path / "log.ndjson"
     monkeypatch.setattr(runner, "FLOWS_ROOT", tmp_path)
+    monkeypatch.setattr(runner, "SPRINTS_ROOT", tmp_path / "no-sprints")
     monkeypatch.setattr(runner, "LOG_PATH", log)
     assert runner.main() == 0
     rec = json.loads(log.read_text(encoding="utf-8").strip())
@@ -105,9 +106,37 @@ def test_main_fatal_when_token_missing(tmp_path, monkeypatch):
     _write_flow(tmp_path, "p1", "open-flow", "awaiting-owner")
     log = tmp_path / "log.ndjson"
     monkeypatch.setattr(runner, "FLOWS_ROOT", tmp_path)
+    monkeypatch.setattr(runner, "SPRINTS_ROOT", tmp_path / "no-sprints")
     monkeypatch.setattr(runner, "LOG_PATH", log)
     monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
     monkeypatch.setattr(swa, "ENV_FILE", tmp_path / "missing.env")
     assert runner.main() == 2
     rec = json.loads(log.read_text(encoding="utf-8").strip())
     assert rec["errors"] and rec["open_gates"] == 1
+
+
+def test_main_delivers_a_sprint_notice_with_no_open_gate(tmp_path, monkeypatch):
+    import outbox
+    _write_flow(tmp_path / "flows", "p1", "closed-flow", None)
+    sdir = tmp_path / "sprints" / "p1" / "S1"
+    sdir.mkdir(parents=True)
+    outbox.append_notice(sdir, notice_id="OBX-PARK-S1-T1", kind="task_parked",
+                         project="p1", slug="S1", subject="Task T1 parked",
+                         body="needs a human", now="2026-07-18T09:00:00Z")
+    log = tmp_path / "log.ndjson"
+    sent = []
+
+    def send_message(channel_id, text, thread_ts=None):
+        sent.append((channel_id, text, thread_ts))
+        return {"ts": "1.0"}
+
+    monkeypatch.setattr(runner, "FLOWS_ROOT", tmp_path / "flows")
+    monkeypatch.setattr(runner, "SPRINTS_ROOT", tmp_path / "sprints")
+    monkeypatch.setattr(runner, "LOG_PATH", log)
+    monkeypatch.setattr(swa, "make_transport",
+                        lambda: (send_message, lambda c, t: []))
+    assert runner.main() == 0
+    assert len(sent) == 1 and "Task T1 parked" in sent[0][1]
+    assert outbox.read_outbox(sdir)[0]["status"] == "sent"
+    rec = json.loads(log.read_text(encoding="utf-8").strip())
+    assert rec["notices"] == 1

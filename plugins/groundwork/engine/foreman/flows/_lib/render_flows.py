@@ -36,6 +36,11 @@ def _find_siteoffice_root(start: pathlib.Path) -> pathlib.Path:
     direct = start.parents[2]  # _lib -> flows -> foreman -> siteoffice
     if (direct / "board").is_dir():
         return direct
+    # Groundwork vendored layout, plugins\groundwork\{engine,board}: the board
+    # folder sits beside the engine folder, one level further up.
+    vendored = start.parents[3]
+    if (vendored / "board").is_dir():
+        return vendored
     for candidate in (start, *start.parents):
         probe = candidate / "50_projects" / "siteoffice"
         if probe.is_dir():

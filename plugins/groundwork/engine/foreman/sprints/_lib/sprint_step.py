@@ -30,9 +30,14 @@ import render_dashboard
 VALID_ACTIONS = {
     "sprint_start", "phase_enter", "phase_exit", "dispatch", "decision",
     "test_run", "verify_run", "iterate", "cap_hit", "escalate", "sprint_done",
-    "task_start", "task_review", "task_fix", "task_done",
+    "task_start", "task_review", "task_fix", "task_done", "task_parked",
+    "touchpoint_open", "touchpoint_done",
 }
-TASK_ACTIONS = {"task_start", "task_review", "task_fix", "task_done"}
+TASK_ACTIONS = {"task_start", "task_review", "task_fix", "task_done", "task_parked"}
+# Run mode (lane 4a): words on pages, codes in receipts.
+RUN_MODE_CODES = {"unattended": "AFK", "attended": "HITL"}
+# flows\_lib holds outbox.py; imported lazily by _queue_parked_notice only.
+_FLOWS_LIB = pathlib.Path(__file__).resolve().parents[2] / "flows" / "_lib"
 VALID_OUTCOMES = {"pass", "fail", "info", "blocked"}
 MAX_DETAIL_LEN = 240
 
@@ -58,6 +63,31 @@ def _find_task(sprint: Dict[str, Any], task_n: int) -> Dict[str, Any]:
         if t.get("n") == task_n:
             return t
     raise ValueError(f"no task with n={task_n} in sprint.json tasks[]")
+
+
+def _queue_parked_notice(sprint_dir: pathlib.Path, sprint: Dict[str, Any],
+                         task_n: int, reason: str, ts: str, park_n: int) -> None:
+    """One outbox line for a parked task, the same one-line write a gate uses."""
+    if str(_FLOWS_LIB) not in sys.path:
+        sys.path.insert(0, str(_FLOWS_LIB))
+    import outbox  # noqa: E402  (flows\_lib sibling, lazy on purpose)
+
+    project = str(sprint.get("project") or "")
+    slug = str(sprint.get("slug") or "")
+    outbox.append_notice(
+        sprint_dir,
+        notice_id=f"OBX-PARK-{sprint.get('sprint_id')}-T{task_n}-{park_n}",
+        kind="task_parked",
+        project=project,
+        slug=slug,
+        subject=f"[SPRINT {project}/{slug}] task {task_n} parked",
+        body=(
+            f"Task {task_n} needs a person: {reason}\n"
+            f"The sprint continues with the tasks that do not depend on it.\n"
+            f"Sprint dir: {sprint_dir}\n"
+        ),
+        now=ts,
+    )
 
 
 def apply_step(
@@ -112,6 +142,9 @@ def apply_step(
         log_entry["model"] = model
     if task is not None:
         log_entry["task"] = task
+    run_mode_code = RUN_MODE_CODES.get(str(sprint.get("run_mode") or ""))
+    if run_mode_code:
+        log_entry["run_mode"] = run_mode_code
 
     with (sprint_dir / "action-log.ndjson").open("a", encoding="utf-8") as f:
         f.write(json.dumps(log_entry) + "\n")
@@ -123,6 +156,7 @@ def apply_step(
     if iteration is not None:
         sprint["iteration"] = iteration
 
+    legacy_park = False  # re-park of a task the pre-park_count code already announced
     if task_entry is not None:
         if action == "task_start":
             task_entry["state"] = "running"
@@ -134,6 +168,13 @@ def apply_step(
             task_entry["state"] = "review"
         elif action == "task_fix":
             task_entry["state"] = "fixing"
+        elif action == "task_parked":
+            if task_entry.get("state") != "parked":
+                task_entry["park_count"] = int(task_entry.get("park_count") or 0) + 1
+            elif not task_entry.get("park_count"):
+                task_entry["park_count"] = 1  # parked before park_count existed
+                legacy_park = True
+            task_entry["state"] = "parked"
         elif action == "task_done":
             task_entry["state"] = "done" if outcome == "pass" else "blocked"
             task_entry["ended_at"] = ts
@@ -141,6 +182,13 @@ def apply_step(
                 task_entry["commit"] = commit
 
     sprint_path.write_text(json.dumps(sprint, indent=2) + "\n", encoding="utf-8")
+
+    # The old code queued OBX-PARK-<sprint_id>-T<n> for that park; the new id would not
+    # match it, so a legacy re-park must not queue a second notice.
+    if (action == "task_parked" and task is not None and not legacy_park
+            and str(sprint.get("run_mode") or "").strip().lower() != "attended"):
+        _queue_parked_notice(sprint_dir, sprint, task, detail, ts,
+                             int(task_entry["park_count"]))
 
     render_dashboard.render_sprint(sprint_dir)
     render_dashboard.render_index(sprint_dir.parent.parent)

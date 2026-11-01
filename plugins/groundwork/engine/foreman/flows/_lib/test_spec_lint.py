@@ -18,6 +18,7 @@ def _good_spec_text(project: str, spec_path: str) -> str:
             "# Spec: demo feature",
             "",
             "Source: docs/roadmap.md lines 1-5",
+            "Run mode: Unattended",
             "",
             "## Problem",
             "The thing is broken.",
@@ -183,3 +184,82 @@ def test_no_invocation_line_fails_rule_4(tmp_path, monkeypatch):
     spec_file.write_text(text, encoding="utf-8")
     failures = spec_lint.lint(spec_file)
     assert any("must end with a valid" in f for f in failures)
+
+
+# --- rule 6: run mode (lane 4a) -------------------------------------------
+
+FENCE = "`" * 3
+
+
+def _write(tmp_path, monkeypatch, text_fn):
+    dev_root = _dev_root(tmp_path, monkeypatch)
+    _setup_project(dev_root, "demoproj")
+    spec_file = tmp_path / "spec.md"
+    spec_file.write_text(text_fn(_good_spec_text("demoproj", str(spec_file))), encoding="utf-8")
+    return spec_file
+
+
+def test_missing_run_mode_fails_rule_6(tmp_path, monkeypatch):
+    spec_file = _write(tmp_path, monkeypatch,
+                       lambda t: t.replace("Run mode: Unattended\n", "", 1))
+    failures = spec_lint.lint(spec_file)
+    assert any("Run mode" in f for f in failures)
+
+
+def test_unattended_passes_rule_6(tmp_path, monkeypatch):
+    spec_file = _write(tmp_path, monkeypatch, lambda t: t)
+    assert spec_lint.lint(spec_file) == []
+
+
+def test_unattended_with_reason_and_lower_case_passes(tmp_path, monkeypatch):
+    spec_file = _write(tmp_path, monkeypatch, lambda t: t.replace(
+        "Run mode: Unattended\n",
+        "run mode: unattended. Every human step sits after the run.\n", 1))
+    assert spec_lint.lint(spec_file) == []
+
+
+def test_attended_without_touchpoint_fails_rule_6(tmp_path, monkeypatch):
+    spec_file = _write(tmp_path, monkeypatch, lambda t: t.replace(
+        "Run mode: Unattended\n", "Run mode: Attended\n", 1))
+    failures = spec_lint.lint(spec_file)
+    assert any("touchpoint" in f for f in failures)
+
+
+def test_attended_with_touchpoint_passes(tmp_path, monkeypatch):
+    spec_file = _write(tmp_path, monkeypatch, lambda t: t.replace(
+        "Run mode: Unattended\n",
+        "Run mode: Attended. The token cannot be prepared in advance.\n"
+        "- Paste the live API token; after task 3; about 5 minutes\n", 1))
+    assert spec_lint.lint(spec_file) == []
+
+
+def test_attended_bullet_missing_a_part_fails_and_quotes_it(tmp_path, monkeypatch):
+    spec_file = _write(tmp_path, monkeypatch, lambda t: t.replace(
+        "Run mode: Unattended\n",
+        "Run mode: Attended\n- Paste the live API token; after task 3\n", 1))
+    failures = spec_lint.lint(spec_file)
+    assert any("Paste the live API token" in f for f in failures)
+
+
+def test_run_mode_inside_code_fence_or_mid_line_does_not_count(tmp_path, monkeypatch):
+    spec_file = _write(tmp_path, monkeypatch, lambda t: t.replace(
+        "Run mode: Unattended\n",
+        "See the glossary (Run mode: Unattended, Attended).\n"
+        + FENCE + "\nRun mode: Unattended\n" + FENCE + "\n", 1))
+    failures = spec_lint.lint(spec_file)
+    assert any("Run mode" in f for f in failures)
+
+
+def test_legacy_keyword_skips_rule_6(tmp_path, monkeypatch):
+    spec_file = _write(tmp_path, monkeypatch,
+                       lambda t: t.replace("Run mode: Unattended\n", "", 1))
+    assert spec_lint.lint(spec_file, legacy=True) == []
+
+
+def test_read_run_mode_returns_lower_case_or_none(tmp_path, monkeypatch):
+    spec_file = _write(tmp_path, monkeypatch, lambda t: t)
+    assert spec_lint.read_run_mode(spec_file) == "unattended"
+    spec_file.write_text("# x\nRun mode: Attended\n", encoding="utf-8")
+    assert spec_lint.read_run_mode(spec_file) == "attended"
+    spec_file.write_text("# x\n", encoding="utf-8")
+    assert spec_lint.read_run_mode(spec_file) is None

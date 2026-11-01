@@ -345,3 +345,96 @@ def test_single_verb_reply_is_unchanged_by_the_compound_path(tmp_path):
         assert result["stopped"] is None, gate_id
         assert calls == [], gate_id
         assert ft.load_flow(flow_dir)["gate"]["decision"]["verdict"] == verb
+
+
+# --- sprint outbox notices (lane 4a, task_parked) ----------------------------
+
+def _sprint_dir(root, project="dsi", sprint_id="S1", subject="Task T1 parked",
+                notice_id=None):
+    """A sprints/<project>/<id> dir holding one pending task_parked notice."""
+    sdir = pathlib.Path(root) / project / sprint_id
+    sdir.mkdir(parents=True)
+    outbox.append_notice(sdir, notice_id=notice_id or "OBX-PARK-%s-T1" % sprint_id,
+                         kind="task_parked", project=project, slug=sprint_id,
+                         subject=subject, body="needs a human", now=GATE_OPENED_AT)
+    return sdir
+
+
+def _sweep(flows_root, sprints_root, send):
+    return host.sweep_once(flows_root, send, _stub_read([]),
+                           now="2026-07-18T10:00:00Z",
+                           sprints_root=sprints_root)
+
+
+def test_sweep_posts_a_pending_sprint_notice_and_marks_it_sent(tmp_path):
+    sprints = tmp_path / "sprints"
+    sdir = _sprint_dir(sprints)
+    send, calls = _stub_send(ts="1.0")
+    result = _sweep(tmp_path / "flows", sprints, send)
+    assert result["notices"] == 1
+    assert len(calls) == 1
+    assert calls[0][0] == host.GATE_CHANNEL_ID
+    assert "Task T1 parked" in calls[0][1]
+    assert calls[0][1].splitlines()[0] == "Task T1 parked"
+    assert calls[0][2] is None
+    rec = outbox.read_outbox(sdir)[0]
+    assert rec["status"] == "sent"
+    assert rec["sent_message_id"] == "1.0"
+
+
+def test_second_sweep_posts_no_sprint_notice_again(tmp_path):
+    sprints = tmp_path / "sprints"
+    _sprint_dir(sprints)
+    send, calls = _stub_send(ts="1.0")
+    _sweep(tmp_path / "flows", sprints, send)
+    result = _sweep(tmp_path / "flows", sprints, send)
+    assert result["notices"] == 0
+    assert len(calls) == 1
+
+
+def test_sent_or_tokened_sprint_records_are_not_posted(tmp_path):
+    import json
+    sprints = tmp_path / "sprints"
+    sdir = _sprint_dir(sprints)
+    outbox.mark_sent(sdir, "OBX-PARK-S1-T1", "9.9", GATE_OPENED_AT)
+    other = _sprint_dir(sprints, sprint_id="S2")
+    recs = outbox.read_outbox(other)
+    recs[0]["token"] = "some-gate-token"
+    (other / "outbox.ndjson").write_text(
+        "".join(json.dumps(r) + "\n" for r in recs), encoding="utf-8")
+    send, calls = _stub_send()
+    result = _sweep(tmp_path / "flows", sprints, send)
+    assert result["notices"] == 0
+    assert calls == []
+
+
+def test_sweep_without_sprints_root_reads_no_sprint_dir(tmp_path):
+    sprints = tmp_path / "sprints"
+    sdir = _sprint_dir(sprints)
+    send, calls = _stub_send()
+    result = host.sweep_once(tmp_path / "flows", send, _stub_read([]),
+                             now="2026-07-18T10:00:00Z")
+    assert result["notices"] == 0
+    assert calls == []
+    assert outbox.read_outbox(sdir)[0]["status"] == "pending"
+
+
+def test_unreadable_sprint_outbox_does_not_stop_another_sprint(tmp_path):
+    sprints = tmp_path / "sprints"
+    bad = sprints / "dsi" / "BAD"
+    (bad / "outbox.ndjson").mkdir(parents=True)  # a directory: read raises
+    good = _sprint_dir(sprints, sprint_id="GOOD")
+    send, calls = _stub_send(ts="2.0")
+    result = _sweep(tmp_path / "flows", sprints, send)
+    assert result["notices"] == 1
+    assert len(result["errors"]) == 1
+    assert outbox.read_outbox(good)[0]["status"] == "sent"
+
+
+def test_has_pending_sprint_notices_reflects_the_outbox(tmp_path):
+    sprints = tmp_path / "sprints"
+    assert host.has_pending_sprint_notices(sprints) is False
+    sdir = _sprint_dir(sprints)
+    assert host.has_pending_sprint_notices(sprints) is True
+    outbox.mark_sent(sdir, "OBX-PARK-S1-T1", "1.0", GATE_OPENED_AT)
+    assert host.has_pending_sprint_notices(sprints) is False

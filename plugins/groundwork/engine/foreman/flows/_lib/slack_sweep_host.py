@@ -67,6 +67,8 @@ import slack_channel
 import sweep_core
 
 DEFAULT_FLOWS_ROOT = str(roots.flows_root())
+# The sprints tree is the sibling of the flows tree (hub/flows, hub/sprints).
+DEFAULT_SPRINTS_ROOT = str(pathlib.Path(DEFAULT_FLOWS_ROOT).parent / "sprints")
 
 # Phase-1 target channel for new gate prompts (spec decision 3: split
 # #znd-gates for actionable items from #znd-alerts for informational ones).
@@ -389,15 +391,78 @@ def process_escalations(flow_dir, flow: dict, entries: List[dict],
 
 
 # =============================================================================
+# Sprint notices (lane 4a): non-gate records in <sprint_dir>\outbox.ndjson.
+# =============================================================================
+
+def _is_postable_notice(rec: dict) -> bool:
+    """A pending, non-gate record: non-empty kind, null token."""
+    return (rec.get("status") == "pending" and bool(rec.get("kind"))
+            and rec.get("token") is None)
+
+
+def has_pending_sprint_notices(sprints_root) -> bool:
+    """True when any sprint outbox holds a postable notice. Read-only; an
+    unreadable outbox counts as none (process_sprint_notices reports it)."""
+    root = pathlib.Path(sprints_root)
+    if not root.exists():
+        return False
+    for ob in root.glob("*/*/outbox.ndjson"):
+        try:
+            if any(_is_postable_notice(r) for r in outbox.read_outbox(ob.parent)):
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def process_sprint_notices(sprints_root, send_message: Callable, now: str,
+                           errors: Optional[List[Dict]] = None) -> int:
+    """Post every pending non-gate sprint notice once. Returns the count posted.
+
+    Walks sprints_root/<project>/<id>/outbox.ndjson. A record is posted when it
+    is `pending`, has a non-empty `kind` and a null `token` (a gate record has a
+    token and is handled by process_open_gate, never here). The message is a
+    new top-level post to GATE_CHANNEL_ID, subject on the first line then the
+    body, and the record is flipped to `sent` afterwards, so a rerun posts
+    nothing. Per-sprint isolation: an error in one sprint dir is appended to
+    `errors` (when given) and the remaining sprints still run.
+    """
+    root = pathlib.Path(sprints_root)
+    count = 0
+    if not root.exists():
+        return count
+    for ob in sorted(root.glob("*/*/outbox.ndjson")):
+        sprint_dir = ob.parent
+        try:
+            for rec in outbox.read_outbox(sprint_dir):
+                if not _is_postable_notice(rec):
+                    continue
+                text = "{}\n{}".format(rec.get("subject", ""),
+                                       rec.get("body", "")).strip()
+                posted = send_message(GATE_CHANNEL_ID, text)
+                # Same defensive .get as process_escalations: the connector's
+                # return shape is an unverified assumption (module docstring).
+                outbox.mark_sent(sprint_dir, rec["id"], posted.get("ts", ""),
+                                 now)
+                count += 1
+        except Exception as exc:  # per-sprint isolation
+            if errors is not None:
+                errors.append({"sprint_dir": str(sprint_dir), "error": str(exc)})
+    return count
+
+
+# =============================================================================
 # Thin host: sweep_once() / main()
 # =============================================================================
 
 def sweep_once(flows_root, send_message: Callable, read_thread: Callable,
-               now: Optional[str] = None) -> dict:
+               now: Optional[str] = None, sprints_root=None) -> dict:
     """One pass over the flow tree: open gates first, then escalations.
 
     Per-flow isolation: an error in one flow is recorded and does not stop the
-    rest of the tree from being processed.
+    rest of the tree from being processed. When sprints_root is given, pending
+    sprint notices are posted after the flow loop ("notices" in the result is
+    0 when it is not).
     """
     now = now or fs.iso_utc_now()
     posted = polled = decided = reminders = 0
@@ -428,12 +493,17 @@ def sweep_once(flows_root, send_message: Callable, read_thread: Callable,
         except Exception as exc:  # per-flow isolation
             errors.append({"flow_id": flow.get("flow_id"), "error": str(exc)})
 
+    notices = 0
+    if sprints_root is not None:
+        notices = process_sprint_notices(sprints_root, send_message, now, errors)
+
     return {"posted": posted, "polled": polled, "decided": decided,
-            "reminders": reminders, "errors": errors}
+            "reminders": reminders, "notices": notices, "errors": errors}
 
 
 def main(send_message: Callable, read_thread: Callable,
-        flows_root=DEFAULT_FLOWS_ROOT, now: Optional[str] = None) -> dict:
+        flows_root=DEFAULT_FLOWS_ROOT, now: Optional[str] = None,
+        sprints_root=DEFAULT_SPRINTS_ROOT) -> dict:
     """Entrypoint for the znd-slack-sweep Cowork task.
 
     The caller (the Cowork task, which alone has Slack connector tool access)
@@ -443,4 +513,4 @@ def main(send_message: Callable, read_thread: Callable,
     This keeps the connector out of module scope entirely, so `import
     slack_sweep_host` never touches the Cowork runtime.
     """
-    return sweep_once(flows_root, send_message, read_thread, now)
+    return sweep_once(flows_root, send_message, read_thread, now, sprints_root)

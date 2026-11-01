@@ -42,6 +42,11 @@ def _find_siteoffice_root(start: pathlib.Path) -> pathlib.Path:
     direct = start.parents[2]  # _lib -> sprints -> foreman -> siteoffice
     if (direct / "board").is_dir():
         return direct
+    # Groundwork vendored layout, plugins\groundwork\{engine,board}: the board
+    # folder sits beside the engine folder, one level further up.
+    vendored = start.parents[3]
+    if (vendored / "board").is_dir():
+        return vendored
     for candidate in (start, *start.parents):
         probe = candidate / "50_projects" / "siteoffice"
         if probe.is_dir():
@@ -73,7 +78,10 @@ TERMINAL_STATUSES = {"passing", "capped", "failed", "escalated"}
 # they used to serve (STATUS_COLORS, OUTCOME_COLORS, TASK_STATE_COLORS,
 # PHASE_ICONS, COMMUNICATION_ACTIONS, LIVE_REFRESH_SECONDS). TASK_STATE_ORDER
 # stays: the text-mode `status`/`tail` CLI still uses it (_text_tasks below).
-TASK_STATE_ORDER = ["running", "review", "fixing", "blocked", "pending"]
+TASK_STATE_ORDER = ["running", "review", "fixing", "parked", "blocked", "pending"]
+
+# Run mode (lane 4a): words on pages, codes in records.
+RUN_MODE_LABELS = {"unattended": "Unattended (AFK)", "attended": "Attended (HITL)"}
 
 
 # ---------------------------------------------------------------------------
@@ -380,6 +388,27 @@ def render_index(sprints_root: pathlib.Path) -> pathlib.Path:
     return sprints_root.parent / "_board" / "sprints" / "index.html"
 
 
+def report_run_mode_line(sprint_dir: pathlib.Path) -> str:
+    """The report.md run mode line (lane 4a, run mode grill R3).
+
+    Parked tasks are the distinct task numbers with a task_parked receipt, so a
+    task parked and later finished still counts. 'Needed a person although
+    Unattended' is yes when an Unattended sprint parked a task or escalated.
+    """
+    sprint_dir = pathlib.Path(sprint_dir)
+    sprint = json.loads((sprint_dir / "sprint.json").read_text(encoding="utf-8"))
+    log = _read_log(sprint_dir)
+    mode = str(sprint.get("run_mode") or "")
+    parked = {e.get("task") for e in log if e.get("action") == "task_parked"}
+    escalated = any(e.get("action") == "escalate" for e in log)
+    needed = mode == "unattended" and (bool(parked) or escalated)
+    label = mode.capitalize() if mode else "not recorded"
+    return (
+        f"Run mode: {label}; parked tasks: {len(parked)}; "
+        f"needed a person although Unattended: {'yes' if needed else 'no'}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Text-mode dashboard (CLI-visible during a running /sprint)
 # ---------------------------------------------------------------------------
@@ -405,6 +434,7 @@ _STATUS_ANSI = {
     "failing":  "red",
     "capped":   "yellow",
     "blocked":  "red",
+    "waiting-on-you": "yellow",
     "done":     "green",
     "planning": "blue",
     "starting": "blue",
@@ -424,6 +454,7 @@ _TASK_STATE_ANSI = {
     "running": "cyan",
     "review":  "magenta",
     "fixing":  "yellow",
+    "parked":  "yellow",
     "blocked": "red",
     "pending": "grey",
 }
@@ -544,6 +575,9 @@ def render_status_text(sprint_dir: pathlib.Path,
     lines.append(_c(header, "bold", colour))
     lines.append(hr)
     lines.append(_text_kv("Status", _c(status.upper(), status_colour, colour), colour))
+    run_mode_label = RUN_MODE_LABELS.get(str(sprint.get("run_mode") or ""))
+    if run_mode_label:
+        lines.append(_text_kv("Run mode", run_mode_label, colour))
     lines.append(_text_kv("Phase", phase, colour))
     lines.append(_text_kv("Iteration", f"{it} of {max_it}", colour))
     lines.append(_text_kv("Progress", _text_bar(progress, colour=colour), colour))

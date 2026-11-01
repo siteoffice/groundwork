@@ -5,6 +5,7 @@ section is tested over tmp_path trees built with flow_transition, the same way
 test_foreman_status.py and test_render_flows.py build theirs.
 """
 import json
+import os
 import pathlib
 
 import flow_transition as ft
@@ -1376,7 +1377,7 @@ def test_spec_missing_is_a_stop_reason_and_stop_reasons_grew():
 
 def test_execute_launch_writes_the_record_then_the_receipt_carries_the_line(
         tmp_path, monkeypatch):
-    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + "\\")
+    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + os.sep)
     spec = _real_spec(tmp_path)
     flow_dir = _sprint_phase_flow(tmp_path, spec)
     line = "/sprint ZeroNonsense.dev {} --model-map {}".format(spec, GOOD_MAP)
@@ -1401,7 +1402,7 @@ def test_execute_launch_writes_the_record_then_the_receipt_carries_the_line(
 
 def test_execute_launch_refuses_a_terminal_sprint_for_the_same_spec(
         tmp_path, monkeypatch):
-    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + "\\")
+    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + os.sep)
     spec = _real_spec(tmp_path)
     flow_dir = _sprint_phase_flow(tmp_path, spec)
     sprints_root = tmp_path / "sprints" / "ZeroNonsense.dev" / "done"
@@ -1425,7 +1426,7 @@ def test_execute_launch_refuses_a_terminal_sprint_for_the_same_spec(
 
 
 def test_execute_launch_refuses_a_spec_that_is_not_on_disk(tmp_path, monkeypatch):
-    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + "\\")
+    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + os.sep)
     spec = tmp_path / "dev" / "ZeroNonsense.dev" / "docs" / "nowhere.md"
     flow_dir = _sprint_phase_flow(tmp_path, spec)
     line = "/sprint ZeroNonsense.dev {} --model-map {}".format(spec, GOOD_MAP)
@@ -1440,6 +1441,10 @@ def test_execute_launch_refuses_a_spec_that_is_not_on_disk(tmp_path, monkeypatch
     assert fr.load_driver(flow_dir, halt=False)["launch"] is None
 
 
+@pytest.mark.skipif(
+    os.name != "nt",
+    reason="a Windows-host fixture forced down the POSIX branch; on a POSIX "
+           "host the tmp spec path is already native and is checked as is")
 def test_execute_launch_abstains_when_local_spec_path_cannot_see_the_disk(
         tmp_path, monkeypatch):
     """local_spec_path returning None means UNDECIDABLE, not "missing". Its own
@@ -1451,7 +1456,7 @@ def test_execute_launch_abstains_when_local_spec_path_cannot_see_the_disk(
     every subsequent pathlib.Path() raise NotImplementedError and takes pytest's
     own reporting down with it.
     """
-    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + "\\")
+    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + os.sep)
     monkeypatch.setattr(ft, "IS_WINDOWS", False)
     monkeypatch.setenv("ZND_DEV_ROOT", str(tmp_path / "no-such-mount"))
     spec = tmp_path / "dev" / "ZeroNonsense.dev" / "docs" / "nowhere.md"
@@ -1467,7 +1472,7 @@ def test_execute_launch_abstains_when_local_spec_path_cannot_see_the_disk(
 
 
 def test_execute_launch_refuses_a_malformed_line(tmp_path, monkeypatch):
-    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + "\\")
+    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + os.sep)
     spec = _real_spec(tmp_path)
     flow_dir = _sprint_phase_flow(tmp_path, spec)
     line = "/sprint ZeroNonsense.dev {} --model-map {}\nrm -rf /".format(spec, GOOD_MAP)
@@ -1485,8 +1490,9 @@ def test_execute_launch_refuses_a_malformed_line(tmp_path, monkeypatch):
 def test_two_runs_in_the_window_produce_exactly_one_launch_receipt(
         tmp_path, monkeypatch):
     """Success criterion 6. No sprint.json ever appears between the two runs."""
-    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + "\\")
+    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + os.sep)
     monkeypatch.setattr(fr, "_REPO_ROOT", tmp_path)   # keep is_cowork_mount off
+    monkeypatch.setenv("FOREMAN_COWORK", "0")   # non-Windows reads as Cowork
     spec = _real_spec(tmp_path)
     flow_dir = _sprint_phase_flow(tmp_path, spec)
     sprints_root = str(tmp_path / "sprints")
@@ -1507,8 +1513,9 @@ def test_two_runs_in_the_window_produce_exactly_one_launch_receipt(
 def test_deleting_foreman_json_offers_the_launch_again(tmp_path, monkeypatch):
     """The record is advisory, and losing it is the safe direction: the guards
     in execute_launch re-run against a disk that by now may hold the sprint."""
-    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + "\\")
+    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + os.sep)
     monkeypatch.setattr(fr, "_REPO_ROOT", tmp_path)
+    monkeypatch.setenv("FOREMAN_COWORK", "0")   # non-Windows reads as Cowork
     spec = _real_spec(tmp_path)
     flow_dir = _sprint_phase_flow(tmp_path, spec)
     sprints_root = str(tmp_path / "sprints")
@@ -1526,8 +1533,9 @@ def test_the_launch_record_survives_the_chain_depth_write(tmp_path, monkeypatch)
     """run_chain writes chain_depth after every executed action. It must re-read
     the driver first, or it writes back the pre-execute snapshot and erases the
     record execute_launch just wrote."""
-    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + "\\")
+    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + os.sep)
     monkeypatch.setattr(fr, "_REPO_ROOT", tmp_path)
+    monkeypatch.setenv("FOREMAN_COWORK", "0")   # non-Windows reads as Cowork
     spec = _real_spec(tmp_path)
     flow_dir = _sprint_phase_flow(tmp_path, spec)
 
@@ -1543,7 +1551,7 @@ def test_the_launch_record_is_cleared_once_the_sprint_resolves(
         tmp_path, monkeypatch):
     """Scope B: cleared once the step's sprint.json resolves, so a later step of
     the same flow gets a clean slate."""
-    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + "\\")
+    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + os.sep)
     monkeypatch.setattr(fr, "_REPO_ROOT", tmp_path)
     spec = _real_spec(tmp_path)
     flow_dir = _sprint_phase_flow(tmp_path, spec)
@@ -1701,7 +1709,7 @@ def test_await_defaults_match_the_spec():
 
 def test_await_sprint_returns_terminal_and_writes_exactly_two_receipts(
         tmp_path, monkeypatch):
-    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + "\\")
+    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + os.sep)
     monkeypatch.setattr(fr, "_REPO_ROOT", tmp_path)
     spec = _real_spec(tmp_path)
     flow_dir = _sprint_phase_flow(tmp_path, spec)
@@ -1732,7 +1740,7 @@ def test_await_sprint_returns_terminal_and_writes_exactly_two_receipts(
 
 
 def test_await_sprint_times_out_with_await_timeout(tmp_path, monkeypatch):
-    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + "\\")
+    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + os.sep)
     monkeypatch.setattr(fr, "_REPO_ROOT", tmp_path)
     spec = _real_spec(tmp_path)
     flow_dir = _sprint_phase_flow(tmp_path, spec)
@@ -1757,7 +1765,7 @@ def test_await_sprint_times_out_with_await_timeout(tmp_path, monkeypatch):
 
 
 def test_await_sprint_honours_a_per_flow_pause_mid_poll(tmp_path, monkeypatch):
-    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + "\\")
+    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + os.sep)
     monkeypatch.setattr(fr, "_REPO_ROOT", tmp_path)
     spec = _real_spec(tmp_path)
     flow_dir = _sprint_phase_flow(tmp_path, spec)
@@ -1786,7 +1794,7 @@ def test_await_sprint_honours_the_global_halt_file_mid_poll(
         tmp_path, monkeypatch):
     """FOREMAN_HALT is stat'd by load_driver on every tick, so it stops an await
     mid-flight exactly as it stops a chain."""
-    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + "\\")
+    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + os.sep)
     monkeypatch.setattr(fr, "_REPO_ROOT", tmp_path)
     monkeypatch.setattr(fst, "HALT_FILE", tmp_path / "FOREMAN_HALT")
     spec = _real_spec(tmp_path)
@@ -1816,7 +1824,7 @@ def test_run_await_re_enters_the_chain_once_on_terminal(tmp_path, monkeypatch):
     executable (slice c), so the re-entry either stops there for some other
     reason or runs it and reaches the G4 gate_open right behind it; both are
     "got past the await and onto the ship path", which is the honest claim."""
-    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + "\\")
+    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + os.sep)
     monkeypatch.setattr(fr, "_REPO_ROOT", tmp_path)
     spec = _real_spec(tmp_path)
     flow_dir = _sprint_phase_flow(tmp_path, spec)
@@ -1837,7 +1845,7 @@ def test_run_await_re_enters_the_chain_once_on_terminal(tmp_path, monkeypatch):
 
 def test_run_await_returns_the_timeout_stop_without_re_entering(
         tmp_path, monkeypatch):
-    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + "\\")
+    monkeypatch.setattr(fr, "_DEV_ROOT_PREFIX", str(tmp_path / "dev") + os.sep)
     monkeypatch.setattr(fr, "_REPO_ROOT", tmp_path)
     spec = _real_spec(tmp_path)
     flow_dir = _sprint_phase_flow(tmp_path, spec)

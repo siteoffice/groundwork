@@ -19,6 +19,8 @@ All notable changes. The version is one clock for the whole repository: `groundw
   `scripts/render-tour.py` renders the screens.
 - **Release route.** `scripts/bump-version.ps1` moves the one version clock for the marketplace and
   both plugins.
+- **Engine resynced from Siteoffice v0.10.4; sprint run modes and notices are vendored, unused by
+  one-loop.**
 
 ## 0.3.0
 

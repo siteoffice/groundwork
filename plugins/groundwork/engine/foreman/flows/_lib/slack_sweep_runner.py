@@ -13,19 +13,25 @@ nothing is re-implemented here.
 
 Cycle (same as the retired Cowork task, spec
 (design spec, not shipped)):
-  1. short-circuit: no flow.json with gate.status == "awaiting-owner" -> log a
-     no-op line and exit 0 without loading a token or making any network call.
+  1. short-circuit: no flow.json with gate.status == "awaiting-owner" and no
+     pending sprint notice (a postable non-gate record in
+     sprints\\*\\*\\outbox.ndjson) -> log a no-op line and exit 0 without
+     loading a token or making any network call.
   2. otherwise run slack_sweep_host.sweep_once() with the real transport:
      post new gate prompts, poll open threads, apply decisions via cmd_gate,
-     post due escalation reminders.
+     post due escalation reminders, then post each pending sprint notice once
+     and mark it sent in its sprint outbox.
   3. after any state change (posted/decided > 0), re-render the affected flow
-     dashboards and the index via render_flows.
+     dashboards and the index via render_flows. Notice delivery alone does not
+     trigger a re-render.
   4. append one ndjson record to slack-sweep-log.ndjson
-     (host: "slack-sweep-runner").
+     (host: "slack-sweep-runner"), including a "notices" count.
 
 Guardrails inherited unchanged: never edits or deletes Slack messages, never
-posts to #znd-alerts, never runs git, never writes under sprints\\, safe to
-re-run (idempotency lives in outbox + cmd_gate first-decision-wins).
+posts to #znd-alerts, never runs git, safe to re-run (idempotency lives in
+outbox + cmd_gate first-decision-wins). The only write under sprints\\ is
+the "sent" mark on a delivered sprint notice in that sprint's outbox.ndjson;
+no other sprint file is touched.
 
 Exit codes: 0 = clean (including no-op), 1 = sweep ran with per-flow errors,
 2 = fatal (token missing, transport failure before any work).
@@ -50,6 +56,7 @@ import flow_state as fs            # noqa: E402
 import slack_sweep_host as host    # noqa: E402
 
 FLOWS_ROOT = pathlib.Path(host.DEFAULT_FLOWS_ROOT)
+SPRINTS_ROOT = pathlib.Path(host.DEFAULT_SPRINTS_ROOT)
 LOG_PATH = _HERE / "slack-sweep-log.ndjson"
 # Default is the ZND deployment's #znd-gates channel id; ZND_GATE_CHANNEL_ID
 # still wins when set. The empty default here (not in slack_sweep_host, whose
@@ -92,7 +99,7 @@ def _render(flow_dirs, flows_root: pathlib.Path) -> list:
 def main() -> int:
     now = fs.iso_utc_now()
     open_dirs = awaiting_gates(FLOWS_ROOT)
-    if not open_dirs:
+    if not open_dirs and not host.has_pending_sprint_notices(SPRINTS_ROOT):
         _log({"ts": now, "host": "slack-sweep-runner", "posted": 0, "polled": 0,
               "decided": 0, "reminders": 0, "open_gates": 0,
               "notes": ["no gate awaiting-owner; no-op, no network call"],
@@ -110,7 +117,8 @@ def main() -> int:
         return 2
 
     host.GATE_CHANNEL_ID = GATE_CHANNEL_ID
-    result = host.sweep_once(FLOWS_ROOT, send_message, read_thread, now)
+    result = host.sweep_once(FLOWS_ROOT, send_message, read_thread, now,
+                             sprints_root=SPRINTS_ROOT)
 
     notes = [f"open gates: {len(open_dirs)}"]
     if result["posted"] or result["decided"]:
@@ -120,6 +128,7 @@ def main() -> int:
     _log({"ts": now, "host": "slack-sweep-runner",
           "posted": result["posted"], "polled": result["polled"],
           "decided": result["decided"], "reminders": result["reminders"],
+          "notices": result["notices"],
           "open_gates": len(open_dirs), "notes": notes,
           "errors": result["errors"]})
     return 1 if result["errors"] else 0

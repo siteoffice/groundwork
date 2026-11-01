@@ -272,6 +272,41 @@ def append_gate_open(flow_dir, flow: dict, now: Optional[str] = None,
     return record
 
 
+def append_notice(target_dir, *, notice_id: str, kind: str, project: str,
+                  slug: str, subject: str, body: str,
+                  now: Optional[str] = None) -> Optional[dict]:
+    """Append one `pending` non-gate notice line to target_dir/outbox.ndjson.
+
+    Same one-JSON-line write as append_gate_open, with the gate fields null and
+    a `kind` field (lane 4a: `task_parked`, written by sprint_step.py into the
+    sprint's own directory). Rerun safe on `notice_id`: returns None when a
+    record with that id already exists. Sends nothing.
+    """
+    now = now or fs.iso_utc_now()
+    if any(e.get("id") == notice_id for e in read_outbox(target_dir)):
+        return None
+    record = {
+        "id": notice_id,
+        "kind": kind,
+        "project": project,
+        "slug": slug,
+        "gate_id": None,
+        "token": None,
+        "subject": subject,
+        "body": body,
+        "created_at": now,
+        "send_after": now,
+        "sent_at": None,
+        "sent_message_id": None,
+        "slack_channel_id": None,
+        "slack_parent_ts": None,
+        "status": "pending",
+    }
+    with _outbox_path(target_dir).open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(record) + "\n")
+    return record
+
+
 # --- status decision + transitions -----------------------------------------
 
 def classify(entry: dict, flow: dict, now: str) -> str:
