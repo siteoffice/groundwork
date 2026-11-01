@@ -837,7 +837,7 @@ def test_the_gitconfig_pairs_reach_a_child_through_runGit():
     # A tiny child that prints its env, not git: runGit passes the two core.* pairs on in the environment.
     body = (
         "async (m) => { const cp = require('child_process'); "
-        "const $ = { plugin: { root: 'C:/x' }, process: { run: async (argv, o) => { "
+        "const $ = { plugin: { root: process.platform === 'win32' ? 'C:/x' : '/x' }, process: { run: async (argv, o) => { "
         "const r = cp.spawnSync(process.execPath, ['-e', 'console.log(JSON.stringify(process.env))'], { env: Object.assign({}, process.env, o.env), encoding: 'utf8' }); "
         "return { exitCode: r.status, stdout: r.stdout, stderr: r.stderr } } } }; "
         "const r = await m.runGit($, ['git', 'status'], 5000, '/d'); return JSON.parse(r.stdout) }"

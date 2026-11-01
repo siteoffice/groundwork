@@ -6,6 +6,7 @@ export type DoctorFacts = {
   git: { ok: boolean; name: string; email: string }
   gh: { installed: boolean; authed: boolean }
   python: string
+  pythonVersion: string
   repo: { inside: boolean; root: string }
   manifest: { found: boolean; valid: boolean; checks: number; engineOk: boolean; syncDirReason?: '' | 'inside' | 'invalid-form' | 'unresolved' }
   plugin: boolean

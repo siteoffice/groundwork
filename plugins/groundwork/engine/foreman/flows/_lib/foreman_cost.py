@@ -33,6 +33,7 @@ Stdlib only. Python 3.8+.
 from __future__ import annotations
 
 import json
+import ntpath
 import os
 import pathlib
 import re
@@ -162,7 +163,13 @@ def dedup_turns(turns: list) -> list:
 
 
 def _norm(path) -> str:
-    return os.path.normcase(os.path.normpath(str(path)))
+    # Session cwds are recorded on Windows. A drive-lettered path is matched
+    # the Windows way (separators, case) on any host; os.path on POSIX would
+    # neither fold "\" nor case.
+    text = str(path)
+    if re.match(r"^[A-Za-z]:[\\/]", text):
+        return ntpath.normcase(ntpath.normpath(text))
+    return os.path.normcase(os.path.normpath(text))
 
 
 def session_ids_for_worktree(worktree_path, sessions: list) -> set:

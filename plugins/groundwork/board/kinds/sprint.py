@@ -34,9 +34,11 @@ _SPRINT_PHASE_ICONS = {
 }
 _TASK_STATE_SEM = {
     "done": "done", "running": "run", "review": "wait",
-    "fixing": "wait", "blocked": "halt", "pending": "done",
+    "fixing": "wait", "parked": "wait", "blocked": "halt", "pending": "done",
 }
-_TASK_STATE_ORDER = ["running", "review", "fixing", "blocked", "pending"]
+_TASK_STATE_ORDER = ["running", "review", "fixing", "parked", "blocked", "pending"]
+# Run mode (lane 4a, mirrored in lane 4b): plain words on pages; AFK and HITL stay in the receipts.
+_RUN_MODE_WORDS = {"unattended": "Unattended", "attended": "Attended"}
 _COMM_ACTIONS = {"dispatch", "decision", "escalate", "cap_hit", "sprint_start", "sprint_done"}
 _SPRINT_NEXT_HINTS = {
     "spec": "Locate or brainstorm a spec, then move to plan.",
@@ -353,11 +355,19 @@ def _sprint_next_action_hint(sprint: dict) -> str:
     phase, status = sprint.get("phase", "spec"), sprint.get("status", "")
     if phase == "done":
         return "Sprint complete. Review the branch and merge when ready."
+    if status == "waiting-on-you":
+        return "Waiting on you: answer the parked tasks, then resume the sprint."
     if status == "escalated":
         return "Escalated. Human review required, see the failure banner and action log."
     if status == "capped":
         return "Iteration cap reached. Read report.md and decide whether to extend or abandon."
     return _SPRINT_NEXT_HINTS.get(phase, "-")
+
+
+def _sprint_run_mode_html(sprint: dict) -> str:
+    """The run mode in plain words; empty for a sprint started before run mode existed."""
+    words = _RUN_MODE_WORDS.get(str(sprint.get("run_mode") or "").strip().lower())
+    return f'<p class="note" data-run-mode>Run mode: {esc(words)}</p>' if words else ""
 
 
 def _sprint_resume_snippet(sprint: dict) -> str:
@@ -399,6 +409,7 @@ def _render_sprint_detail(sprint_dir: pathlib.Path, lang, languages, manifest_la
         f'<p>{tpl_table.render_badge(status, theme.status_sem(status))} '
         f'<span class="chip">{esc(phase)}</span> '
         f'<span class="mono">Iteration {iteration} of {max_it}</span></p>'
+        f"{_sprint_run_mode_html(sprint)}"
         f'<p class="note">Next: {esc(_sprint_next_action_hint(sprint))}</p>'
         f"{banner}"
         f"<h3>Phase timeline</h3>{_sprint_phase_timeline_html(sprint, stats)}"

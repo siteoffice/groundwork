@@ -271,6 +271,30 @@ class TextStatusTests(unittest.TestCase):
             out = rd.render_status_text(sd, colour=False)
             self.assertNotIn("Tasks:", out)
 
+    def test_status_shows_run_mode_parked_and_waiting_on_you(self):
+        tasks = [
+            {"n": 1, "title": "needs token", "state": "parked", "attempts": 1,
+             "commit": None, "started_at": "2026-07-07T00:00:00Z",
+             "ended_at": None, "model": "sonnet"},
+            {"n": 2, "title": "other work", "state": "done", "attempts": 1,
+             "commit": "3f9a1c2", "started_at": "2026-07-07T00:01:00Z",
+             "ended_at": "2026-07-07T00:02:00Z", "model": "sonnet"},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            sd = _write_sprint(pathlib.Path(tmp),
+                self._sprint(tasks=tasks, run_mode="unattended",
+                             status="waiting-on-you"), [])
+            out = rd.render_status_text(sd, colour=False)
+            self.assertIn("Run mode: Unattended (AFK)", out)
+            self.assertIn("WAITING-ON-YOU", out)
+            self.assertIn("Tasks: 1 of 2 done, 1 parked", out)
+
+    def test_status_has_no_run_mode_line_for_old_sprint(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sd = _write_sprint(pathlib.Path(tmp), self._sprint(), [])
+            out = rd.render_status_text(sd, colour=False)
+            self.assertNotIn("Run mode:", out)
+
     def test_status_progress_bar_renders_percentage(self):
         with tempfile.TemporaryDirectory() as tmp:
             sd = _write_sprint(pathlib.Path(tmp),
@@ -488,6 +512,60 @@ class SiteofficeRootTests(unittest.TestCase):
             lib = root / "x" / "y" / "z" / "_lib"
             lib.mkdir(parents=True)
             self.assertEqual(rd._find_siteoffice_root(lib), site)
+
+
+class ReportRunModeLineTests(unittest.TestCase):
+    def _sprint(self, **overrides):
+        base = {"project": "demo", "slug": "hello", "status": "passing",
+                "phase": "done", "iteration": 1, "max_iterations": 5}
+        base.update(overrides)
+        return base
+
+    def _entry(self, action, task=None):
+        e = {"ts": "2026-07-07T00:00:00Z", "iteration": 1, "phase": "dev",
+             "actor": "orchestrator", "action": action, "outcome": "info",
+             "detail": "x", "ref": None}
+        if task is not None:
+            e["task"] = task
+        return e
+
+    def test_unattended_with_parked_task_needed_a_person(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = [self._entry("task_parked", 3), self._entry("task_parked", 3),
+                   self._entry("task_start", 3), self._entry("task_done", 3)]
+            sd = _write_sprint(pathlib.Path(tmp), self._sprint(run_mode="unattended"), log)
+            self.assertEqual(
+                rd.report_run_mode_line(sd),
+                "Run mode: Unattended; parked tasks: 1; "
+                "needed a person although Unattended: yes")
+
+    def test_unattended_clean_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sd = _write_sprint(pathlib.Path(tmp), self._sprint(run_mode="unattended"),
+                               [self._entry("sprint_done")])
+            self.assertEqual(
+                rd.report_run_mode_line(sd),
+                "Run mode: Unattended; parked tasks: 0; "
+                "needed a person although Unattended: no")
+
+    def test_unattended_escalation_counts_as_needed_a_person(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sd = _write_sprint(pathlib.Path(tmp), self._sprint(run_mode="unattended"),
+                               [self._entry("escalate")])
+            self.assertTrue(rd.report_run_mode_line(sd).endswith(": yes"))
+
+    def test_attended_and_old_sprint(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sd = _write_sprint(pathlib.Path(tmp), self._sprint(run_mode="attended"),
+                               [self._entry("touchpoint_open")])
+            self.assertEqual(
+                rd.report_run_mode_line(sd),
+                "Run mode: Attended; parked tasks: 0; "
+                "needed a person although Unattended: no")
+        with tempfile.TemporaryDirectory() as tmp:
+            sd = _write_sprint(pathlib.Path(tmp), self._sprint(), [])
+            self.assertTrue(rd.report_run_mode_line(sd).startswith(
+                "Run mode: not recorded;"))
 
 
 if __name__ == "__main__":

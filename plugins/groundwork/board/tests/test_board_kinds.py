@@ -297,6 +297,30 @@ class TestSprintDetailPage(unittest.TestCase):
             page = self._render(tmp, "demo", "hello", self._sprint())
             self.assertNotIn("<h3>Tasks</h3>", page)
 
+    def test_waiting_on_you_parked_task_and_run_mode_words(self):
+        tasks = [
+            {"n": 1, "title": "needs a live token", "state": "parked", "model": "sonnet"},
+            {"n": 2, "title": "other work", "state": "done", "commit": "3f9a1c2", "model": "sonnet"},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            page = self._render(tmp, "demo", "hello",
+                                self._sprint(tasks=tasks, status="waiting-on-you", run_mode="unattended"))
+            self.assertIn("Tasks: 1 of 2 done, 1 parked", page)
+            self.assertIn('class="badge wait">waiting-on-you', page)
+            self.assertIn('class="badge wait">parked', page)
+            self.assertIn("Run mode: Unattended", page)
+            self.assertIn("Waiting on you", page)
+            self.assertNotIn("AFK", page)
+
+    def test_attended_run_mode_words_and_no_line_for_an_old_sprint(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            page = self._render(tmp, "demo", "hello", self._sprint(run_mode="attended"))
+            self.assertIn("Run mode: Attended", page)
+            self.assertNotIn("HITL", page)
+        with tempfile.TemporaryDirectory() as tmp:
+            page = self._render(tmp, "demo", "hello", self._sprint())
+            self.assertNotIn("Run mode:", page)
+
     def test_phase_timeline_renders_all_phases(self):
         with tempfile.TemporaryDirectory() as tmp:
             page = self._render(tmp, "demo", "hello", self._sprint(phase="dev"))

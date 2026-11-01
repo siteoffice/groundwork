@@ -321,3 +321,22 @@ def test_find_step_parent_ts_is_scoped_to_one_flow(tmp_path):
                "2026-07-18T07:14:03Z", "1600000000.000000"),
     ])
     assert outbox.find_step_parent_ts(ours, 2) == "1700000100.000100"
+
+
+# --- lane 4a: non-gate notice (parked task) --------------------------------
+
+def test_append_notice_writes_one_pending_line_and_is_rerun_safe(tmp_path):
+    kwargs = dict(notice_id="OBX-PARK-demo__hello__x-T3", kind="task_parked",
+                  project="demo", slug="hello",
+                  subject="[SPRINT demo/hello] task 3 parked",
+                  body="Task 3 needs a person: live token\n",
+                  now="2026-10-11T22:00:00Z")
+    rec = outbox.append_notice(tmp_path, **kwargs)
+    assert rec["status"] == "pending"
+    assert rec["kind"] == "task_parked"
+    assert rec["token"] is None and rec["gate_id"] is None
+    assert rec["created_at"] == "2026-10-11T22:00:00Z"
+    assert outbox.append_notice(tmp_path, **kwargs) is None
+    lines = _read_outbox_lines(tmp_path)
+    assert len(lines) == 1
+    assert lines[0]["id"] == "OBX-PARK-demo__hello__x-T3"

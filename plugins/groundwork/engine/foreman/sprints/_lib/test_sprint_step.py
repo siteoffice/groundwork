@@ -7,7 +7,7 @@ import unittest
 import sprint_step as ss
 
 
-def _write_sprint(root: pathlib.Path, tasks=None) -> pathlib.Path:
+def _write_sprint(root: pathlib.Path, tasks=None, run_mode=None) -> pathlib.Path:
     sprint_dir = root / "demo" / "hello"
     sprint_dir.mkdir(parents=True, exist_ok=True)
     sprint = {
@@ -26,6 +26,8 @@ def _write_sprint(root: pathlib.Path, tasks=None) -> pathlib.Path:
     }
     if tasks is not None:
         sprint["tasks"] = tasks
+    if run_mode is not None:
+        sprint["run_mode"] = run_mode
     (sprint_dir / "sprint.json").write_text(json.dumps(sprint), encoding="utf-8")
     (sprint_dir / "action-log.ndjson").write_text("", encoding="utf-8")
     return sprint_dir
@@ -122,6 +124,157 @@ class ApplyStepTests(unittest.TestCase):
                           / sprint_dir.relative_to(sprints_root) / "index.html")
             self.assertTrue(board_page.exists())
 
+
+    def test_task_parked_sets_parked_and_queues_one_outbox_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sprint_dir = _write_sprint(pathlib.Path(tmp),
+                                       tasks=[_task(1, state="running"), _task(2)],
+                                       run_mode="unattended")
+            sprint = ss.apply_step(
+                sprint_dir, phase="dev", action="task_parked", actor="orchestrator",
+                detail="needs the live API token", outcome="blocked", task=1,
+            )
+            states = {t["n"]: t["state"] for t in sprint["tasks"]}
+            self.assertEqual(states, {1: "parked", 2: "pending"})
+            lines = (sprint_dir / "outbox.ndjson").read_text(
+                encoding="utf-8").strip().splitlines()
+            self.assertEqual(len(lines), 1)
+            rec = json.loads(lines[0])
+            self.assertEqual(rec["kind"], "task_parked")
+            self.assertIn("needs the live API token", rec["body"])
+
+    def test_parking_the_same_task_twice_queues_one_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sprint_dir = _write_sprint(pathlib.Path(tmp), tasks=[_task(1)],
+                                       run_mode="unattended")
+            for _ in range(2):
+                ss.apply_step(sprint_dir, phase="dev", action="task_parked",
+                              actor="orchestrator", detail="needs a person", task=1)
+            lines = (sprint_dir / "outbox.ndjson").read_text(
+                encoding="utf-8").strip().splitlines()
+            self.assertEqual(len(lines), 1)
+
+    def test_reparking_after_resume_queues_a_second_notice(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sprint_dir = _write_sprint(pathlib.Path(tmp),
+                                       tasks=[_task(1), _task(2)],
+                                       run_mode="unattended")
+
+            def park():
+                ss.apply_step(sprint_dir, phase="dev", action="task_parked",
+                              actor="orchestrator", detail="needs a person", task=2)
+
+            def ids():
+                lines = (sprint_dir / "outbox.ndjson").read_text(
+                    encoding="utf-8").strip().splitlines()
+                return [json.loads(x)["id"] for x in lines]
+
+            park()
+            self.assertEqual(len(ids()), 1)
+            self.assertTrue(ids()[0].endswith("-T2-1"))
+            ss.apply_step(sprint_dir, phase="dev", action="task_start",
+                          actor="agent:implementer", detail="resumed", task=2)
+            park()
+            self.assertEqual(len(ids()), 2)
+            self.assertTrue(ids()[1].endswith("-T2-2"))
+            park()  # repeat of the second call while still parked
+            self.assertEqual(len(ids()), 2)
+
+    def test_reparking_a_task_parked_under_the_old_code_adds_no_notice(self):
+        # Old code: no park_count, notice id OBX-PARK-<sprint_id>-T<n>, state already parked.
+        with tempfile.TemporaryDirectory() as tmp:
+            sprint_dir = _write_sprint(pathlib.Path(tmp),
+                                       tasks=[_task(1, state="parked")],
+                                       run_mode="unattended")
+            ss.apply_step(sprint_dir, phase="dev", action="task_parked",
+                          actor="orchestrator", detail="needs a person", task=1)
+            outbox_file = sprint_dir / "outbox.ndjson"
+            if outbox_file.exists():
+                self.assertEqual(outbox_file.read_text(encoding="utf-8").strip(), "")
+            sprint = json.loads((sprint_dir / "sprint.json").read_text(encoding="utf-8"))
+            self.assertEqual(sprint["tasks"][0]["park_count"], 1)
+            # A genuine new park after a resume still queues, as park 2.
+            ss.apply_step(sprint_dir, phase="dev", action="task_start",
+                          actor="agent:implementer", detail="resumed", task=1)
+            ss.apply_step(sprint_dir, phase="dev", action="task_parked",
+                          actor="orchestrator", detail="needs a person", task=1)
+            lines = outbox_file.read_text(encoding="utf-8").strip().splitlines()
+            self.assertEqual(len(lines), 1)
+            self.assertTrue(json.loads(lines[0])["id"].endswith("-T1-2"))
+
+    def test_attended_sprint_parks_without_a_notice(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sprint_dir = _write_sprint(pathlib.Path(tmp), tasks=[_task(1)],
+                                       run_mode="attended")
+            sprint = ss.apply_step(sprint_dir, phase="dev", action="task_parked",
+                                   actor="orchestrator", detail="needs a person",
+                                   task=1)
+            self.assertEqual(sprint["tasks"][0]["state"], "parked")
+            outbox_file = sprint_dir / "outbox.ndjson"
+            if outbox_file.exists():
+                self.assertEqual(outbox_file.read_text(encoding="utf-8").strip(), "")
+            log = (sprint_dir / "action-log.ndjson").read_text(
+                encoding="utf-8").strip().splitlines()
+            self.assertEqual(json.loads(log[-1])["action"], "task_parked")
+
+    def test_attended_check_ignores_case(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sprint_dir = _write_sprint(pathlib.Path(tmp), tasks=[_task(1)],
+                                       run_mode="Attended")
+            ss.apply_step(sprint_dir, phase="dev", action="task_parked",
+                          actor="orchestrator", detail="needs a person", task=1)
+            outbox_file = sprint_dir / "outbox.ndjson"
+            if outbox_file.exists():
+                self.assertEqual(outbox_file.read_text(encoding="utf-8").strip(), "")
+
+    def test_sprint_without_run_mode_still_queues_a_park_notice(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sprint_dir = _write_sprint(pathlib.Path(tmp), tasks=[_task(1)])
+            ss.apply_step(sprint_dir, phase="dev", action="task_parked",
+                          actor="orchestrator", detail="needs a person", task=1)
+            lines = (sprint_dir / "outbox.ndjson").read_text(
+                encoding="utf-8").strip().splitlines()
+            self.assertEqual(len(lines), 1)
+            self.assertTrue(json.loads(lines[0])["id"].endswith("-T1-1"))
+
+    def test_task_parked_without_task_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sprint_dir = _write_sprint(pathlib.Path(tmp), tasks=[_task(1)])
+            with self.assertRaises(ValueError):
+                ss.apply_step(sprint_dir, phase="dev", action="task_parked",
+                              actor="orchestrator", detail="no task arg")
+
+    def test_touchpoint_actions_are_accepted_and_logged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sprint_dir = _write_sprint(pathlib.Path(tmp), tasks=[_task(1)],
+                                       run_mode="attended")
+            ss.apply_step(sprint_dir, phase="dev", action="touchpoint_open",
+                          actor="orchestrator", detail="paste the live token")
+            ss.apply_step(sprint_dir, phase="dev", action="touchpoint_done",
+                          actor="human", detail="token pasted", task=1)
+            entries = [json.loads(x) for x in (sprint_dir / "action-log.ndjson")
+                       .read_text(encoding="utf-8").strip().splitlines()]
+            self.assertEqual([e["action"] for e in entries],
+                             ["touchpoint_open", "touchpoint_done"])
+            self.assertEqual({e["run_mode"] for e in entries}, {"HITL"})
+
+    def test_unattended_receipts_carry_afk(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sprint_dir = _write_sprint(pathlib.Path(tmp), run_mode="unattended")
+            ss.apply_step(sprint_dir, phase="spec", action="sprint_start",
+                          actor="orchestrator", detail="spec resolved")
+            entry = json.loads((sprint_dir / "action-log.ndjson")
+                               .read_text(encoding="utf-8").strip())
+            self.assertEqual(entry["run_mode"], "AFK")
+
+    def test_no_run_mode_field_when_sprint_has_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sprint_dir = _write_sprint(pathlib.Path(tmp))
+            ss.apply_step(sprint_dir, phase="spec", action="sprint_start",
+                          actor="orchestrator", detail="spec resolved")
+            entry = json.loads((sprint_dir / "action-log.ndjson")
+                               .read_text(encoding="utf-8").strip())
+            self.assertNotIn("run_mode", entry)
 
 if __name__ == "__main__":
     unittest.main()

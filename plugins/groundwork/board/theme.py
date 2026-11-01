@@ -208,7 +208,7 @@ def root_css_vars() -> str:
 # ===========================================================================
 STATUS_SEM = {
     "running": "run", "active": "run",
-    "awaiting-owner": "wait", "awaiting-wilco": "wait", "due": "wait",
+    "awaiting-owner": "wait", "awaiting-wilco": "wait", "due": "wait", "waiting-on-you": "wait",
     "passing": "done", "done": "done", "closed": "done", "paid": "done",
     "escalated": "halt", "failed": "halt", "capped": "halt", "halted": "halt",
     "paused": "halt", "overdue": "halt", "cancel me": "halt",

@@ -5,7 +5,7 @@ import type { Policy } from '../hooks/policy/policy'
 import { shipped } from './default-policy'
 
 const policy = shipped as unknown as Policy
-const ROOT = 'C:/work/shop'
+const ROOT = '/work/shop'
 const NOW = '2026-10-21T10:00:00.000Z'
 const ctx = { root: ROOT, approvals: [], nowIso: NOW }
 
@@ -130,7 +130,9 @@ describe('the rules', () => {
 
 // The hooks, end to end: the engine below them is a small in-memory file system.
 function stage($: any, on: any, files: Map<string, string>, core: { n: number }, cwd: string = ROOT) {
-  const fwd = (p: string) => p.split('\\').join('/')
+  // The host resolves a path before the mock sees it: on Windows '/work/shop' arrives as 'C:\work\shop'.
+  // Drop the drive so one POSIX-style key matches on every OS.
+  const fwd = (p: string) => p.split('\\').join('/').replace(/^[A-Za-z]:/, '')
   const isDir = (p: string) => [...files.keys()].some(k => k.startsWith(p + '/'))
   mock.clock(on)
   on('session.cwd', () => ({ value: cwd }))

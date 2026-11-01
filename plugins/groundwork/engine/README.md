@@ -1,7 +1,7 @@
 # Engine
 
 The state machine behind the one-loop skill: flows, gates (G1 to G4), sprints, locks and the
-local receipt. Python 3.8 or newer, standard library only. No service, no network call, no
+local receipt. Python 3.9 or newer, standard library only. No service, no network call, no
 account is needed to run a flow.
 
 ## Where it comes from
@@ -44,7 +44,7 @@ pytest installed:
 
 ```powershell
 # runs in: PowerShell on Windows. cwd: plugins\groundwork\engine in the repo checkout
-py -3 -m pytest foreman -q
+py -3 -m pytest foreman groundwork -q
 ```
 
-Expect `979 passed, 4 skipped` for engine 0.1.0. macOS is untested.
+Expect `987 passed, 4 skipped` for engine 0.1.0. macOS is untested.

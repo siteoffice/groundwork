@@ -1,0 +1,147 @@
+name: install-matrix
+
+# Runs the test suites and a Claude Code install probe on three OSes by two
+# Pythons, plus a tour job that renders the screenshots. Read-only token.
+
+on:
+  pull_request:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  matrix:
+    name: ${{ matrix.os }} / python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-24.04]
+        python: ['3.9', '3.13']
+        # Root suite floor per OS (passed plus skipped). Linux and macOS collect 8 fewer tests than
+        # Windows because of the os.name == "nt" test blocks in tests/. 621 is the count from run
+        # 4e079bf; Windows keeps 628.
+        include:
+          - os: windows-latest
+            root_floor: 628
+          - os: macos-latest
+            root_floor: 621
+          - os: ubuntu-24.04
+            root_floor: 621
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+
+      - name: Install test requirements
+        run: python -m pip install -r scripts/requirements-ci.txt
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Claude Code version
+        run: |
+          set -o pipefail
+          echo "claude: $(claude --version)" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Payload gate
+        shell: pwsh
+        run: ./scripts/check-public-payload.ps1
+
+      - name: Engine suite
+        run: |
+          set -o pipefail
+          cd plugins/groundwork/engine && python -m pytest foreman groundwork -q -rs | tee "$RUNNER_TEMP/engine.txt"
+
+      - name: Engine floor
+        run: python scripts/ci_report.py floor --suite engine --floor 991 --log "$RUNNER_TEMP/engine.txt"
+
+      - name: Board suite
+        run: |
+          set -o pipefail
+          cd plugins/groundwork && python -m pytest board -q -rs | tee "$RUNNER_TEMP/board.txt"
+
+      - name: Board floor
+        run: python scripts/ci_report.py floor --suite board --floor 190 --log "$RUNNER_TEMP/board.txt"
+
+      - name: Root suite
+        run: |
+          set -o pipefail
+          python -m pytest tests -q -rs | tee "$RUNNER_TEMP/root.txt"
+
+      - name: Root floor
+        run: python scripts/ci_report.py floor --suite root --floor ${{ matrix.root_floor }} --log "$RUNNER_TEMP/root.txt"
+
+      - name: Mods plugin test probe
+        id: mods
+        working-directory: plugins/groundwork-mods
+        run: python "$GITHUB_WORKSPACE/scripts/ci_report.py" probe --name "mods plugin test" --out "$RUNNER_TEMP/mods.txt" -- claude plugin test .
+
+      - name: Mods floor
+        if: steps.mods.outputs.result == 'proven'
+        run: python scripts/ci_report.py floor --suite mods --floor 206 --log "$RUNNER_TEMP/mods.txt"
+
+      - name: Install probe, marketplace add
+        run: python scripts/ci_report.py probe --name "marketplace add" -- claude plugin marketplace add "$GITHUB_WORKSPACE"
+
+      - name: Install probe, groundwork
+        run: python scripts/ci_report.py probe --name "install groundwork" -- claude plugin install groundwork@groundwork --scope user
+
+      - name: Install probe, groundwork-mods
+        run: python scripts/ci_report.py probe --name "install groundwork-mods" -- claude plugin install groundwork-mods@groundwork --scope user
+
+      - name: Install probe, plugin list
+        run: python scripts/ci_report.py probe --name "plugin list" -- claude plugin list
+
+      - name: Tested on row
+        run: python scripts/ci_report.py row --os "${{ matrix.os }}"
+
+  tour:
+    name: tour screenshots
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.13'
+
+      - name: Install tour requirements
+        run: python -m pip install -r scripts/requirements-ci.txt -r scripts/requirements-tour.txt
+
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: Tour tests
+        run: python -m pytest tests/test_render_tour.py -q -rs
+
+      - name: Render tour
+        run: python scripts/render-tour.py --out tour-png
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tour-screenshots
+          path: tour-png/*.png
+          if-no-files-found: error

@@ -20,6 +20,7 @@ export type Probe = {
 }
 
 export const MIN_VERSION = '2.1.287'
+export const MIN_PYTHON = '3.9'
 
 // BurnMon writes its snapshot every 5 seconds (snapshot schema version 1). The file counts as
 // fresh while it is younger than two of those ticks.
@@ -91,10 +92,14 @@ export function buildReport(f: DoctorFacts): Probe[] {
   })
   out.push({
     id: 'python',
-    title: 'Python 3',
+    title: 'Python ' + MIN_PYTHON + ' or newer',
     level: 'required',
-    ok: !!f.python,
-    why: 'siteoffice-git and the engine behind the one loop run on Python.',
+    ok: !!f.python && !!f.pythonVersion && atLeast(f.pythonVersion, MIN_PYTHON),
+    why: !f.python
+      ? 'siteoffice-git and the engine behind the one loop run on Python.'
+      : f.pythonVersion
+        ? 'Found Python ' + f.pythonVersion + '; the engine needs Python ' + MIN_PYTHON + ' or newer.'
+        : 'Found Python but could not read its version; the engine needs Python ' + MIN_PYTHON + ' or newer.',
     fix: win ? 'winget install --id Python.Python.3.12 -e' : 'brew install python',
     fixWhere: shell(f),
   })

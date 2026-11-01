@@ -3,6 +3,29 @@
 All notable changes. The version is one clock for the whole repository: `groundwork`,
 `groundwork-mods` and the marketplace move together.
 
+## 0.4.0
+
+- **Changed requirement: Python 3.9 or newer (was 3.8).** The Setup Doctor now checks the version
+  and names the fix when it is older.
+- **CI install matrix on Windows, macOS and Linux with Python 3.9 and 3.13.** Every pull request and
+  release tag installs Claude Code, runs the `claude plugin` install commands and the engine, board
+  and repository suites and the mods plugin test, each against a floor. Steps that need a Claude login are marked skipped,
+  not passed. The Claude Desktop app install is not tested by CI. The result per step and per
+  system is in `docs/install-matrix.md`.
+- **Linux install steps and a Tested on table** in `docs/setup-guide.md`, beside Windows and macOS,
+  with the terminal route for Claude Code (needs Node.js; CI uses Node.js 22, the trust tests need
+  22.18 or newer) and a section on what CI proves.
+- **Guided tour.** `docs/tour.md` explains every screen of a running flow and what to do next;
+  `scripts/render-tour.py` renders the screens.
+- **Release route.** `scripts/bump-version.ps1` moves the one version clock for the marketplace and
+  both plugins.
+- **Engine resynced from Siteoffice v0.10.4; sprint run modes and notices are vendored, unused by
+  one-loop.**
+- **Tour dates follow the render day.** `scripts/render-tour.py` shifts the dates in its temporary
+  copy of the Molenwerk example, so the board shows no overdue line and a filled next two weeks.
+  `docs/tour.md` explains the panels that stay empty in a local example and lists three known
+  issues from the vendored engine.
+
 ## 0.3.0
 
 - **New skill `retro`: a monthly check-up of your own Claude Code and Cowork sessions.** It reads

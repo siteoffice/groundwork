@@ -70,7 +70,7 @@ $components = @{
         Dest = (Join-Path $pluginDir 'engine\foreman')
         Receipt = (Join-Path $pluginDir 'engine\SYNCED_FROM.json')
         SkipTop = @('README.md', 'PACKAGE.json')              # Groundwork has its own engine\README.md
-        SkipNames = @('operator.json')                         # per-operator state file
+        SkipNames = @('operator.json', 'test_vendored_layout.py')   # operator.json: per-operator state file; test_vendored_layout.py: tests the Siteoffice layout; Groundwork CI proves the vendored layout
         Tests = 'engine'
     }
     board = @{
@@ -87,7 +87,8 @@ $components = @{
         Dest = (Join-Path $pluginDir 'engine\sync')
         Receipt = (Join-Path $pluginDir 'engine\sync\SYNCED_FROM.json')
         SkipTop = @('helper.py', 'scan_tree.py', 'owner.local.json', 'secret_scan_baseline.json')   # the helper server and local state, not the engine
-        SkipNames = @('test_cli.py', 'test_http_server.py', 'test_scan_tree.py')                      # test the helper, not shipped
+        SkipNames = @('test_cli.py', 'test_http_server.py', 'test_scan_tree.py', 'test_siteoffice_helper_sync.py')   # test the helper, not shipped
+        SkipDirs = @('siteoffice_helper')                                                             # the hosted helper, not the engine (same reason as SkipTop)
         Tests = 'sync'
     }
 }
@@ -109,6 +110,7 @@ foreach ($name in $names) {
         -not ($parts | Where-Object { $skipDirs -contains $_ }) -and
         ($skipExt -notcontains [System.IO.Path]::GetExtension($rel).ToLower()) -and
         -not (($parts.Count -eq 1) -and ($c.SkipTop -contains $rel)) -and
+        -not ($c.ContainsKey('SkipDirs') -and ($parts | Select-Object -SkipLast 1 | Where-Object { $c.SkipDirs -contains $_ })) -and
         ($c.SkipNames -notcontains (Split-Path -Leaf $rel))
     })
     Write-Host "${name}: $src ($($files.Count) file(s)) -> $($c.Dest)"
