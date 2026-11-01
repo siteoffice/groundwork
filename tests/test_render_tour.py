@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import re
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -80,17 +82,31 @@ def test_temp_copy_removed_after_failure(tour, tmp_path, monkeypatch):
     assert list(work.iterdir()) == []
 
 
-def test_transcript_is_normalized(rendered):
+def test_transcript_is_normalized(tour, rendered):
     result, work = rendered
     transcript = result["transcript"]
     assert sorted(transcript) == ["G1", "G2", "G3", "G4"]
-    forms = {str(work), str(work).replace("\\", "/"), work.as_posix()}
+    forms = set(tour._root_forms(work)) | {str(work), work.as_posix()}
     for gate, text in transcript.items():
         assert text.startswith("> gw "), gate
         for form in forms:
             assert form not in text, (gate, form)
         assert not re.search(r"\d{8}T\d{6}Z", text), gate
     assert "receipt (self-issued, not signed): <copy>" in transcript["G4"]
+
+
+def test_pages_carry_no_local_path(tour, rendered):
+    result, work = rendered
+    temp = tempfile.gettempdir()
+    forms = set(tour._root_forms(work)) | set(tour._root_forms(temp))
+    forms |= {temp, temp.replace("\\", "/")}
+    for name, html in result["pages"].items():
+        for form in forms:
+            assert form not in html, (name, form)
+            assert form.replace("\\", "\\\\") not in html, (name, form)
+        if os.name == "nt":
+            assert "~1\\" not in html, name
+    assert "~/molenwerk-demo" in result["pages"]["flow-g4"]
 
 
 def test_normalize_replaces_root_and_stamp(tour, tmp_path):

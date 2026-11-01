@@ -40,6 +40,7 @@ SCREENS = [
 ]
 THEMES = ("light", "dark")
 VIEWPORT = {"width": 1280, "height": 800}
+DISPLAY_ROOT = "~/molenwerk-demo"
 STAMP = re.compile(r"\d{8}T\d{6}Z-[0-9A-F]{4}")
 
 
@@ -204,6 +205,16 @@ def _screenshot(files: dict, out_dir: Path) -> list:
     return [out_dir / name for name in png_names()]
 
 
+def _scrub_page(page: Path, work: Path) -> str:
+    """Rewrite page in place so no local temp path (and so no OS username) ships."""
+    text = page.read_text(encoding="utf-8")
+    for form in _root_forms(work):
+        text = text.replace(form.replace("\\", "\\\\"), DISPLAY_ROOT)  # JSON-escaped copies
+        text = text.replace(form, DISPLAY_ROOT)
+    page.write_text(text, encoding="utf-8")
+    return text
+
+
 def _on_rm_error(func, path, _exc) -> None:
     """Windows: clear the read-only bit and retry once."""
     os.chmod(path, stat.S_IWRITE)
@@ -226,7 +237,7 @@ def render_tour(out_dir, *, screenshots=True, work_parent=None) -> dict:
         missing = [str(p) for p in files.values() if not p.exists()]
         if missing:
             raise RuntimeError("tour pages missing: " + ", ".join(missing))
-        pages = {name: p.read_text(encoding="utf-8") for name, p in files.items()}
+        pages = {name: _scrub_page(p, work) for name, p in files.items()}
         transcript = {key: normalize(text, copy) for key, text in raw.items()}
         pngs = _screenshot(files, out_dir) if screenshots else []
         return {
