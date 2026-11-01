@@ -114,3 +114,21 @@ def test_actionlint_passes():
     r = subprocess.run([exe, str(WORKFLOW)], capture_output=True, text=True,
                        encoding="utf-8", errors="replace", cwd=str(ROOT), timeout=300)
     assert r.returncode == 0, (r.stdout or "") + (r.stderr or "")
+
+
+def _step_containing(needle: str) -> list:
+    lines = _lines()
+    starts = [i for i, l in enumerate(lines) if re.match(r"^\s+- name:", l)]
+    for n, start in enumerate(starts):
+        end = starts[n + 1] if n + 1 < len(starts) else len(lines)
+        block = lines[start:end]
+        if any(needle in l for l in block):
+            return block
+    pytest.fail("no step contains %r" % needle)
+
+
+def test_mods_probe_matches_readme():
+    block = _step_containing("claude plugin test")
+    text = "\n".join(block)
+    assert re.search(r"claude plugin test \.\s*$", text, re.M), text
+    assert any(_strip_comment(l) == "working-directory: plugins/groundwork-mods" for l in block), text

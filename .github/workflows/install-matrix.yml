@@ -81,7 +81,8 @@ jobs:
 
       - name: Mods plugin test probe
         id: mods
-        run: python scripts/ci_report.py probe --name "mods plugin test" --out "$RUNNER_TEMP/mods.txt" -- claude plugin test plugins/groundwork-mods
+        working-directory: plugins/groundwork-mods
+        run: python "$GITHUB_WORKSPACE/scripts/ci_report.py" probe --name "mods plugin test" --out "$RUNNER_TEMP/mods.txt" -- claude plugin test .
 
       - name: Mods floor
         if: steps.mods.outputs.result == 'proven'
