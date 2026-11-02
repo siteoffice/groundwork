@@ -160,6 +160,35 @@ cd ..\groundwork-mods; claude plugin test .
 The engine and the board are vendored from Siteoffice by `scripts\sync-engine.ps1`, never edited
 by hand. The payload gate `scripts\check-public-payload.ps1` must exit 0 before any commit.
 
+### Before you rely on it
+
+This is a beta, built and used daily by one person. It runs on your own machine and changes nothing
+outside the folders you point it at. It comes with no warranty (see [LICENSE](LICENSE)).
+
+What it does not do, or not yet:
+
+- **Claude Desktop runs on Windows and macOS only.** There is no Desktop app for Linux, so Linux is
+  command-line only: use Claude Code from a terminal.
+- **Hooks can be skipped** on a Claude organisation with managed settings ("cc-plugin-sec-default
+  runs first"); the Setup Doctor tells you when. The agent policy pack and the Git guard then do not
+  run.
+- **The Fleet and the Git lane are off by default.** Turn them on in the mods settings.
+- **The plugin security scan** may show a Warn banner the first time, because the plugin ships hooks.
+- **No Linear, Jira or GitHub Projects link** yet. The board reads your folders only.
+
+### Feedback and issues
+
+I want to hear what broke and what you expected instead.
+
+1. **Bug**: open an issue with the "Bug" template. Include the version (Setup Doctor or the About
+   line), your OS, and what you did just before. Never paste prompts, keys or customer data.
+2. **"It did not do what I expected"**: use that template. This is the most useful one for me.
+3. **Idea**: use the "Idea" template, one idea per issue.
+4. **After two weeks**: answer the five questions in [FEEDBACK.md](FEEDBACK.md).
+
+Response: I read every issue within two working days. Security problems: do not open a public
+issue; mail info@zerononsense.dev.
+
 ## 6. How to use: the first ten minutes
 
 1. Open Claude Code in a project folder.
