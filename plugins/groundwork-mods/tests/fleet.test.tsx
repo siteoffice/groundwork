@@ -859,6 +859,72 @@ describe('Fleet one click', () => {
   })
 })
 
+describe('Fleet NEEDS YOU wait states', () => {
+  const DIR = '/home/w/.claude/groundwork-fleet/2026-10-19'
+  const att = (over: Partial<FleetAttention>): FleetAttention => ({
+    key: 'k', sessionId: 's-a', project: 'shop', agentId: '', agent: 'main thread', kind: 'question', text: 'Cats or dogs?', at: NOW, ...over,
+  })
+  const card = (sessionId: string, project: string, attention: FleetAttention[]) =>
+    JSON.stringify({ v: 1, sessionId, project, cwd: '/w/' + project, state: 'waiting', running: 0, questions: 0, threads: { needsYou: 0, working: 0 }, ask: '', answer: '', at: NOW, agents: [], attention })
+  const snapshot = JSON.stringify({
+    written_at: new Date(NOW + 3000).toISOString(),
+    wait_counts: { blocked: 1, your_turn: 1, done: 0 },
+    wait_items: [
+      { kind: 'session', group: 'blocked', id: 'session:anthropic:s-a' },
+      { kind: 'your_turn', group: 'your_turn', id: 'session:anthropic:s-b' },
+    ],
+  })
+  const files = (withSnapshot: boolean): Record<string, string> => ({
+    [DIR + '/s-a.json']: card('s-a', 'shop', [att({ key: 'qa' })]),
+    [DIR + '/s-b.json']: card('s-b', 'api', [att({ key: 'db', sessionId: 's-b', project: 'api', kind: 'done', text: 'All green.' })]),
+    [DIR + '/s-c.json']: card('s-c', 'old', [att({ key: 'qc', sessionId: 's-c', project: 'old', kind: 'permission', at: NOW - 2 * 24 * 3600000 })]),
+    ...(withSnapshot ? { '/home/w/.burnmon/snapshot.json': snapshot } : {}),
+  })
+
+  test('with a fresh BurnMon snapshot: source line, Your turn before Blocked, stale folded', ON, async ($, on) => {
+    const clock = mock.clock(on, { now: NOW })
+    mock.store(on)
+    session(on, files(true))
+    await $.session.start({ cwd: '/work/siteoffice', surface: 'terminal', isInteractive: true })
+    await clock.advance(4100)
+    const ui = await $.ui.mount({ plugin: 'groundwork-mods', surface: 'terminal', component: 'Pane', requestId: 'groundwork-fleet', props: PANE_PROPS(120) } as never)
+    expect(await ui.find({ type: 'Text', text: /states from BurnMon/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /stale, 1/ })).toBeDefined()
+    const drawn = JSON.stringify(await ui.drawn())
+    expect(drawn.indexOf('main thread · your turn')).toBeGreaterThan(-1)
+    expect(drawn.indexOf('main thread · your turn')).toBeLessThan(drawn.indexOf('main thread · waits on you'))
+    expect(drawn).not.toContain('needs your OK')
+    await ui.unmount()
+  })
+
+  test('without a snapshot the Fleet splits its own data and says so', ON, async ($, on) => {
+    const clock = mock.clock(on, { now: NOW })
+    mock.store(on)
+    session(on, files(false))
+    await $.session.start({ cwd: '/work/siteoffice', surface: 'terminal', isInteractive: true })
+    await clock.advance(4100)
+    const ui = await $.ui.mount({ plugin: 'groundwork-mods', surface: 'terminal', component: 'Pane', requestId: 'groundwork-fleet', props: PANE_PROPS(120) } as never)
+    expect(await ui.find({ type: 'Text', text: /states from this session/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /states from BurnMon/ })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /main thread · your turn/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /main thread · waits on you/ })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('a stale snapshot is ignored', ON, async ($, on) => {
+    const clock = mock.clock(on, { now: NOW })
+    mock.store(on)
+    const f = files(true)
+    f['/home/w/.burnmon/snapshot.json'] = snapshot.replace(/"written_at":"[^"]+"/, '"written_at":"' + new Date(NOW - 60000).toISOString() + '"')
+    session(on, f)
+    await $.session.start({ cwd: '/work/siteoffice', surface: 'terminal', isInteractive: true })
+    await clock.advance(4100)
+    const ui = await $.ui.mount({ plugin: 'groundwork-mods', surface: 'terminal', component: 'Pane', requestId: 'groundwork-fleet', props: PANE_PROPS(120) } as never)
+    expect(await ui.find({ type: 'Text', text: /states from this session/ })).toBeDefined()
+    await ui.unmount()
+  })
+})
+
 describe('Fleet notices', () => {
   test('a request still tells the person when a question dialog refuses the view switch', ON, async ($, on) => {
     const clock = mock.clock(on, { now: NOW })

@@ -229,6 +229,7 @@ declare module 'claude-code' {
       'fleet.usage': FleetUsage
       'fleet.burnOn': boolean
       'fleet.burnmon': DoctorFacts['burnmon']
+      'fleet.burnWaits': BurnWaits | null
       'fleet.plainOn': boolean
       'fleet.bbOn': boolean
       'fleet.bbQueue': string[]
