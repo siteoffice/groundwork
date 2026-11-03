@@ -1393,7 +1393,7 @@ export const registerFleet: Register = on => {
     // session's own agents (its main thread you are looking at).
     const elsewhere = (await needsYou($)).filter(a => a.sessionId !== me)
     const need = (await needsYou($)).filter(a => a.sessionId !== me || a.agentId !== '').length
-    const ready = Object.values(await read($, threads)).filter(t => threadState(t) === 'needs-you').length
+    const ready = Object.values(await read($, threads)).filter(t => threadState(t) === 'your-turn').length
     const q = await read($, questions)
     const burn = await read($, burnOn)
     const plain = await read($, plainOn)
