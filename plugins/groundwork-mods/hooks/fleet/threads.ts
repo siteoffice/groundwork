@@ -229,7 +229,8 @@ export function splitWaits(items: FleetAttention[], burn: BurnWaits | null, now:
   const blocked: FleetAttention[] = []
   const stale: FleetAttention[] = []
   for (const a of items) {
-    const group = burn && a.agentId === '' ? burn.groups[a.sessionId] : undefined
+    const g = burn && a.agentId === '' ? burn.groups[a.sessionId] : undefined
+    const group = g === 'blocked' || g === 'your_turn' ? g : undefined
     const turn = group ? group === 'your_turn' : a.kind === 'done'
     // An item with no time (at 0) is never called stale.
     if (turn) yourTurn.push(a)
