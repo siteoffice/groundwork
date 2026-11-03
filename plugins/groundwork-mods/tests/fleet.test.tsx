@@ -2,11 +2,11 @@ import type { On } from 'claude-code'
 import { describe, expect, mock, test } from 'claude-code/testing'
 
 import { PLAIN_CAP_DEFAULT, bar, dayOf, firstLine, groupLineOf, overheadFile, overheadLine, plainTip, tokensOf, isGuardHold, isSetupNoise, outcomeOf, colorFor, levelColor, parseExplanations, perHour, phraseFor, questionsKey, resetLabel, spark, treeOrder, withPlainWords } from '../hooks/fleet/plain'
-import { agentViewAttention, attentionOf, canStop, endShell, gitConfigEnv, hardenGit, isUnderWorktrees, liveCards, nullDevice, numstatSum, parseAgentView, plainText, reconcileShells, safeKey, proofOf, resumeCommand, shellState, sortThreads, splitDiff, startShell, threadState, verdictOf, visibleShells } from '../hooks/fleet/threads'
-import type { FleetAgentView, FleetCard, FleetShell, FleetThread } from '../types'
+import { agentViewAttention, attentionOf, canStop, countSessions, endShell, splitWaits, stateLine, waitRow, waitWord, gitConfigEnv, hardenGit, isUnderWorktrees, liveCards, nullDevice, numstatSum, parseAgentView, plainText, reconcileShells, safeKey, proofOf, resumeCommand, shellState, sortThreads, splitDiff, startShell, threadState, verdictOf, visibleShells } from '../hooks/fleet/threads'
+import type { FleetAgentView, FleetAttention, FleetCard, FleetShell, FleetThread } from '../types'
 
 import { POLICY_RX, policyText, underHost } from './host'
-import { burnmonNote } from '../hooks/burnmon'
+import { burnmonNote, parseBurnWaits } from '../hooks/burnmon'
 import { BURNMON_RELEASES_URL } from '../hooks/doctor/checks'
 
 const TMP = 'C:\\Temp\\gw-fleet'
@@ -127,7 +127,10 @@ describe('threads helpers', () => {
     expect(splitDiff(DIFF, 10).more).toBe(1)
     const order = sortThreads([thread({ id: 'w', startedAt: 3 }), thread({ id: 'r', status: 'completed', startedAt: 1 }), thread({ id: 's', status: 'completed', settled: true })])
     expect(order.map(t => t.id)).toEqual(['r', 'w', 's'])
-    expect(threadState(thread({ status: 'completed' }))).toBe('needs-you')
+    expect(threadState(thread({ status: 'completed' }))).toBe('your-turn')
+    expect(threadState(thread({ status: 'idle' }))).toBe('your-turn')
+    expect(threadState(thread({ status: 'waiting' }))).toBe('needs-you')
+    expect(threadState(thread({ status: 'running' }))).toBe('working')
     expect(verdictOf('VERDICT: ok\nNo issues found.')).toBe('ok')
     expect(verdictOf('VERDICT: issues\n- a.ts:3 off by one')).toBe('issues')
   })
@@ -155,6 +158,109 @@ describe('Fleet', () => {
       answers: { a4: 'All green.' }, doneAt: { a4: 40 }, now: 10000,
     })
     expect(list.map(a => a.agent + ':' + a.kind)).toEqual(['three:permission', 'four:done', 'one:question', 'main thread:done'])
+  })
+})
+
+describe('Fleet wait states', () => {
+  const NOW_W = Date.UTC(2026, 10, 3, 12, 0, 0)
+  const MIN = 60000
+  const item = (over: Partial<FleetAttention>): FleetAttention => ({
+    key: 'k' + Math.random(), sessionId: 's1', project: 'p', agentId: '', agent: 'main thread', kind: 'question', text: 't', at: NOW_W - MIN, ...over,
+  })
+  const snap = (over: Record<string, unknown> = {}, ageSeconds = 3) =>
+    JSON.stringify({
+      written_at: new Date(NOW_W - ageSeconds * 1000).toISOString(),
+      wait_counts: { blocked: 2, your_turn: 1, done: 22 },
+      wait_items: [
+        { kind: 'session', group: 'blocked', id: 'session:anthropic:s-blocked', title: 'secret title', detail: 'secret detail', spec_path: 'C:\\hub\\private.md' },
+        { kind: 'prompt', group: 'blocked', id: 'agentview:av1' },
+        { kind: 'your_turn', group: 'your_turn', id: 'session:anthropic:s-turn' },
+        { kind: 'close_out', group: 'done', id: 'closeout:x' },
+      ],
+      ...over,
+    })
+
+  test('the local split: finished and idle are Your turn, questions, permissions and failures are Blocked', async () => {
+    const out = splitWaits([
+      item({ key: 'a', kind: 'question', at: NOW_W - 3 * MIN }),
+      item({ key: 'b', kind: 'permission', sessionId: 's2', at: NOW_W - 2 * MIN }),
+      item({ key: 'c', kind: 'failed', sessionId: 's3', agentId: 'ag', agent: 'build', at: NOW_W - 5 * MIN }),
+      item({ key: 'd', kind: 'done', sessionId: 's4', at: NOW_W - 4 * MIN }),
+      item({ key: 'e', kind: 'done', sessionId: 's1', agentId: 'ag2', agent: 'review', at: NOW_W - 1 * MIN }),
+    ], null, NOW_W)
+    expect(out.source).toBe('session')
+    expect(out.yourTurn.map(a => a.key)).toEqual(['e', 'd'])
+    expect(out.blocked.map(a => a.key)).toEqual(['b', 'a', 'c'])
+    expect(out.stale).toEqual([])
+  })
+
+  test("this session's own main thread is a row like any other", async () => {
+    const out = splitWaits([item({ key: 'me', kind: 'done', sessionId: 's-me', at: NOW_W - 4 * MIN })], null, NOW_W)
+    expect(out.yourTurn.map(a => a.key)).toEqual(['me'])
+  })
+
+  test('Blocked items older than 24 hours fold into stale', async () => {
+    const day = 24 * 60 * MIN
+    const out = splitWaits([
+      item({ key: 'fresh', at: NOW_W - day + MIN }),
+      item({ key: 'old', kind: 'permission', sessionId: 's2', at: NOW_W - day - MIN }),
+      item({ key: 'turn', kind: 'done', sessionId: 's3', at: NOW_W - 3 * day }),
+    ], null, NOW_W)
+    expect(out.blocked.map(a => a.key)).toEqual(['fresh'])
+    expect(out.stale.map(a => a.key)).toEqual(['old'])
+    expect(out.yourTurn.map(a => a.key)).toEqual(['turn'])
+  })
+
+  test('a fresh snapshot sets a main thread state; subagent rows and unknown sessions use the local split', async () => {
+    const burn = parseBurnWaits(snap(), NOW_W)
+    expect(burn).not.toBeNull()
+    const out = splitWaits([
+      item({ key: 'x', sessionId: 's-turn', kind: 'question' }),
+      item({ key: 'y', sessionId: 's-blocked', kind: 'done' }),
+      item({ key: 'z', sessionId: 's-blocked', kind: 'done', agentId: 'ag', agent: 'review' }),
+      item({ key: 'w', sessionId: 's-unknown', kind: 'permission' }),
+    ], burn, NOW_W)
+    expect(out.source).toBe('burnmon')
+    expect(out.yourTurn.map(a => a.key).sort()).toEqual(['x', 'z'])
+    expect(out.blocked.map(a => a.key).sort()).toEqual(['w', 'y'])
+  })
+
+  test('the snapshot read keeps counts, ids and groups only, and ignores a stale or broken file', async () => {
+    const burn = parseBurnWaits(snap(), NOW_W)
+    expect(burn).toEqual({ blocked: 2, yourTurn: 1, groups: { 's-blocked': 'blocked', av1: 'blocked', 's-turn': 'your_turn' } })
+    expect(JSON.stringify(burn)).not.toContain('secret')
+    expect(JSON.stringify(burn)).not.toContain('private')
+    expect(parseBurnWaits(snap({}, 11), NOW_W)).toBeNull()
+    expect(parseBurnWaits(snap({}, 9), NOW_W)).not.toBeNull()
+    expect(parseBurnWaits(snap({ wait_counts: undefined }), NOW_W)).toBeNull()
+    expect(parseBurnWaits(snap({ written_at: 'x' }), NOW_W)).toBeNull()
+    expect(parseBurnWaits('not json', NOW_W)).toBeNull()
+  })
+
+  test('parity: Fleet sessions in Your turn and Blocked equal BurnMon blocked plus your_turn', async () => {
+    const burn = parseBurnWaits(snap(), NOW_W)
+    const items = [
+      item({ sessionId: 's-blocked', kind: 'question' }),
+      item({ sessionId: 'av1', kind: 'permission' }),
+      item({ sessionId: 's-turn', kind: 'done' }),
+      item({ sessionId: 's-turn', kind: 'done', agentId: 'ag', agent: 'subagent' }),
+    ]
+    const out = splitWaits(items, burn, NOW_W)
+    expect(countSessions(out)).toBe(burn!.blocked + burn!.yourTurn)
+    expect(out.yourTurn.length + out.blocked.length).toBe(4)
+  })
+
+  test('the source line, the row line and the words', async () => {
+    expect(stateLine('burnmon')).toBe('states from BurnMon')
+    expect(stateLine('session')).toBe('states from this session')
+    expect(waitRow(item({ kind: 'done', at: NOW_W - 4 * MIN }), NOW_W, false)).toBe('main thread \u00B7 your turn \u00B7 4m')
+    expect(waitRow(item({ kind: 'done', agentId: 'ag', agent: 'review', at: NOW_W - 4 * MIN }), NOW_W, false)).toBe('review \u00B7 finished \u00B7 4m')
+    expect(waitRow(item({ kind: 'question', at: NOW_W - 2 * MIN }), NOW_W, false)).toBe('main thread \u00B7 waits on you \u00B7 2m')
+    expect(waitRow(item({ kind: 'question', at: NOW_W - 2 * MIN }), NOW_W, true)).toBe('main thread \u00B7 waiting for you \u00B7 2m')
+    expect(waitRow(item({ kind: 'permission', at: NOW_W - 2 * MIN }), NOW_W, false)).toBe('main thread \u00B7 needs your OK \u00B7 2m')
+    expect(waitRow(item({ kind: 'failed', agentId: 'ag', agent: 'build', at: NOW_W - 2 * MIN }), NOW_W, false)).toBe('build \u00B7 failed \u00B7 2m')
+    expect(waitWord(false)).toBe('waits on you')
+    expect(waitWord(true)).toBe('waiting for you')
   })
 })
 
