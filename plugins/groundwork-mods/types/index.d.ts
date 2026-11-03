@@ -17,6 +17,9 @@ export type DoctorFacts = {
   burnmon: { exists: boolean; ageSeconds: number | null }
 }
 
+/** What the Fleet keeps of a fresh BurnMon snapshot: the counts, and the group of each session item by session id. */
+export type BurnWaits = { blocked: number; yourTurn: number; groups: Record<string, 'blocked' | 'your_turn'> }
+
 export type FleetActivity = { tool: string; phrase: string; since: number; calls: number }
 export type FleetStatus = 'pending' | 'running' | 'waiting' | 'idle' | 'completed' | 'failed' | 'killed'
 export type FleetAgent = {
@@ -226,6 +229,7 @@ declare module 'claude-code' {
       'fleet.usage': FleetUsage
       'fleet.burnOn': boolean
       'fleet.burnmon': DoctorFacts['burnmon']
+      'fleet.burnWaits': BurnWaits | null
       'fleet.plainOn': boolean
       'fleet.bbOn': boolean
       'fleet.bbQueue': string[]

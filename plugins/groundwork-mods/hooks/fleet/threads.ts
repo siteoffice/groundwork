@@ -1,7 +1,8 @@
 // Pure helpers for Threads and Fleet: no engine calls, so the tests can
 // check them directly.
 
-import type { FleetAgentView, FleetAttention, FleetCard, FleetDiffFile, FleetShell, FleetStatus, FleetThread } from '../types'
+import type { BurnWaits, FleetAgentView, FleetAttention, FleetCard, FleetDiffFile, FleetShell, FleetStatus, FleetThread } from '../types'
+import { ago } from './plain'
 
 // Which check a command is, from the command line alone. The last run of
 // each kind wins, so a fixed test run turns a red tick green.
@@ -66,19 +67,21 @@ export function splitDiff(out: string, budget = 60000): { files: FleetDiffFile[]
   return { files, more }
 }
 
-// Where a thread stands for the person: needs you, working, or out of the way.
-export type ThreadState = 'needs-you' | 'working' | 'failed' | 'settled'
+// Where a thread stands for the person, in BurnMon's three states: your turn (finished or
+// idle), blocked (only you can unblock it; named needs-you), working, or out of the way.
+export type ThreadState = 'your-turn' | 'needs-you' | 'working' | 'failed' | 'settled'
 
 export function threadState(t: FleetThread): ThreadState {
   if (t.settled) return 'settled'
   if (t.status === 'failed' || t.status === 'killed') return 'failed'
-  if (t.status === 'completed' || t.status === 'idle' || t.status === 'waiting') return 'needs-you'
+  if (t.status === 'completed' || t.status === 'idle') return 'your-turn'
+  if (t.status === 'waiting') return 'needs-you'
   return 'working'
 }
 
-const RANK: Record<ThreadState, number> = { 'needs-you': 0, failed: 1, working: 2, settled: 3 }
+const RANK: Record<ThreadState, number> = { 'your-turn': 0, 'needs-you': 1, failed: 2, working: 3, settled: 4 }
 
-// Needs you first, then failed, then working; newest first within each.
+// Your turn first, then blocked, failed, working; newest first within each.
 export function sortThreads(list: FleetThread[]): FleetThread[] {
   return [...list].sort((a, b) => RANK[threadState(a)] - RANK[threadState(b)] || b.startedAt - a.startedAt)
 }
@@ -211,6 +214,52 @@ export const KIND_WORD: Record<FleetAttention['kind'], string> = {
   permission: 'needs your OK',
   done: 'finished',
   failed: 'failed',
+}
+
+// Fleet wait states, the same split BurnMon makes. Your turn: finished work (a main thread
+// or an agent). Blocked: a question, a permission or a failure, which only you can clear.
+// A fresh BurnMon snapshot names the group of a main-thread session; subagent rows and
+// sessions it does not list use this split. A Blocked item older than a day folds into stale.
+export const STALE_BLOCKED_MS = 24 * 60 * 60 * 1000
+
+export type WaitSplit = { yourTurn: FleetAttention[]; blocked: FleetAttention[]; stale: FleetAttention[]; source: 'burnmon' | 'session' }
+
+export function splitWaits(items: FleetAttention[], burn: BurnWaits | null, now: number): WaitSplit {
+  const yourTurn: FleetAttention[] = []
+  const blocked: FleetAttention[] = []
+  const stale: FleetAttention[] = []
+  for (const a of items) {
+    const g = burn && a.agentId === '' ? burn.groups[a.sessionId] : undefined
+    const group = g === 'blocked' || g === 'your_turn' ? g : undefined
+    const turn = group ? group === 'your_turn' : a.kind === 'done'
+    // An item with no time (at 0) is never called stale.
+    if (turn) yourTurn.push(a)
+    else if (a.at > 0 && now - a.at > STALE_BLOCKED_MS) stale.push(a)
+    else blocked.push(a)
+  }
+  const newest = (a: FleetAttention, b: FleetAttention) => b.at - a.at
+  return { yourTurn: yourTurn.sort(newest), blocked: blocked.sort(newest), stale: stale.sort(newest), source: burn ? 'burnmon' : 'session' }
+}
+
+// Sessions, not rows: BurnMon sees no subagents, so only main-thread rows count.
+export function countSessions(s: WaitSplit): number {
+  return new Set([...s.yourTurn, ...s.blocked, ...s.stale].filter(a => a.agentId === '').map(a => a.sessionId)).size
+}
+
+export function stateLine(source: WaitSplit['source']): string {
+  return source === 'burnmon' ? 'states from BurnMon' : 'states from this session'
+}
+
+// Standard says "waits on you", Plain says "waiting for you", as BurnMon does.
+export function waitWord(plain: boolean): string {
+  return plain ? 'waiting for you' : 'waits on you'
+}
+
+// One row of NEEDS YOU: who, what state, how long.
+export function waitRow(a: FleetAttention, now: number, plain: boolean): string {
+  const word =
+    a.kind === 'done' ? (a.agentId === '' ? 'your turn' : 'finished') : a.kind === 'question' ? waitWord(plain) : a.kind === 'permission' ? KIND_WORD.permission : KIND_WORD.failed
+  return [a.agent, word, ago(now - a.at)].join(' · ')
 }
 
 // A key a Button can carry: letters, digits, dash and underscore only.

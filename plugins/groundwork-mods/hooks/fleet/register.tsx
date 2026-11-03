@@ -14,9 +14,10 @@ import type { EngineInterface, InputProps, Register, RenderElement } from 'claud
 
 import { chipRow, section, tips } from '../doctor/chips'
 import type { Chip, Els } from '../doctor/chips'
-import { burnmonNote, readBurnmon } from '../burnmon'
+import { burnmonNote, readBurnWaits, readBurnmon } from '../burnmon'
 
 import type {
+  BurnWaits,
   DoctorFacts,
   FleetActivity,
   FleetAgent,
@@ -39,6 +40,7 @@ import {
   armedText,
   attentionOf,
   canStop,
+  countSessions,
   parseAgentView,
   plainText,
   safeKey,
@@ -55,11 +57,15 @@ import {
   shellState,
   sortThreads,
   splitDiff,
+  splitWaits,
   startShell,
+  stateLine,
   threadName,
   threadState,
   verdictOf,
   visibleShells,
+  waitRow,
+  waitWord,
   worked,
 } from './threads'
 import { isTrustedFolder as trustCheck, runGit } from '../gitsafe'
@@ -158,6 +164,7 @@ const wire = atom({ plugin: 'groundwork-mods', key: 'fleet.wire' } as const, [] 
 const usage = atom({ plugin: 'groundwork-mods', key: 'fleet.usage' } as const, { limits: [] } as FleetUsage)
 const burnOn = atom({ plugin: 'groundwork-mods', key: 'fleet.burnOn' } as const, true)
 const burnmon = atom({ plugin: 'groundwork-mods', key: 'fleet.burnmon' } as const, { exists: false, ageSeconds: null } as DoctorFacts['burnmon'])
+const burnWaits = atom({ plugin: 'groundwork-mods', key: 'fleet.burnWaits' } as const, null as BurnWaits | null)
 const ctxHistory = atom({ plugin: 'groundwork-mods', key: 'fleet.ctxHistory' } as const, [] as number[])
 const plainOn = atom({ plugin: 'groundwork-mods', key: 'fleet.plainOn' } as const, false)
 const bbOn = atom({ plugin: 'groundwork-mods', key: 'fleet.bbOn' } as const, false)
@@ -293,6 +300,9 @@ async function tick($: EngineInterface) {
   // BurnMon: only the age of its snapshot is kept, never the file's text.
   const bm = await readBurnmon($, await homeDir($)).catch(() => ({ exists: false, ageSeconds: null }) as DoctorFacts['burnmon'])
   if (!same(bm, await read($, burnmon))) await update($, burnmon, () => bm)
+  // The wait states of a fresh snapshot: counts and the group per session, nothing else.
+  const bw = await readBurnWaits($, await homeDir($)).catch(() => null)
+  if (!same(bw, await read($, burnWaits))) await update($, burnWaits, () => bw)
 
   ticks += 1
   await writeCard($, nextAgents, nextUsage).catch(() => undefined)
@@ -1392,8 +1402,8 @@ export const registerFleet: Register = on => {
     // What waits elsewhere: everything in other sessions, plus this
     // session's own agents (its main thread you are looking at).
     const elsewhere = (await needsYou($)).filter(a => a.sessionId !== me)
-    const need = (await needsYou($)).filter(a => a.sessionId !== me || a.agentId !== '').length
-    const ready = Object.values(await read($, threads)).filter(t => threadState(t) === 'needs-you').length
+    const need = countSessions(splitWaits(await needsYou($), await read($, burnWaits), await $.clock.now()))
+    const ready = Object.values(await read($, threads)).filter(t => threadState(t) === 'your-turn').length
     const q = await read($, questions)
     const burn = await read($, burnOn)
     const plain = await read($, plainOn)
@@ -1515,7 +1525,11 @@ export const registerFleet: Register = on => {
     const revs = await read($, reviewers)
     const all = await read($, threads)
     const cards = await read($, fleet)
-    const items = (await needsYou($)).filter(a => !(a.sessionId === me && a.agentId === ''))
+    // Your turn first, then Blocked; Blocked items older than a day fold into one line.
+    const plainMode = await read($, plainOn)
+    const split = splitWaits(await needsYou($), await read($, burnWaits), now)
+    const items = [...split.yourTurn, ...split.blocked]
+    const sessionsWaiting = countSessions(split) || items.length
     const picked = await read($, fleetItem)
     const fp = await read($, fleetPick)
     const showS = await read($, showSettled)
@@ -1681,8 +1695,11 @@ export const registerFleet: Register = on => {
     return (
       <Box flexDirection="column">
         {header}
-        {section(E, 'NEEDS YOU' + (items.length ? ' · ' + items.length : ''), cols)}
-        {items.length === 0 && <Text dimColor>  Nothing waits on you. Questions, permission asks and finished agents from every session land here.</Text>}
+        {section(E, 'NEEDS YOU' + (sessionsWaiting ? ' · ' + sessionsWaiting : ''), cols)}
+        <Text dimColor>{'  ' + stateLine(split.source)}</Text>
+        {items.length === 0 && split.stale.length === 0 && (
+          <Text dimColor>{'  Nothing ' + (plainMode ? 'is ' : '') + waitWord(plainMode) + '. Questions, permission asks and finished agents from every session land here.'}</Text>
+        )}
         {items.map(a => {
           const isOpen = a.key === picked
           const here = a.sessionId === me
@@ -1713,9 +1730,9 @@ export const registerFleet: Register = on => {
                 <Box flexGrow={1} flexShrink={1} minWidth={0}>
                   <Button key={'attb-' + safeKey(a.key)} plain onPress={() => update($, fleetItem, v => (v === a.key ? '' : a.key))}>
                     <Text color={kindColor(a.kind)}>{kindGlyph(a.kind)}</Text>
-                    {' ' + (here ? 'this tab' : a.project) + ' › ' + a.agent + (isOpen ? ' ▾' : '')}
-                    <Text color={kindColor(a.kind)}>{'  ' + KIND_WORD[a.kind]}</Text>
-                    <Text dimColor>{'  ' + ago(now - a.at)}</Text>
+                    {' ' + (here ? 'this tab' : a.project) + ' › '}
+                    <Text color={kindColor(a.kind)}>{waitRow(a, now, plainMode)}</Text>
+                    {isOpen ? ' ▾' : ''}
                   </Button>
                 </Box>
                 {tips(E, chips)}
@@ -1744,6 +1761,7 @@ export const registerFleet: Register = on => {
             </Box>
           )
         })}
+        {split.stale.length > 0 && <Text dimColor>{'  stale, ' + split.stale.length}</Text>}
         <Text> </Text>
         {section(E, 'THIS SESSION', cols)}
         <Button key="agent-main" plain onPress={() => $.ui.view({})}>
