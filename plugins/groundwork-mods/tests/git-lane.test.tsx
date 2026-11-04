@@ -1001,20 +1001,20 @@ describe('hardened lane', () => {
 
   test('the closed lane names the setting that closed it', ON, async ($, on) => {
     const ui = await closedWith($, on, '/work/names-key', () => ({ stdout: 'local\thook.evil.command sh -c evil\n', exitCode: 0 }))
-    expect(await ui.find({ type: 'Text', text: /runs no git here\. \(hook\.evil\.command\)$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /runs no git here\. \(hook\.evil\.command\)\. Fix the setting, then start a new session: refresh keeps this verdict\.$/ })).toBeDefined()
     await ui.unmount()
   })
 
   test('the setting name shows only plain characters, the rest as ?, cut at 60 characters', ON, async ($, on) => {
     const key = 'url.\u001b[31m' + 'x'.repeat(100) + '.insteadof'
     const ui = await closedWith($, on, '/work/long-key', () => ({ stdout: 'local\t' + key + ' y\n', exitCode: 0 }))
-    expect(await ui.find({ type: 'Text', text: new RegExp('runs no git here\\. \\(url\\.\\?\\?31mx{51}\\)$') })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: new RegExp('runs no git here\\. \\(url\\.\\?\\?31mx{51}\\)\\. Fix the setting, then start a new session: refresh keeps this verdict\\.$') })).toBeDefined()
     await ui.unmount()
   })
 
   test('a check that did not finish says so instead of a setting', ON, async ($, on) => {
     const ui = await closedWith($, on, '/work/no-finish', () => 'THROW')
-    expect(await ui.find({ type: 'Text', text: /runs no git here\. \(the settings check did not finish\)$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /runs no git here\. \(the settings check did not finish\)\. Fix the setting, then start a new session: refresh keeps this verdict\.$/ })).toBeDefined()
     await ui.unmount()
   })
 

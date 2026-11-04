@@ -244,7 +244,7 @@ default. See the [issue list](https://github.com/siteoffice/groundwork/issues).
   that succeeded. It refuses to show a diff for a folder whose repo-local, worktree or command git
   config defines programs to run. A clean verdict is checked again on every refresh; an untrusted
   verdict stays for the session, so after you move a setting to your global git config you restart
-  the session to open the lane again (unverified: that a restart clears the verdict, a check in the live look). The check reads the repo's local, worktree and command settings for a list of keys that
+  the session to open the lane again. Checked live on 2026-11-04: a new session clears the verdict. The check reads the repo's local, worktree and command settings for a list of keys that
   name a program to run (filters, `core.sshCommand`, pager and editor, diff commands, credential
   helpers, hooks, `gpg`, `alias` and `url` sections, includes, and more). It is a best-effort
   warning from a list of known settings, not a proof that git runs nothing else from a repo's

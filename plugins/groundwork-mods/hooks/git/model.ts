@@ -241,7 +241,7 @@ export function shownBranch(name: string): string {
 // The closed-lane line with the setting that closed it, cleaned the same way as a branch name (plain spaces stay, so a fixed sentence reads normally).
 export function untrustedLineFor(why: string): string {
   const key = [...why.replace(new RegExp('[^A-Za-z0-9._/+ -]', 'gu'), '?')].slice(0, 60).join('')
-  return key ? UNTRUSTED_LINE + ' (' + key + ')' : UNTRUSTED_LINE
+  return key ? UNTRUSTED_LINE + ' (' + key + '). Fix the setting, then start a new session: refresh keeps this verdict.' : UNTRUSTED_LINE
 }
 
 // Claude's own git commands that need a person: risky enough to stop.

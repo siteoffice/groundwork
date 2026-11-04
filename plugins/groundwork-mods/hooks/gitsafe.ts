@@ -165,13 +165,19 @@ function commandEntry(line: string): { key: string; value: string | undefined } 
 }
 
 // Claude Code itself adds command-scope pins to every git a plugin runs (an empty core.askpass, every
-// hook.<name>.enabled=false, protocol.ext.allow=never, submodule.recurse=false). A value that switches a program
-// off is harmless whoever set it, so command scope is judged by value; any other value still counts.
+// hook.<name>.enabled=false, protocol.ext.allow=never, submodule.recurse=false, and core.alternaterefscommand).
+// A value that switches a program off is harmless whoever set it, so command scope is judged by value; any
+// other value still counts.
+// core.alternaterefscommand: the host pins git's own default for-each-ref command (read 2026-11-04, Claude Code
+// 2.1.318) so a repo cannot set its own. Only that exact string, or an empty one, at command scope is trusted;
+// any other value or scope stays untrusted. If the host changes the string the lane closes (fails closed).
+const HOST_ALTERNATE_REFS = "f() { git --git-dir=\"$1\" for-each-ref --format='%(objectname)'; }; f"
 const NULL_DEVICE = /^(nul|\\\\\.\\nul|\/dev\/null)$/i
 function switchesOff(line: string): boolean {
   const { key, value } = commandEntry(line)
   if (value === undefined) return false
   if (key === 'core.askpass') return value === ''
+  if (key === 'core.alternaterefscommand') return value === '' || value === HOST_ALTERNATE_REFS
   if (key === 'core.hookspath') return NULL_DEVICE.test(value)
   if (key === 'submodule.recurse' || /^hook\.[^\s]+\.enabled$/.test(key)) return /^(false|no|off|0)$/i.test(value)
   if (/^protocol\.([^\s]+\.)?allow$/.test(key)) return value.toLowerCase() === 'never'
