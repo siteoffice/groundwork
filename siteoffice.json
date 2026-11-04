@@ -13,7 +13,12 @@
     "languages": [
       "en"
     ],
-    "timeRegistration": false
+    "timeRegistration": false,
+    "git": {
+      "checks": [
+        "python -m pytest -q"
+      ]
+    }
   },
   "labels": {},
   "display_name": "Groundwork",
