@@ -1,6 +1,7 @@
 """Checks on the install docs: setup guide per OS, install matrix page, README and CHANGELOG."""
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -104,6 +105,8 @@ def test_readme_points_to_the_guide():
 def test_changelog_040():
     text = _read(CHANGELOG)
     headings = [h for h in re.findall(r"^## .*$", text, flags=re.M) if h != "## Unreleased"]
-    assert headings and headings[0] == "## 0.4.0", headings[:1]
+    assert "## 0.4.0" in headings, headings[:3]
+    manifest = json.loads((ROOT / "plugins" / "groundwork" / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    assert headings[0] == "## " + manifest["version"], (headings[0], manifest["version"])
     section = text.split("## 0.4.0", 1)[1].split("\n## ", 1)[0]
     assert "Python 3.9" in section

@@ -3,7 +3,7 @@
 All notable changes. The version is one clock for the whole repository: `groundwork`,
 `groundwork-mods` and the marketplace move together.
 
-## Unreleased
+## 0.4.1
 
 - **Fixed: the Git lane closed in every repo on Claude Code 2.1.317 and later with reason core.alternaterefscommand.**
   Claude Code pins that key at command scope to git's own default for-each-ref command; the trust check
