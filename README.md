@@ -21,8 +21,9 @@ makes the agent read-only until you say otherwise.
 BurnMon is a separate app that watches your agent sessions and writes a small snapshot file in
 your home folder. Two things need it: the Fleet's BurnMon line and the Doctor's BurnMon line,
 which both show whether BurnMon runs. Everything else in Groundwork works without it, the rest of
-the Fleet and the whole Git lane included. Both lines read only the `written_at` field of
-`~/.burnmon/snapshot.json`, nothing from inside your sessions. The Fleet's line says "BurnMon is
+the Fleet and the whole Git lane included. The Doctor's line reads only the `written_at` field of `~/.burnmon/snapshot.json`. The Fleet also
+reads how many sessions wait on you (`wait_counts`) and, per session, whether it is blocked or your
+turn. It never reads titles, details or paths, so nothing from inside your sessions. The Fleet's line says "BurnMon is
 running" with the snapshot's age when the file is younger than ten seconds, "BurnMon is not
 running" when it is ten seconds or older or cannot be read, and "BurnMon is not installed" with
 the link when the file is missing. BurnMon is linked, never bundled: [get it from its releases
@@ -189,28 +190,61 @@ I want to hear what broke and what you expected instead.
 Response: I read every issue within two working days. Security problems: do not open a public
 issue; mail info@zerononsense.dev.
 
-## 6. How to use: the first ten minutes
+## 6. The first 15 minutes, in a repo you already have
 
-1. Open Claude Code in a project folder.
-2. Type `/setup-doctor`. Fix what it lists.
-3. Say: "Start a flow for adding a login page." `one-loop` creates the flow and walks you to
-   the plan gate.
-4. Answer each gate. At the ship gate, say "ship" if you accept the result. Your receipt lands
-   in `flows\<project>\<slug>\receipts\`.
-5. Want a folder structure for the whole company? Say "set up my company hub".
+You do not need a new folder. Groundwork works in the repo you already use, and adds one folder
+to it.
+
+1. Install `groundwork` and `groundwork-mods` at user scope (section 4 or 5), then restart Claude
+   Code. The mods load when a session starts.
+2. Open Claude Code in the root of your repo and type `/setup-doctor`. Fix what it lists. If it
+   says hooks are skipped, your Claude organisation manages settings: the agent policy and the Git
+   guard do not run, and the rest still works.
+3. Pick a change you were going to make anyway, a small bug or a small feature. Say: "Start a flow
+   for <that change>." `one-loop` creates the flow and stops at the plan gate.
+4. Answer the gates: plan (G1), spec (G2), ship (G4), learn (G3).
+   [docs/tour.md](docs/tour.md) shows every screen and what to do next.
+5. Say "ship" at G4 when you accept the result. The receipt lands in
+   `flows\<project>\<slug>\receipts\`.
+
+What lands in your repo: one `flows\` folder at the root, with the plan, the gate decisions and
+the receipt. Commit it. The record then sits next to the change it describes, and a reviewer reads
+both in the same pull request. If your team does not want it in the repo, add `flows/` to
+`.gitignore`; the record then lives on your disk only.
+
+What the agent may do there:
+
+- **Read and write drafts, out of the box.** It does not change your code until you set
+  `"mode": "work"` in `.groundwork\agent-policy.json` (see
+  [Turn on write access](docs/setup-guide.md#turn-on-write-access)). Add `.groundwork/` to
+  `.gitignore`. Sends and deletes stay blocked in work mode too.
+- **Never commit, push or merge.** The Git guard blocks raw git from the agent. You commit
+  yourself, in your own terminal, the way you do now.
+
+Why the brakes: a plan nobody approved is a guess, and a chat window is a bad place to keep the
+only copy of a decision. The gates make a change slower. They also leave a record you can read
+next month, which is the part I wanted.
+
+Fifteen minutes is my target, not a measurement: so far only I have run this. Question 1 in
+[FEEDBACK.md](FEEDBACK.md) is how I find out.
+
+Starting from an empty folder instead: say "set up my company hub", or copy
+`templates\skeleton\`.
 
 ## 7. Roadmap
 
-Next: a first green run of the install matrix on Windows, macOS and Linux, install screenshots for all three systems (this release ships the guided tour, not install screenshots), and a first run by someone who
-did not build it, with their findings filed as issues. Not planned here: signing receipts and a
-verify page (that is a separate product), a hosted version, a sprint runner, and Slack as the
-default. See the [issue list](https://github.com/siteoffice/groundwork/issues).
+Next, in 0.5.0: the Fleet shows what waits on you from BurnMon's wait states, the engine fixes from
+issue #105, the Claude Desktop install checked against Claude's new Plugins page, and install
+screenshots from macOS. Then the first run by people who did not build it, a small group of
+developers, with their findings filed as issues. Not planned here: signing receipts and a verify
+page (that is a separate product), a hosted version, a sprint runner, and Slack as the default.
+See the [issue list](https://github.com/siteoffice/groundwork/issues).
 
 ## 8. Known bugs and limits
 
-- **macOS and Linux wait on the first green CI run.** The install matrix runs the command-line
-  install and the tests there; until a run is green, see [docs/install-matrix.md](docs/install-matrix.md).
-  The Claude Desktop app install is not tested by CI on any system.
+- **The Claude Desktop install is not tested yet.** CI proves the command-line install and the
+  tests on Windows, macOS and Linux ([docs/install-matrix.md](docs/install-matrix.md)). The Desktop
+  route is checked by hand against Claude's new Plugins page, and that check has not run.
 - **Retro on Cowork for macOS is unverified, and its touch classes are heuristics.** They are
   `metric_version 1`, so read the counts as a trend, not as a score.
 - **Retro refuses any path with a component starting `.env`.** That includes a parent folder, so
