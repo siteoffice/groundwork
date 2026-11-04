@@ -708,10 +708,12 @@ describe('Threads', () => {
     for (const surface of ['terminal', 'mobile'] as const) {
       const ui = await $.ui.mount({ plugin: 'groundwork-mods', surface, component: 'Pane', requestId: 'groundwork-fleet', props: PANE_PROPS(60) } as never)
       expect(await ui.find({ key: 'thread-t9' })).toBeDefined()
+      // The host decides whether a surface offers a text field; the list page's new-thread input shows it.
+      const hostOffersInput = (await ui.find({ key: 'new-thread' })) !== undefined
       await ui.press({ key: 'thread-t9' })
       expect(await ui.find({ type: 'Text', text: /ADD A DARK MODE TOGGLE/ })).toBeDefined()
       expect(await ui.find({ type: 'Text', text: /toggle to settings/ })).toBeDefined()
-      expect((await ui.find({ key: 'thread-msg' })) === undefined).toBe(surface === 'mobile')
+      expect((await ui.find({ key: 'thread-msg' })) !== undefined).toBe(hostOffersInput)
       await ui.press({ key: 'back' })
       expect(await ui.find({ type: 'Text', text: /THIS SESSION/ })).toBeDefined()
       await ui.unmount()

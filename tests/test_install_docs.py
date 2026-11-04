@@ -103,7 +103,7 @@ def test_readme_points_to_the_guide():
 
 def test_changelog_040():
     text = _read(CHANGELOG)
-    headings = re.findall(r"^## .*$", text, flags=re.M)
+    headings = [h for h in re.findall(r"^## .*$", text, flags=re.M) if h != "## Unreleased"]
     assert headings and headings[0] == "## 0.4.0", headings[:1]
     section = text.split("## 0.4.0", 1)[1].split("\n## ", 1)[0]
     assert "Python 3.9" in section

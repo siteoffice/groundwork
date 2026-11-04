@@ -137,4 +137,17 @@ describe('gitsafe', () => {
     expect(safe.lineIsUntrusted('worktree\thook.x.enabled false')).toBe(true)
     expect(safe.conflictingLine(['command\tcore.askpass ', 'command\tcore.askpass ', 'command\tcore.askpass x'])).toBe('command\tcore.askpass x')
   })
+
+  test('core.alternaterefscommand: only the host\'s empty command-scope pin is trusted', () => {
+    expect(safe.lineIsUntrusted('command\tcore.alternaterefscommand ')).toBe(false)
+    expect(safe.lineIsUntrusted('command\tcore.alternaterefscommand evil')).toBe(true)
+    expect(safe.lineIsUntrusted('local\tcore.alternaterefscommand ')).toBe(true)
+  })
+
+  test('core.alternaterefscommand: the host\'s pinned command is trusted at command scope only, and only exactly', () => {
+    const host = "f() { git --git-dir=\"$1\" for-each-ref --format='%(objectname)'; }; f"
+    expect(safe.lineIsUntrusted('command\tcore.alternaterefscommand ' + host)).toBe(false)
+    expect(safe.lineIsUntrusted('local\tcore.alternaterefscommand ' + host)).toBe(true)
+    expect(safe.lineIsUntrusted('command\tcore.alternaterefscommand ' + host + 'x')).toBe(true)
+  })
 })

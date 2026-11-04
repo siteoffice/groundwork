@@ -3,6 +3,15 @@
 All notable changes. The version is one clock for the whole repository: `groundwork`,
 `groundwork-mods` and the marketplace move together.
 
+## Unreleased
+
+- **Fixed: the Git lane closed in every repo on Claude Code 2.1.317 and later with reason core.alternaterefscommand.**
+  Claude Code pins that key at command scope to git's own default for-each-ref command; the trust check
+  now accepts exactly that value (or an empty one) at command scope, and refuses any other value or scope.
+- **Changed: the closed-lane line now says how to reopen the lane.** After the setting it adds "Fix the
+  setting, then start a new session: refresh keeps this verdict." The README now states as checked live
+  on 2026-11-04 that a new session clears the verdict.
+
 ## 0.4.0
 
 - **Changed requirement: Python 3.9 or newer (was 3.8).** The Setup Doctor now checks the version
