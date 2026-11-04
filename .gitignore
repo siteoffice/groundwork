@@ -8,3 +8,6 @@ _board/
 .groundwork/
 _log/
 04_assets/
+# The maintainer's own one-loop records (local paths); your
+project should commit its flows/.
+flows/
