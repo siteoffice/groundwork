@@ -3,6 +3,20 @@
 All notable changes. The version is one clock for the whole repository: `groundwork`,
 `groundwork-mods` and the marketplace move together.
 
+## Unreleased
+
+- **README: "Before you rely on it" and "Feedback and issues".** What Groundwork does not do yet,
+  and where bugs, surprises and ideas go: three issue templates (Bug, "It did not do what I
+  expected", Idea) and `FEEDBACK.md` with five questions for after two weeks. The old bug report
+  template is gone. I read every issue within two working days.
+- **README section 6 rewritten for a repo you already have.** Install, the Setup Doctor, one flow
+  on a real change, what lands in your repo and what the agent may do there.
+- **Roadmap and known limits brought up to date.** The install matrix is green since 0.4.0; the
+  Claude Desktop install is the open check.
+- **The Fleet reads BurnMon's wait states (G6).** What waits on you in the Fleet now comes from
+  BurnMon's snapshot file: blocked and your turn per session. Tested on a fixture, not yet against
+  a live BurnMon.
+
 ## 0.4.1
 
 - **Fixed: the Git lane closed in every repo on Claude Code 2.1.317 and later with reason core.alternaterefscommand.**
