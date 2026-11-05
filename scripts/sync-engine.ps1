@@ -78,7 +78,7 @@ $components = @{
         Dest = (Join-Path $pluginDir 'board')
         Receipt = (Join-Path $pluginDir 'board\SYNCED_FROM.json')
         SkipTop = @('DESIGN.md', 'REVIEW.md')                  # internal design and review notes
-        SkipNames = @('test_drag_drop.py', 'test_sync_buttons.py', 'test_as_of.py')   # need the Siteoffice sync helper or git history, not shipped
+        SkipNames = @('test_drag_drop.py', 'test_sync_buttons.py', 'test_as_of.py', 'test_python_floor_gw14.py', 'test_python_floor_sot26.py', 'test_python_floor_foreman.py')   # need the Siteoffice sync helper or git history, not shipped
         Tests = 'board'
     }
     sync = @{
