@@ -1,7 +1,7 @@
 """Siteoffice recursive board renderer.
 
 CLI: node <dir> | tree <root> | check <root> | export-hours <root> | as-of
-<dir> <date>. Stdlib only, Python 3.8+, no pip installs, no network calls
+<dir> <date>. Stdlib only, Python 3.9+, no pip installs, no network calls
 (as-of's git clone/checkout is local-only, never a remote fetch). Reads a
 node's siteoffice.json (schema v1 or v2) and the manifests of its declared
 children, and writes exactly `<dir>\\_board\\board.html` (one self-contained

@@ -16,7 +16,7 @@ parallel (spec "Explicitly out of scope").
 Pure-function core, thin host: find_unconsumed_gates does no I/O and never calls
 the clock, so it returns the raw decided_at stamp and main() computes the age.
 
-Stdlib only. Python 3.8+.
+Stdlib only. Python 3.9+.
 """
 from __future__ import annotations
 

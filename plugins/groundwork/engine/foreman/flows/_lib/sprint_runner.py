@@ -14,7 +14,7 @@ relationship the /foreman shim already has to it. It reads, it runs the line,
 it does not change what "authorised" means. Nothing in foreman_run.py,
 foreman_plan.py, flow_state.py or foreman_lock.py is written by this work.
 
-Stdlib only. Python 3.8+.
+Stdlib only. Python 3.9+.
 """
 from __future__ import annotations
 

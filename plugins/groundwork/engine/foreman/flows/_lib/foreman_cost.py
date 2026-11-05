@@ -28,7 +28,7 @@ Fail-open by contract: absent BurnRate, an unreadable store, a sprint with no
 worktree_path or no matching session all return None, and None never trips a
 fence. A driver must not be wedged by a sibling repository being absent.
 
-Stdlib only. Python 3.8+.
+Stdlib only. Python 3.9+.
 """
 from __future__ import annotations
 

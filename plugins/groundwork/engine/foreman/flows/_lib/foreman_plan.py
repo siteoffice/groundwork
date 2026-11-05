@@ -19,7 +19,7 @@ stops those surfaces from drifting.
 
 `why` is a template fill derived from state, never model output.
 
-Stdlib only. Python 3.8+.
+Stdlib only. Python 3.9+.
 """
 from __future__ import annotations
 

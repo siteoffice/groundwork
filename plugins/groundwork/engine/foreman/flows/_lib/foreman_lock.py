@@ -20,7 +20,7 @@ one-line `with` at each call site.
 Atomicity comes from os.open with O_CREAT|O_EXCL, which is atomic on NTFS and on
 POSIX. Everything else in this module is ordinary file I/O.
 
-Stdlib only. Python 3.8+.
+Stdlib only. Python 3.9+.
 """
 from __future__ import annotations
 
@@ -63,7 +63,7 @@ def _parse_ts(ts):
     """ISO 8601 'Z' string to an aware datetime, or None. Pure.
 
     strptime rather than fromisoformat: fromisoformat does not accept the
-    trailing 'Z' before Python 3.11 and the floor here is 3.8.
+    trailing 'Z' before Python 3.11 and the floor here is 3.9.
     """
     try:
         return _dt.datetime.strptime(ts, _TS_FMT).replace(

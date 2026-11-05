@@ -19,7 +19,7 @@ rest of the keys (`halt.*`, `gate_consume.*`, `sprint_recover.*`,
 `flow_advance.*`, and the tail kinds) fall back by design until a real operator
 stalls on one and it gets written.
 
-Stdlib only. Python 3.8+.
+Stdlib only. Python 3.9+.
 """
 from __future__ import annotations
 

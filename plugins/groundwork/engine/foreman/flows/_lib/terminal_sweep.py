@@ -17,7 +17,7 @@ Invariants (spec §Invariants, never violated):
 - Never writes sprint.json or anything under sprints/.
 - Never mutates flow.json directly; all flow state changes go through
   flow_transition.cmd_advance (done in the thin host main(), not here).
-- Stdlib only, Python 3.8+.
+- Stdlib only, Python 3.9+.
 - Pure-function core: no I/O, no clock calls. The host main() does all I/O.
 """
 from __future__ import annotations

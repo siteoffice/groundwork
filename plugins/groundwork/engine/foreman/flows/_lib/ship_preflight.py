@@ -12,7 +12,7 @@ failing check NEVER blocks the gate from opening: this module annotates a ship
 decision, the operator makes it. And scope is never guessed: a spec with no
 fenced path list yields scope_respected None, not a pass and not a fail.
 
-Stdlib only, plus brief_composer for the secret patterns. Python 3.8+.
+Stdlib only, plus brief_composer for the secret patterns. Python 3.9+.
 """
 from __future__ import annotations
 

@@ -17,7 +17,7 @@ C:\\work\\10_holding\\04_engineering\\command_center\\notify.py but dispatch
 is OUT OF SCOPE here: the live `outlook_send_mail` call and the scheduled sweep
 belong to slice e. This module imports NO network library and sends NO email.
 
-Stdlib only. Python 3.8+.
+Stdlib only. Python 3.9+.
 """
 from __future__ import annotations
 

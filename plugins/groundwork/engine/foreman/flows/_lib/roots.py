@@ -19,7 +19,7 @@ Mirrors the pattern already used correctly at
 `04_engineering\\command_center\\assemble.py:83`, the only place in the tree
 that read `ZND_HUB_ROOT` before this module existed.
 
-Stdlib only. Python 3.8+.
+Stdlib only. Python 3.9+.
 """
 from __future__ import annotations
 

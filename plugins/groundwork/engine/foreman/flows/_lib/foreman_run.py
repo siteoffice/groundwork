@@ -18,7 +18,7 @@ flow_transition.cmd_advance_guarded, so the existing single write paths stay
 single. It never launches a sprint, never touches git, never writes a hub
 brief and never calls a model.
 
-Stdlib only. Python 3.8+.
+Stdlib only. Python 3.9+.
 """
 from __future__ import annotations
 

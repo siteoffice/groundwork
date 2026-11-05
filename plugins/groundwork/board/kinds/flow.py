@@ -49,13 +49,33 @@ def _flow_summary(flow_path: pathlib.Path):
         "idea": flow.get("idea", ""),
         "log": read_ndjson(flow_path.parent / "flow-log.ndjson"),
         "dir": flow_path.parent,
+        # A sprint runner exists only where a sprints folder sits beside flows\.
+        # Without one (a one-loop root) the /sprint line has nothing to run it.
+        "has_sprint_runner": (flow_path.parent.parent.parent.parent / "sprints").is_dir(),
     }
+
+
+def _log_detail(entry: dict, has_sprint_runner: bool):
+    if entry.get("action") == "sprint_emitted" and not has_sprint_runner:
+        return "work step ready"
+    return entry.get("detail", "")
+
+
+# The verdicts each gate takes. A local copy of flow_state.VERDICTS_BY_GATE:
+# this module never imports flows\\_lib (hard rule). Unknown ids take only park.
+_VERDICTS_BY_GATE = {
+    "G1": ("approve", "reject", "park"),
+    "G2": ("approve", "reject", "park"),
+    "G3": ("proceed", "adapt", "close", "park"),
+    "G4": ("ship", "hold", "park"),
+}
 
 
 def _flow_next_command(summary: dict) -> str:
     project, slug, gate = summary["project"], summary["slug"], summary["gate"]
     if summary["awaiting"] and gate:
-        return f"/flow gate {project} {slug} approve|reject  (token {gate.get('token', '')})"
+        verdicts = "|".join(_VERDICTS_BY_GATE.get(gate.get("id"), ("park",)))
+        return f"/flow gate {project} {slug} {verdicts}  (token {gate.get('token', '')})"
     if summary["status"] == "closed":
         return ""
     return f"/flow status {project} {slug}"
@@ -100,9 +120,12 @@ def _render_flows_index(summaries, lang, languages, manifest_labels, label_bundl
 def _render_flow_page(s: dict, lang, languages, manifest_labels, label_bundle, render_page_shell) -> str:
     empty_text = label_bundle.get("state_empty", "state_empty")
 
+    # Stored indexes are 0-based; show them from 1, as the gw CLI and the
+    # guidance road-ahead block do.
     step_rows = [
-        [esc(step.get("index", "")), esc(step.get("title", "")), esc(step.get("status", ""))]
-        for step in s["steps"]
+        [esc((step["index"] if isinstance(step.get("index"), int) else position) + 1),
+         esc(step.get("title", "")), esc(step.get("status", ""))]
+        for position, step in enumerate(s["steps"])
     ]
     ladder_html = tpl_table.render_table(["#", "title", "status"], step_rows, empty_text=empty_text)
 
@@ -120,8 +143,9 @@ def _render_flow_page(s: dict, lang, languages, manifest_labels, label_bundle, r
         gate_html = f'<p class="empty"><span class="msg">{esc(empty_text)}</span></p>'
 
     log_entries = [
-        {"name": " · ".join(str(e.get(k, "")) for k in
-                                 ("ts", "stage", "actor", "action", "outcome", "detail"))}
+        {"name": " · ".join(
+            str(_log_detail(e, s["has_sprint_runner"]) if k == "detail" else e.get(k, ""))
+            for k in ("ts", "stage", "actor", "action", "outcome", "detail"))}
         for e in s["log"]
     ]
     log_state = tpl_activity.STATE_NORMAL if log_entries else tpl_activity.STATE_EMPTY
