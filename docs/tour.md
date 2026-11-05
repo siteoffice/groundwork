@@ -101,7 +101,7 @@ stage=execute status=decided step=1/1 phase=grill | GATE G2 decided: approve. Ru
 ![The flow page in the light theme with gate G4 open after the work, and ten activity lines ending with the G4 token](../assets/screenshots/tour-04-flow-g4-light.png)
 ![The same flow page at gate G4 in the dark theme](../assets/screenshots/tour-04-flow-g4-dark.png)
 
-**What you see:** Gate G4 is open. The activity list shows your G2 approval, then a `sprint_emitted` line with a `/sprint` command. That line is engine wording carried over from Siteoffice. Groundwork does not start a sprint or any agent: the work happens in your own session. The line under Next still reads approve or reject: the verdicts that count here are the ones the command prints, ship, hold or park.
+**What you see:** Gate G4 is open. The activity list shows your G2 approval, then a `sprint_emitted` line that reads "work step ready". That is engine wording carried over from Siteoffice. Groundwork does not start a sprint or any agent: the work happens in your own session. The line under Next lists the verdicts that count here: ship, hold or park.
 
 **What it means:** G4 is the ship gate, and you meet it before G3. Only ship accepts the change and writes a receipt. Hold keeps the work but does not accept it. Park sets the flow aside.
 
@@ -150,17 +150,3 @@ stage=execute status=decided step=1/1 phase=learn | GATE G3 decided: proceed. Ru
 <!-- /tour:G3 -->
 
 After the last proceed, one more advance closes the flow. That is the whole loop.
-
-## Known issues
-
-Three things on these pages come from the engine as vendored from Siteoffice v0.10.4. Groundwork
-has not changed them, so the pictures show them as they are.
-
-- **The Next line offers `approve|reject` at G4.** The verdicts that count at G4 are the ones the
-  command prints: ship, hold or park. G3 shows the same Next line, where the verdicts are proceed,
-  adapt, close or park. Fix comes from Siteoffice.
-- **The first step is numbered 0.** The steps table counts from 0, while the command output says
-  `step=1/1`. Fix comes from Siteoffice.
-- **A `/sprint` line appears in the activity of a one-loop flow.** After G2 the activity shows a
-  `sprint_emitted` line with a `/sprint` command. Groundwork starts no sprint and no agent. Fix
-  comes from Siteoffice.

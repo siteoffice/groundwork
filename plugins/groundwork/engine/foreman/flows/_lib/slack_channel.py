@@ -12,7 +12,7 @@ functions here are pure: fixtures in, strings/dicts out, no I/O.
 Reuses outbox.gate_name / outbox.reply_verbs_line / outbox.dashboard_link so the
 Slack compose path never drifts from the email compose path.
 
-Python 3.8+.
+Python 3.9+.
 """
 from __future__ import annotations
 

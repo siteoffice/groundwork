@@ -9,7 +9,7 @@ This module NEVER launches a sprint and NEVER sends email. The /flow command
 markdown and the Cowork wrapper (both out of scope) call these functions and,
 after a transition, call render_flows to regenerate the dashboards.
 
-Stdlib only. Python 3.8+.
+Stdlib only. Python 3.9+.
 """
 from __future__ import annotations
 

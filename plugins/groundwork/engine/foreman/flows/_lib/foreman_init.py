@@ -15,7 +15,7 @@ place. Idempotent: an already-scaffolded hub is left untouched unless
 CLI:
     python foreman_init.py [--hub-root PATH] [--force]
 
-Stdlib only. Python 3.8+.
+Stdlib only. Python 3.9+.
 """
 from __future__ import annotations
 

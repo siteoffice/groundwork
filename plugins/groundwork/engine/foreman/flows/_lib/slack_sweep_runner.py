@@ -38,7 +38,7 @@ Exit codes: 0 = clean (including no-op), 1 = sweep ran with per-flow errors,
 
 Windows Task Scheduler registration: see RUNNER_SETUP.md in this folder.
 
-Stdlib only. Python 3.8+.
+Stdlib only. Python 3.9+.
 """
 from __future__ import annotations
 

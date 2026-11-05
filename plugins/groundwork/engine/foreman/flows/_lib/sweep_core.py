@@ -17,7 +17,7 @@ explicit OPEN dependency, out of scope (see
 lines 24-27, 61-78). Decisions produced here are applied by a host that calls
 flow_transition.cmd_gate; this module never reimplements or executes them.
 
-Stdlib only. Python 3.8+ (zoneinfo is used only inside in_default_send_window).
+Stdlib only. Python 3.9+ (zoneinfo is used only inside in_default_send_window).
 """
 from __future__ import annotations
 

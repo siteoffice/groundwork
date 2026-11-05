@@ -33,7 +33,10 @@ _PR_FETCH_TIMEOUT = 4
 def _flows_root(manifest: dict):
     declared = manifest.get("flows")
     if not declared:
-        return None
+        # No declaration: use <node>\flows when it exists, where the Groundwork
+        # engine writes. No folder either means no gates, silently.
+        default = manifest["_dir"] / "flows"
+        return default if default.is_dir() else None
     p = pathlib.Path(declared)
     if not p.is_absolute():
         p = (manifest["_dir"] / declared).resolve()

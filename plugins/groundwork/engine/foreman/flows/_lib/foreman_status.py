@@ -17,7 +17,7 @@ Split, matching terminal_sweep.py: a pure section (no I/O, no clock, every input
 an argument) and a thin host section below the banner comment that does all the
 filesystem work and all the printing.
 
-Stdlib only. Python 3.8+.
+Stdlib only. Python 3.9+.
 """
 from __future__ import annotations
 

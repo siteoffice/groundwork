@@ -6,7 +6,7 @@ Mirrors the sprint schema discipline in C:\\work\\10_holding\\sprints\\_lib\\sch
 one file overwritten each transition, ISO 8601 UTC timestamps with a trailing Z at
 second precision.
 
-Stdlib only. Python 3.8+.
+Stdlib only. Python 3.9+.
 """
 from __future__ import annotations
 

@@ -16,7 +16,7 @@ STDLIB ONLY. One retry on HTTP 429 honoring Retry-After. Every Slack API
 "ok": false response raises RuntimeError with the Slack error code so the
 runner logs it instead of half-succeeding. urlopen is injectable for tests.
 
-Python 3.8+.
+Python 3.9+.
 """
 from __future__ import annotations
 

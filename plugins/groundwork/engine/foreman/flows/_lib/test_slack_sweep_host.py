@@ -399,7 +399,7 @@ def test_sent_or_tokened_sprint_records_are_not_posted(tmp_path):
     outbox.mark_sent(sdir, "OBX-PARK-S1-T1", "9.9", GATE_OPENED_AT)
     other = _sprint_dir(sprints, sprint_id="S2")
     recs = outbox.read_outbox(other)
-    recs[0]["token"] = "some-gate-token"
+    recs[0]["token"] = "gate-tok"
     (other / "outbox.ndjson").write_text(
         "".join(json.dumps(r) + "\n" for r in recs), encoding="utf-8")
     send, calls = _stub_send()

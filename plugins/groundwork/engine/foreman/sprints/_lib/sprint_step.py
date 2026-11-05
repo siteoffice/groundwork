@@ -8,7 +8,7 @@ what makes /sprint go silent for hours during a long dev phase (see
 docs/superpowers/2026-07-31-sprint-visibility-proposal.md). This script does
 all four as one atomic call, so the print cannot be separated from the write.
 
-Reads/writes the schema in ./schema.md. Stdlib only. Python 3.8+.
+Reads/writes the schema in ./schema.md. Stdlib only. Python 3.9+.
 
 CLI:
     python sprint_step.py <sprint_dir> --phase <phase> --action <action> \

@@ -35,5 +35,5 @@ def test_each_spot_says_3_9():
 
 def test_engine_readme_count_is_measured():
     text = _text(ENGINE_README)
-    assert "987 passed, 4 skipped" in text
+    assert "1021 passed, 4 skipped" in text
     assert "979" not in text

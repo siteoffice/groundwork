@@ -2,7 +2,7 @@
 agent. Steps: start, save, check, propose, land, abort. Every step is
 step(repo_dir, ..., apply=False): with apply=False it returns the preview only
 and changes nothing; with apply=True it acts and writes one receipt line to
-_log\\runs\\git-flow.ndjson. Stdlib only, Python 3.8+, no network beyond the
+_log\\runs\\git-flow.ndjson. Stdlib only, Python 3.9+, no network beyond the
 repo's own configured remote (through git_ops pull, push and fetch) and, for
 propose and land, the GitHub API of that remote's repository through the gh
 CLI. Settings schema: sync\\GIT_FLOW.md. CLI: python sync\\git_flow.py start

@@ -17,6 +17,11 @@ All notable changes. The version is one clock for the whole repository: `groundw
   BurnMon's snapshot file: blocked and your turn per session. Tested on a fixture, not yet against
   a live BurnMon.
 
+- **Engine, board and sync resynced from Siteoffice `ca0b00e`.** The GW14 fixes from
+  siteoffice/siteoffice-private#105 and the Python 3.9 floor. The flow page Next line lists the
+  verdicts the open gate takes, the steps table counts from 1, Waiting on you reads the default
+  `flows` folder, and a flow with no sprint runner shows "work step ready" instead of the
+  `/sprint` line.
 ## 0.4.1
 
 - **Fixed: the Git lane closed in every repo on Claude Code 2.1.317 and later with reason core.alternaterefscommand.**

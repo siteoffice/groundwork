@@ -49,7 +49,7 @@ rehearsal), same as the email send path. This module's only automated gates
 are the import-smoke check (no connector runtime required) and a source-level
 check that no push-based transport has crept in.
 
-Stdlib only. Python 3.8+.
+Stdlib only. Python 3.9+.
 """
 from __future__ import annotations
 

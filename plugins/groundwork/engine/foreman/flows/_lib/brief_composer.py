@@ -19,7 +19,7 @@ Hard rules enforced (hub-update SKILL.md lines 43-62):
 The learn-stage file write and the /hub-update emit line that CONSUME this string
 live in the /flow command surface (slice c) and are out of scope here.
 
-Stdlib only. Python 3.8+.
+Stdlib only. Python 3.9+.
 """
 from __future__ import annotations
 

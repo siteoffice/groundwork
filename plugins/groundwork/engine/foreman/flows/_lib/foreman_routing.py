@@ -19,7 +19,7 @@ Reads sprints/_lib/model_map.CLASS_TO_MODEL and model_map.DEFAULT_TABLE live
 (via **mm.DEFAULT_TABLE at import time and mm.resolve_model at call time);
 never redefines or copies either by value. One table, three consumers.
 
-Stdlib only. Python 3.8+.
+Stdlib only. Python 3.9+.
 """
 from __future__ import annotations
 

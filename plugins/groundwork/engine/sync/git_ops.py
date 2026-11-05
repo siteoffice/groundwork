@@ -1,5 +1,5 @@
 """Git plumbing for the sync helper: status, pull, push, commit. Stdlib
-only (subprocess), Python 3.8+. Every function takes an explicit repo_dir;
+only (subprocess), Python 3.9+. Every function takes an explicit repo_dir;
 nothing here assumes it is running against the real siteoffice-private
 clone, which is what makes it testable against a throwaway temp repo
 (Global Constraint). No network calls beyond `git fetch/pull/push` against

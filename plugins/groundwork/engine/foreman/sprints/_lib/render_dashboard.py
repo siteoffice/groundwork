@@ -6,7 +6,7 @@ and render_index(sprints_root) delegate and return the new _board\\ path.
 compute_progress and compute_stats stay here as pure functions, still used
 by the text-mode status/tail/watch CLI below, which is unchanged.
 
-Stdlib only. Python 3.8+.
+Stdlib only. Python 3.9+.
 
 CLI:
     python render_dashboard.py sprint  <sprint_dir>
