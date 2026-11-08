@@ -107,6 +107,10 @@ tests that drive real git through the real `gitsafe.ts` need Node 22.18 or newer
 suite builds real git repositories and takes about 25 minutes. Claude Code wrote most of the code
 and text of this release. I set the scope and I decide what ships.
 
+### How it compares
+
+Google's Elephant-Goldfish Model and GitHub's Spec Kit help you write a spec and review it before the agent codes. Matt Pocock's skills give you small grilling, test-first and review skills. Groundwork sits one level up: it keeps the idea, the plan, the spec, the work and the review as files in your own folder, stops at four gates where you decide, and keeps a receipt of each decision next to the change.
+
 ## 3. Screenshots
 
 All four are rendered from this release. The receipt page is what you get when you ship.

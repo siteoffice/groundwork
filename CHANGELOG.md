@@ -5,6 +5,7 @@ All notable changes. The version is one clock for the whole repository: `groundw
 
 ## Unreleased
 
+- docs(readme): How it compares (EGM, Spec Kit, Matt Pocock's skills)
 - **README: "Before you rely on it" and "Feedback and issues".** What Groundwork does not do yet,
   and where bugs, surprises and ideas go: three issue templates (Bug, "It did not do what I
   expected", Idea) and `FEEDBACK.md` with five questions for after two weeks. The old bug report
