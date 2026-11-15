@@ -5,6 +5,12 @@ All notable changes. The version is one clock for the whole repository: `groundw
 
 ## Unreleased
 
+## 0.4.3
+
+- **siteoffice-setup writes refusals with their reason.** Each AGENTS.md refusal from the
+  interview now carries its reason; "never" stays for real hard limits, the rest becomes "ask
+  before X", because current models read "never" as absolute.
+
 ## 0.4.2
 
 - **Skill rules carry their reason (Fable 5.2).** Anthropic's Fable 5.2 prompting guide says the
