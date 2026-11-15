@@ -1,6 +1,6 @@
 ---
 name: retro
-description: Monthly check-up of your own Claude Code and Cowork sessions of the last N days, script only. Collects transcripts on this machine, scrubs secrets, counts human touches per finished piece of work, silent failures (headless runs that end in an API error, hooks and connectors failing in 3 or more sessions, scheduled tasks without a success line) and secret exposures, and writes a counts-only report with a month-over-month trend. R1 measures only; guided apply arrives in R2. Use on "retro", "monthly checkup of my sessions", "what went wrong in my sessions", "improve my setup". Do NOT use for a weekly tree health check (siteoffice-checkup), for context and tool usage (audit-my-context), to diagnose one superpowers session (diagnosing-superpowers), or to apply changes (this skill never does).
+description: Monthly script-only check-up of Claude Code and Cowork sessions that counts human touches, silent failures and secret exposures in a trend report. Use on "retro", "monthly checkup of my sessions", "what went wrong in my sessions", "improve my setup". Do NOT use for siteoffice-checkup, audit-my-context, diagnosing-superpowers, or to apply fixes.
 ---
 
 # Retro
@@ -73,7 +73,7 @@ and it changes nothing. Applying fixes arrives in R2.
    ```
 
    The output ends with the exact `schtasks.exe` line and the command to register: the same call
-   plus `-Register`. The user runs it, never you. After the first scheduled run the user checks it
+   plus `-Register`. The user runs it, not you: registering a task changes their machine. After the first scheduled run the user checks it
    with the same call plus `-Verify`, which reads Last Result (0 is success). macOS and Linux:
    `<skill folder>/scripts/retro.launchd.plist.example` and `retro.cron.example`, copied and
    edited by the user.

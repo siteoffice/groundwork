@@ -1,6 +1,7 @@
 ---
 name: one-loop
-description: Run one piece of work from idea to close in a folder you control, with four gates where you decide and a local receipt when you accept the result. Use on "one loop", "start a flow", "new flow", "flow status", "advance the flow", "approve the gate", "close the flow", or when the user wants a change to pass an idea, a design, a plan, the work and a review before it counts as done. Do NOT use for a quick edit that needs no decision trail, or to launch background agents (this skill never does).
+description: >-
+  Runs one piece of work from idea to close in a folder you control, with four gates where you decide and a local receipt when you accept. Use on "one loop", "start a flow", "flow status", "advance the flow", "approve the gate", "close the flow". Do NOT use for a quick edit that needs no decision trail.
 ---
 
 # One loop
@@ -50,7 +51,8 @@ Each command prints one status line: stage, status, and any open gate with its t
 verdicts it accepts. Run the next command only after you have read it.
 
 1. **New.** `gw.py --root ROOT new <project> "<idea>"`. Creates the flow at stage `idea`.
-   Refused if the slug exists: relay the message, never overwrite.
+   Refused if the slug exists: relay the message and leave the existing flow as it is; it
+   holds the user's earlier decisions.
 2. **Shape the idea.** Write down what the idea is, who it is for and how you will know it
    worked. Keep it in the project, for example `ROOT\docs\<slug>.md`. Then
    `advance <project>/<slug>` twice: idea to design, design to breakdown.
@@ -81,7 +83,8 @@ verdicts it accepts. Run the next command only after you have read it.
 - **First decision wins.** A gate that is already decided cannot be changed. The command says
   so and changes nothing.
 - **Repeating is safe.** If a command is refused, relay its message in full and stop. Never
-  "repair" state by hand.
+  "repair" state by hand: the engine's own checks are what make the record and the receipt
+  worth trusting.
 - **A receipt exists only for `ship`.** If the user asks for one after `hold`, `park` or
   `close`, say there is none and why.
 
@@ -90,7 +93,7 @@ verdicts it accepts. Run the next command only after you have read it.
 Short, outcome first:
 
 - Say what changed in one line, then what the user must decide, in plain words.
-- Name a step only when it failed or changed the plan. Do not narrate commands that worked.
+- Name a step only when it failed or changed the plan. Commands that worked need no mention.
 - Give the receipt path in full when one was written, and say it is self-issued, not signed.
 - End with the single next step and whose move it is.
 

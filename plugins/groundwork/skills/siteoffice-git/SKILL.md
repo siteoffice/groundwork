@@ -51,11 +51,12 @@ The agent may run any step itself, always preview first, and applies only after 
   Unattended run, do not apply: park a HAND line with the full `land --apply` snippet.
 - Tag: the launcher has no tag step, and the guard denies the push. Hand the person the tag snippet as a
   HAND line, in both modes, until the launcher gains a tag step.
-- Raw git stays denied. Never set `SITEOFFICE_GIT_GUARD=off`.
+- Raw git stays denied. Never set `SITEOFFICE_GIT_GUARD=off`: the guard keeps every change on the six
+  steps, and only a human turns it off (see the last paragraph).
 
 ## Failure branches
 
-- Exit 2 (refused): state the refusal, give the next move, stop. Never retry with raw git.
+- Exit 2 (refused): state the refusal, give the next move, stop. Never retry with raw git: it skips the checks that refused the step.
 - Exit 3 (blocked): say what is blocked (a red check, a missing `gh`), give the next move, stop.
 - "Engine not found": tell the user to install the groundwork plugin or set `SITEOFFICE_SYNC_DIR` to a folder outside the repo, then stop.
 - The hook denies a git command: use the launcher step that covers it. If no step covers it, say so and stop. The person runs that git by hand.
