@@ -130,7 +130,9 @@ words, tightened, not invented content:
 1. **What does this node do, for whom?** One or two sentences. Goes into 00_context\brief.md and
    the Claude Desktop description.
 2. **What is important here, what must never go wrong?** Goes into brief.md and the instructions
-   (the refusals).
+   (the refusals). Ask why for each one and write the reason next to it. Keep "never" for real
+   hard limits and phrase the rest as "ask before X": current models read "never" as absolute
+   (Anthropic's Fable 5.2 prompting guide).
 3. **Top priorities right now, in order?** Goes into 02_roadmap\roadmap.md as a numbered list,
    per the roadmap convention above.
 4. **Hard dates in the next months?** Goes into DEADLINES.md, most imminent on top. None is a
@@ -146,7 +148,8 @@ Skipping is allowed: write the section header with "to be filled" plus the date,
 "structure-only", and say what was skipped.
 
 **Output:** brief.md, roadmap.md, DEADLINES.md, the relevant 01_projects file, STATUS.md and the
-AGENTS.md refusals, each holding the customer's own words or an explicit "to be filled."
+AGENTS.md refusals, each with its reason, holding the customer's own words or an explicit "to be
+filled."
 
 ## Step 4: produce the paste-ready texts
 
