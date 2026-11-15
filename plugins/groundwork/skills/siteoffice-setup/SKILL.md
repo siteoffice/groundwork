@@ -1,6 +1,7 @@
 ---
 name: siteoffice-setup
-description: Set up, extend or improve a Siteoffice structure and its Claude Desktop projects, folder structure on disk included, for a holding, company, department or project, in any combination. Use when the user says "set up a project", "new project in Claude Desktop", "create a folder structure", "set up my company hub", "set up a holding", "add a department", "add a project to my hub", "improve my hub files", "fill in my structure", "nieuw project opzetten", "mappenstructuur maken", "zet een hub op", "richt een holding in", "voeg een afdeling toe", "verbeter mijn hub", or wants help deciding what the description, instructions and work folder of a Claude project should be.
+description: >-
+  Sets up, extends or improves a Siteoffice structure for a holding, company, department or project, folders on disk and Claude Desktop projects included. Use on "set up a project", "create a folder structure", "add a project to my hub", "improve my hub files", "nieuw project opzetten". Do NOT use to move a tree (siteoffice-migrate).
 ---
 
 # Siteoffice setup
@@ -84,7 +85,8 @@ choice):
   the first.
 - **Extend**: a tree exists and gets a new node (a department in a company, a project in a hub).
   Run steps 1 to 5 for the new node only, update the parent's siteoffice.json children list, and
-  add the child's one-pager to the parent's 01_projects. Never touch sibling nodes.
+  add the child's one-pager to the parent's 01_projects. Leave sibling nodes as they are: they belong to
+  other units. If one needs a change, name it and ask.
 - **Improve**: the tree exists but files are thin, stale or empty. Read the node's files first,
   list concretely what is missing (empty sections, a STATUS that contradicts a newer decision,
   deadlines without dates, decisions without a why), then ask the content questions from Step 3
@@ -107,7 +109,7 @@ stopped and offers to continue there.
 5. Language of the files? Default is the conversation's language; confirm.
 6. Does this node need time registration (WBSO hours)? Sets `settings.timeRegistration` in the
    schema v2 block.
-7. New or existing? Existing files are never overwritten.
+7. New or existing? An existing file changes only after you show the change and get a yes.
 
 **Output:** the node list, its disk location, approver(s), language and new-vs-existing status,
 one answer at a time, ready to feed Step 2.
@@ -171,7 +173,7 @@ this node's folder to see the dashboard.
 
 - One source of truth per fact; live files state what is true NOW, superseded content moves to
   03_logs\_history; every durable file is date-prefixed and lands in a fitting subfolder, never
-  in the node root.
+  in the node root, so the root stays readable at a glance.
 - Ask before creating; one question at a time; never overwrite existing files without showing the
   change and getting a yes.
 - Write only what the user said, tightened. No invented examples, no lorem.

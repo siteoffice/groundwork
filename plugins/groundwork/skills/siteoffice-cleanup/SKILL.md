@@ -1,6 +1,7 @@
 ---
 name: siteoffice-cleanup
-description: Clean up a Siteoffice tree or any folder tree an AI works in, in three read-first passes, folders (stale, empty, junk, unprotected, dirty repos), documents (unreferenced and idle files), and instruction files (compact a grown AGENTS.md or CLAUDE.md to about 80 lines by moving detail to STATUS.md and SESSION_LOG.md, never deleting). Use on "clean up my folders", "what is stale", "which files can go", "compact my CLAUDE.md", "my instruction file is too long", "tidy the hub", "opruimen", "welke bestanden kunnen weg", "maak mijn CLAUDE.md korter", or before a move with siteoffice-migrate. Do NOT use to move or rename folders (siteoffice-migrate) or to create a tree (siteoffice-setup).
+description: >-
+  Cleans up a Siteoffice tree or any folder tree an AI works in, in three read-first passes: folders, documents, and instruction files compacted without deleting. Use on "clean up my folders", "which files can go", "compact my CLAUDE.md", "opruimen". Do NOT use to move or rename folders (siteoffice-migrate).
 ---
 
 # Siteoffice cleanup
@@ -107,7 +108,7 @@ one line per judgment call (what was tightened, what was kept verbatim as a guar
   reworded, and every tightening is shown to the user.
 - Preserve every cross-reference; a pointer that names a file keeps naming it.
 - Deletions from pass 1 and 2 are the user's own step, after the CSV holds the decision.
-- One commit per unit. Hub edits and project edits never share a commit.
+- One commit per unit. Hub edits and project edits never share a commit, so each can be reverted on its own.
 - Scripts stay pure ASCII. A non-ASCII character in a `.ps1` is a script that does not run.
 - Answer in the conversation's language. No em dashes in anything on disk.
 

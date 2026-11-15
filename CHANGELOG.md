@@ -5,6 +5,13 @@ All notable changes. The version is one clock for the whole repository: `groundw
 
 ## Unreleased
 
+## 0.4.2
+
+- **Skill rules carry their reason (Fable 5.2).** Anthropic's Fable 5.2 prompting guide says the
+  model reads "never" as absolute. Fourteen rule lines in one-loop, retro and the five siteoffice
+  skills now give a reason or a scope, or ask first instead of forbidding.
+- **Shorter skill descriptions.** Every description is 350 characters or less, because every
+  session loads every description and an overflowing skill list drops them.
 - docs(readme): How it compares (EGM, Spec Kit, Matt Pocock's skills)
 - **README: "Before you rely on it" and "Feedback and issues".** What Groundwork does not do yet,
   and where bugs, surprises and ideas go: three issue templates (Bug, "It did not do what I

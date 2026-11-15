@@ -1,6 +1,7 @@
 ---
 name: siteoffice-migrate
-description: Move, restructure, rename or adopt a Siteoffice tree (holding, company, department, project) or any folder tree an AI works in, without losing state that tools key by path. Modes are audit (stale, junk or unprotected folders, read-only), inventory (every hard-coded path before a move, read-only), restructure (map a grown tree onto the Siteoffice layout at a new root, with dry run, apply and path rewrite), relocate (same layout, new root), rename, adopt. Use on "move my hub to a new drive or folder", "bring our folders into the Siteoffice structure", "what still points at the old path", "which folders are stale or can go", "rename this project folder", "make this existing folder a Siteoffice unit", or Dutch "verhuis onze mappen", "zet onze structuur om", "welke mappen kunnen weg". Do NOT use to create a new tree (siteoffice-setup) or to scope tools per unit (siteoffice-scope).
+description: >-
+  Moves, renames, restructures or adopts a Siteoffice tree or any folder tree an AI works in, without breaking tools that store the path. Use on "move my hub to a new drive or folder", "what still points at the old path", "rename this project folder", "verhuis onze mappen". Do NOT use to create a tree (siteoffice-setup).
 ---
 
 # Siteoffice migrate
@@ -105,7 +106,7 @@ cd <skill folder>\scripts
    by hit count, the CSV path, exit code 0. Nothing changed on disk except the CSV.
 
 2. Read the CSV with the user, sorted by `Note`. `stays subtree`: no rewrite. `generated`:
-   regenerate, never edit. `prose path in markdown`: rewrite. Unmarked rows are config and code,
+   regenerate, never edit (the generator overwrites a hand edit). `prose path in markdown`: rewrite. Unmarked rows are config and code,
    the ones that break first. `task` rows are re-registered and proven by exit code plus output
    on disk. `claude-json` and `claude-projects` rows are the state Claude Code loses unless the
    entries are copied to the new path or hash. `claude-desktop` and `shortcut` rows are rewritten
@@ -194,7 +195,7 @@ shape (the target stays while the file moves, or the file left the folder the fo
 is listed with a `review` note and left alone. Limit: a form is only found when a moved folder is
 on its path, so a link between two files that moved by different depths but crosses no moved
 folder is not seen; read what is left by hand. History files and folders (`decisions.md`,
-`SESSION_LOG.md`, `_archive`, `handovers`, `03_logs\_history`) are never touched. The rewrite skips a
+`SESSION_LOG.md`, `_archive`, `handovers`, `03_logs\_history`) are never touched: they record what was true then, old paths included. The rewrite skips a
 file that is not valid UTF-8 (a Windows-1252 `.bat`) and lists it in its output and report.
 
 **Output:** the approved map, the dry-run plans, the applied plans with per-item result, the
@@ -348,5 +349,6 @@ pure ASCII.
 - Refuse a new root inside a cloud-synced folder (OneDrive, Dropbox, iCloud); two sync engines
   on one folder corrupt each other.
 - Scripts stay pure ASCII. A non-ASCII character in a `.ps1` is a script that does not run.
-- One findings file per run, date-prefixed, in a fitting subfolder, never in the unit root.
+- One findings file per run, date-prefixed, in a fitting subfolder, never in the unit root, so the
+  root stays readable at a glance.
 - Answer in the conversation's language. No em dashes in anything on disk.

@@ -1,13 +1,15 @@
 ---
 name: siteoffice-checkup
-description: Weekly read-only maintenance check of a Siteoffice tree, skills (frontmatter, size, routing, risky commands), plugins (manifests, one version clock, published versus routed, drift), instruction files (size, em dashes, stale paths, broken imports) and folders (git locks, unit files), plus scheduled tasks against their inventory. Use on "run the checkup", "maintenance check", "health check", "is everything still in order", "onderhoudscheck", or from the weekly scheduled task. Do NOT use to fix or delete anything (siteoffice-cleanup), for instruction drift across harnesses (audit-ai-instructions), or for context usage (audit-my-context).
+description: >-
+  Runs a weekly read-only check of a Siteoffice tree: skills, plugins, instruction files, folders and scheduled tasks. Use on "run the checkup", "maintenance check", "health check", "onderhoudscheck", or from the weekly scheduled task. Do NOT use to fix or delete anything (siteoffice-cleanup).
 ---
 
 # Siteoffice checkup
 
 One weekly pass that tells you what broke or slid since last week, before it costs a session.
-It reads and reports. It never edits, publishes, promotes, deletes or runs git. The only file it
-writes is its own dated report.
+It reads and reports. It never edits, publishes, promotes, deletes or runs git, so it is safe to
+run unattended every week; fixes go through the skills named in the table below. The only file
+it writes is its own dated report.
 
 `<root>` below is the top folder of your Siteoffice tree. `<holding>` is its holding folder
 (`10_holding` in the standard layout).
