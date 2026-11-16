@@ -37,16 +37,16 @@ def rendered(tour, tmp_path_factory):
     return result, work
 
 
-def test_png_names_are_twelve_pairs(tour):
+def test_png_names_are_ten_pairs(tour):
     names = tour.png_names()
-    assert len(names) == 12
+    assert len(names) == 10
     pattern = re.compile(r"^tour-\d\d-[a-z0-9-]+-(light|dark)\.png$")
     for name in names:
         assert pattern.match(name), name
     for light, dark in zip(names[0::2], names[1::2]):
         assert light.endswith("-light.png")
         assert dark == light[: -len("-light.png")] + "-dark.png"
-    assert [n for n, _ in tour.SCREENS] == ["01", "02", "03", "04", "05", "06"]
+    assert [n for n, _ in tour.SCREENS] == ["01", "02", "03", "04", "05"]
 
 
 def test_shift_dates_puts_deadlines_ahead_and_leaves_the_template_alone(tour, tmp_path):
@@ -70,7 +70,7 @@ def test_shift_dates_puts_deadlines_ahead_and_leaves_the_template_alone(tour, tm
     assert (tour.MOLENWERK / "DEADLINES.md").read_bytes() == before
 
 
-def test_six_pages_render_and_one_receipt(tour, rendered):
+def test_five_pages_render_and_one_receipt(tour, rendered):
     result, _ = rendered
     pages = result["pages"]
     assert sorted(pages) == sorted(name for _, name in tour.SCREENS)
@@ -108,14 +108,14 @@ def test_temp_copy_removed_after_failure(tour, tmp_path, monkeypatch):
 def test_transcript_is_normalized(tour, rendered):
     result, work = rendered
     transcript = result["transcript"]
-    assert sorted(transcript) == ["G1", "G2", "G3", "G4"]
+    assert sorted(transcript) == ["accept", "learn", "spec"]
     forms = set(tour._root_forms(work)) | {str(work), work.as_posix()}
     for gate, text in transcript.items():
         assert text.startswith("> gw "), gate
         for form in forms:
             assert form not in text, (gate, form)
         assert not re.search(r"\d{8}T\d{6}Z", text), gate
-    assert "receipt (self-issued, not signed): <copy>" in transcript["G4"]
+    assert "receipt (self-issued, not signed): <copy>" in transcript["accept"]
 
 
 def test_pages_carry_no_local_path(tour, rendered):
@@ -129,22 +129,22 @@ def test_pages_carry_no_local_path(tour, rendered):
             assert form.replace("\\", "\\\\") not in html, (name, form)
         if os.name == "nt":
             assert "~1\\" not in html, name
-    assert "~/molenwerk-demo" in result["pages"]["flow-g4"]
+    assert "~/molenwerk-demo" in result["pages"]["flow-accept"]
 
 
 def test_normalize_replaces_root_and_stamp(tour, tmp_path):
     root = tmp_path / "molenwerk"
-    text = "token FLOW-X-G1-20261101T101132Z-EC17 at {}{}flows and {}/flows".format(
+    text = "token FLOW-X-spec-S0-20261101T101132Z-EC17 at {}{}flows and {}/flows".format(
         root, "\\" if "\\" in str(root) else "/", root.as_posix()
     )
     out = tour.normalize(text, root)
     assert str(root) not in out
     assert root.as_posix() not in out
-    assert "FLOW-X-G1-<stamp>" in out
+    assert "FLOW-X-spec-S0-<stamp>" in out
     assert out.count("<copy>") == 2
 
 
-def test_twelve_pngs(tour, tmp_path):
+def test_ten_pngs(tour, tmp_path):
     ok, reason = tour.playwright_available()
     if not ok:
         pytest.skip(reason)
@@ -166,7 +166,7 @@ def test_script_is_ascii():
 
 
 DOC = ROOT / "docs" / "tour.md"
-GATES = ("G1", "G2", "G4", "G3")
+GATES = ("spec", "accept", "learn")
 
 
 def read_doc() -> str:
@@ -174,7 +174,7 @@ def read_doc() -> str:
     return DOC.read_text(encoding="utf-8")
 
 
-def test_tour_doc_references_twelve_pngs_in_pairs(tour):
+def test_tour_doc_references_ten_pngs_in_pairs(tour):
     text = read_doc()
     positions = []
     for name in tour.png_names():
@@ -183,7 +183,7 @@ def test_tour_doc_references_twelve_pngs_in_pairs(tour):
         positions.append(text.index(link))
     assert positions == sorted(positions)
     images = re.findall(r"!\[([^\]]*)\]\(\.\./assets/screenshots/([^)]+)\)", text)
-    assert len(images) == 12
+    assert len(images) == len(tour.png_names())
     for alt, name in images:
         assert len(alt) >= 20, name
 
@@ -216,16 +216,25 @@ def test_write_doc_rewrites_only_the_marker_blocks(tour, rendered, tmp_path):
     result, _ = rendered
     doc = tmp_path / "tour.md"
     doc.write_text(
-        "intro\n<!-- tour:G1 -->\nold\n<!-- /tour:G1 -->\nmiddle\n"
-        "<!-- tour:G3 -->\n<!-- /tour:G3 -->\nend\n",
+        "intro\n<!-- tour:spec -->\nold\n<!-- /tour:spec -->\nmiddle\n"
+        "<!-- tour:learn -->\n<!-- /tour:learn -->\nend\n",
         encoding="utf-8",
     )
     tour.write_doc(doc, result["transcript"])
     out = doc.read_text(encoding="utf-8")
-    assert out.startswith("intro\n<!-- tour:G1 -->\n```text\n> gw ")
+    assert out.startswith("intro\n<!-- tour:spec -->\n```text\n> gw ")
     assert "old" not in out
-    assert "\nmiddle\n" in out and out.endswith("<!-- /tour:G3 -->\nend\n")
-    assert tour.doc_block(result["transcript"]["G3"]) in out
+    assert "\nmiddle\n" in out and out.endswith("<!-- /tour:learn -->\nend\n")
+    assert tour.doc_block(result["transcript"]["learn"]) in out
+
+
+def test_rendered_tour_names_spec_and_accept(rendered):
+    result, _ = rendered
+    text = "\n".join(result["transcript"].values())
+    assert "GATE spec open" in text and "GATE accept open" in text
+    assert not re.search(r"\bG[1-4]\b", text)
+    for name, html in result["pages"].items():
+        assert not re.search(r"\bG[1-4]\b", html), name
 
 
 def test_tour_doc_has_no_em_dash():
