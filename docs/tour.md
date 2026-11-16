@@ -68,6 +68,12 @@ py -3 .\plugins\groundwork\board\render_board.py flows <your folder>\flows
 **What you do next:** Read the spec. Say approve, reject or park. After approve, Claude does the work with you in the same session.
 
 <!-- tour:spec -->
+```text
+> gw advance molenwerk/add-a-stock-check
+stage=execute status=awaiting-owner step=1/1 phase=grill | GATE spec open, token FLOW-MOLENWERK-add-a-stock-check-spec-S0-<stamp>, verdicts: approve, reject, park
+> gw gate molenwerk/add-a-stock-check approve
+stage=execute status=decided step=1/1 phase=grill | GATE spec decided: approve. Run advance to apply it
+```
 <!-- /tour:spec -->
 
 ## 3. The accept gate
@@ -82,6 +88,14 @@ py -3 .\plugins\groundwork\board\render_board.py flows <your folder>\flows
 **What you do next:** Look at what changed and what the checks said. Say ship if you accept it, with a short note. Otherwise say hold or park.
 
 <!-- tour:accept -->
+```text
+> gw advance molenwerk/add-a-stock-check
+stage=execute status=awaiting-owner step=1/1 phase=sprint | GATE accept open, token FLOW-MOLENWERK-add-a-stock-check-accept-S0-<stamp>, verdicts: ship, hold, park
+> gw gate molenwerk/add-a-stock-check ship "looks right"
+stage=execute status=decided step=1/1 phase=sprint | GATE accept decided: ship. Run advance to apply it
+receipt (self-issued, not signed): <copy>/flows/molenwerk/add-a-stock-check/receipts/step-01.html
+receipt data: <copy>/flows/molenwerk/add-a-stock-check/receipts/step-01.json
+```
 <!-- /tour:accept -->
 
 ## 4. The receipt
@@ -107,6 +121,12 @@ py -3 .\plugins\groundwork\board\render_board.py flows <your folder>\flows
 **What you do next:** Nothing waits on you. Ask Claude to run advance to continue.
 
 <!-- tour:learn -->
+```text
+> gw advance molenwerk/add-a-stock-check
+stage=execute status=running step=1/1 phase=learn
+> gw advance molenwerk/add-a-stock-check
+stage=closed status=closed step=2/1 phase=learn
+```
 <!-- /tour:learn -->
 
 After the last step, one more advance closes the flow. That is the whole loop.
