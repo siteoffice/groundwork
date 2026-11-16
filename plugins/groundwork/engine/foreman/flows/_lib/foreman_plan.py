@@ -40,7 +40,7 @@ ACTION_KINDS = (
     "sprint_await",      # sprint running, not terminal
     "sprint_recover",    # sprint capped, failed or escalated
     "ship_preflight",    # run the deterministic ship checks
-    "ship_execute",      # G4 shipped, run merge and push
+    "ship_execute",      # accept shipped, run merge and push
     "brief_write",       # compose and write the hub_agent_update brief
     "hub_ingest",        # run hub-update propagation
     "hub_refresh",       # assemble.py --force plus render_mission_deck.py
@@ -68,14 +68,12 @@ BLOCKING_KINDS = ("", "human", "agent", "clock", "fence")
 ROLES = ("none", "ship_preflight", "learn_summarise", "hub_ingest", "hub_refresh")
 
 HALT_REASONS = ("halt_file", "paused", "flow_paused", "chain_cap",
-                "unknown_stage", "unknown_phase", "malformed_gate")
+                "unknown_stage", "unknown_phase", "malformed_gate", "held")
 
-# Slice c adds G4 to flow_state.GATE_IDS and VERDICTS_BY_GATE. That module is
-# out of scope for this build-order step, so the ship gate is named locally and
-# recognised defensively. test_foreman_plan asserts these agree with flow_state
-# the moment flow_state grows them, so the duplication cannot drift silently.
-SHIP_GATE_ID = "G4"
-SHIP_VERDICTS = ("ship", "hold", "park")
+# The two active gates by name; the ship gate verdicts come from flow_state.
+SPEC_GATE_ID = "spec"
+SHIP_GATE_ID = "accept"
+SHIP_VERDICTS = fs.VERDICTS_BY_GATE[SHIP_GATE_ID]
 
 # Identical to terminal_sweep.SUCCESS_STATUSES / NEEDS_GUIDANCE_STATUSES.
 # Redeclared rather than imported so this pure module does not pull in
@@ -145,10 +143,7 @@ def _verdict_of(gate: dict) -> str:
 
 
 def _allowed_verdicts(gate_id: str) -> tuple:
-    """Verdicts valid at `gate_id`, including the ship gate flow_state does not
-    know about yet."""
-    if gate_id == SHIP_GATE_ID:
-        return SHIP_VERDICTS
+    """Verdicts valid at `gate_id` (an old code reads through the alias table)."""
     return fs.valid_verdicts(gate_id)
 
 
@@ -169,6 +164,9 @@ _HALT_WHY = {
                      "next action is not computable and the driver stops",
     "malformed_gate": "the flow's gate is malformed: {detail}, so the next "
                       "action is not computable and the driver stops",
+    "held": "a hold is pending on this step ({detail}), so learnings do not "
+            "run and the flow does not move on; reopen the ship gate with "
+            "foreman_run.py ship <ref> or close the flow",
 }
 
 
@@ -203,10 +201,6 @@ def _halt_reason(flow: dict, driver: dict):
 
 # --- gate validity ------------------------------------------------------------
 
-# The gate ids this seam ever routes on. SHIP_GATE_ID is included even though
-# flow_state does not carry G4 yet (see the module-level comment on
-# SHIP_GATE_ID above).
-_RECOGNISED_GATE_IDS = ("G1", "G2", "G3", SHIP_GATE_ID)
 _RECOGNISED_GATE_STATUSES = ("awaiting-owner", "decided")
 
 
@@ -222,7 +216,9 @@ def _malformed_gate_reason(gate: dict):
     halts instead of guessing.
     """
     gate_id = gate.get("id")
-    if gate_id not in _RECOGNISED_GATE_IDS:
+    if fs.is_retired_gate(gate_id):
+        return "gate {} is retired".format(gate_id)
+    if fs.canonical_gate(gate_id) not in fs.ACTIVE_GATES:
         return "gate id {} is not recognised".format(repr(gate_id))
     status = gate.get("status")
     if status not in _RECOGNISED_GATE_STATUSES:
@@ -234,8 +230,13 @@ def _malformed_gate_reason(gate: dict):
 
 # --- gate branches ----------------------------------------------------------
 
+def _gate_key(*parts) -> str:
+    """Guidance key for a gate action: the parts joined with dots."""
+    return ".".join(parts)
+
+
 def _gate_await(flow: dict, gate: dict) -> NextAction:
-    gate_id = gate.get("id") or "?"
+    gate_id = fs.canonical_gate(gate.get("id")) or "?"
     verdicts = ", ".join(_allowed_verdicts(gate_id))
     return NextAction(
         kind="gate_await",
@@ -249,12 +250,12 @@ def _gate_await(flow: dict, gate: dict) -> NextAction:
         gate_id=gate_id,
         step_index=gate.get("step_index"),
         role="none",
-        guidance_key="gate_await.{}".format(gate_id.lower()),
+        guidance_key=_gate_key("gate_await", gate_id),
     )
 
 
 def _gate_consume(flow: dict, gate: dict) -> NextAction:
-    gate_id = gate.get("id") or "?"
+    gate_id = fs.canonical_gate(gate.get("id")) or "?"
     verdict = _verdict_of(gate)
     return NextAction(
         kind="gate_consume",
@@ -265,11 +266,12 @@ def _gate_consume(flow: dict, gate: dict) -> NextAction:
         gate_id=gate_id,
         step_index=gate.get("step_index"),
         role="none",
-        guidance_key="gate_consume.{}.{}".format(gate_id.lower(), verdict),
+        guidance_key=_gate_key("gate_consume", gate_id, verdict),
     )
 
 
 def _gate_open(flow: dict, gate_id: str, step_index) -> NextAction:
+    gate_id = fs.canonical_gate(gate_id)
     return NextAction(
         kind="gate_open",
         why="{} has no open gate and {} needs a {} decision, so the gate opens "
@@ -279,7 +281,7 @@ def _gate_open(flow: dict, gate_id: str, step_index) -> NextAction:
         gate_id=gate_id,
         step_index=step_index,
         role="none",
-        guidance_key="gate_open.{}".format(gate_id.lower()),
+        guidance_key=_gate_key("gate_open", gate_id),
     )
 
 
@@ -294,7 +296,7 @@ def next_action(flow: dict, sprint: Optional[dict], driver: dict) -> NextAction:
       3. an open undecided gate                      -> gate_await
       4. a decided gate                               -> ship_execute or gate_consume
       5. stage idea / design                         -> flow_advance
-      6. stage breakdown                             -> gate_open G1
+      6. stage breakdown                             -> flow_advance (no gate)
       7. stage execute                               -> per current_step.phase
     Anything unrecognised halts rather than guessing.
     """
@@ -311,6 +313,15 @@ def next_action(flow: dict, sprint: Optional[dict], driver: dict) -> NextAction:
         return _tail(flow, driver)
 
     gate = flow.get("gate")
+    if isinstance(gate, dict) and fs.is_retired_gate(gate.get("id")):
+        if stage == "execute" and (flow.get("current_step") or {}).get(
+                "phase") == "learn":
+            held = _held_halt(flow, driver)
+            if held:
+                return held
+            return _learn_advance(flow, "the retired gate is dropped, so ")
+        return _halt(flow, "malformed_gate",
+                     "gate {} is retired".format(gate.get("id")))
     if isinstance(gate, dict):
         malformed = _malformed_gate_reason(gate)
         if malformed:
@@ -333,7 +344,17 @@ def next_action(flow: dict, sprint: Optional[dict], driver: dict) -> NextAction:
         )
 
     if stage == "breakdown":
-        return _gate_open(flow, "G1", None)
+        return NextAction(
+            kind="flow_advance",
+            why="the breakdown crosses into execute without a gate; the first "
+                "spec card shows it",
+            blocking="",
+            command=_advance_cmd(flow),
+            gate_id=None,
+            step_index=_step_index(flow),
+            role="none",
+            guidance_key=_advance_key(stage),
+        )
 
     if stage == "execute":
         return _execute(flow, sprint, driver)
@@ -342,10 +363,10 @@ def next_action(flow: dict, sprint: Optional[dict], driver: dict) -> NextAction:
 
 
 def _decided(flow: dict, gate: dict, driver: dict) -> NextAction:
-    """A decided gate. The one special case is a G4 `ship` that has not run yet:
+    """A decided gate. The one special case is an accept `ship` that has not run yet:
     the merge and push happen before the verdict is consumed, so the receipt
     order reads ship-then-advance."""
-    if (gate.get("id") == SHIP_GATE_ID
+    if (fs.canonical_gate(gate.get("id")) == SHIP_GATE_ID
             and _verdict_of(gate) == "ship"
             and not driver.get("shipped")):
         return _ship_execute(flow, gate, driver)
@@ -359,7 +380,7 @@ def _ship_execute(flow: dict, gate: dict, driver: dict) -> NextAction:
     sha = preflight.get("revert_point") or "unrecorded"
     return NextAction(
         kind="ship_execute",
-        why="G4 is decided with verdict ship at {}, so branch {} merges with "
+        why="accept is decided with verdict ship at {}, so branch {} merges with "
             "--no-ff and pushes; pre-merge sha {}".format(
                 _step_label(flow), branch, sha),
         blocking="",
@@ -374,14 +395,49 @@ def _ship_execute(flow: dict, gate: dict, driver: dict) -> NextAction:
     )
 
 
+def _advance_key(part) -> str:
+    return "flow_advance." + str(part)
+
+
+def _phase_of(flow: dict):
+    return (flow.get("current_step") or {}).get("phase")
+
+
+def _held_halt(flow: dict, driver: dict):
+    """A halt NextAction when a hold is pending on this step, else None."""
+    held = (driver or {}).get("held")
+    if not held:
+        return None
+    reason = held.get("reason") if isinstance(held, dict) else ""
+    return _halt(flow, "held", reason or "no reason recorded")
+
+
+def _learn_advance(flow: dict, prefix: str) -> NextAction:
+    return NextAction(
+        kind="flow_advance",
+        why=prefix + "the step is accepted, so learnings run without a gate "
+            "and the flow moves to the next step's grill, or closes after the "
+            "last step",
+        blocking="",
+        command=_advance_cmd(flow),
+        gate_id=None,
+        step_index=_step_index(flow),
+        role="none",
+        guidance_key=_advance_key(_phase_of(flow)),
+    )
+
+
 def _execute(flow: dict, sprint: Optional[dict], driver: dict) -> NextAction:
     cs = flow.get("current_step") or {}
     phase = cs.get("phase")
     index = cs.get("index")
     if phase == "grill":
-        return _gate_open(flow, "G2", index)
+        return _gate_open(flow, SPEC_GATE_ID, index)
     if phase == "learn":
-        return _gate_open(flow, "G3", index)
+        held = _held_halt(flow, driver)
+        if held:
+            return held
+        return _learn_advance(flow, "")
     if phase == "sprint":
         return _sprint(flow, sprint, driver, index)
     return _halt(flow, "unknown_phase", repr(phase))
@@ -440,8 +496,8 @@ def _sprint(flow: dict, sprint: Optional[dict], driver: dict,
         return NextAction(
             kind="sprint_recover",
             why="the sprint for {} reached terminal status {}, so the step "
-                "moves to learn and G3 opens carrying the recovery "
-                "context".format(_step_label(flow), status),
+                "goes back to its spec gate marked regrill".format(
+                    _step_label(flow), status),
             blocking="",
             command=_advance_cmd(flow),
             gate_id=None,

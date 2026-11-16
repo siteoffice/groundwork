@@ -1,3 +1,4 @@
+# Old codes (G1 to G4) below are stored old records kept on purpose (OF30).
 """Tests for foreman_plan.py. Plain pytest, stdlib only, hermetic.
 
 Every state is a literal fixture and every call is pure: no tmp_path, no clock,
@@ -35,7 +36,7 @@ def _flow(stage="idea", status="running", phase=None, index=0, of=0,
     return flow
 
 
-def _gate(gate_id="G1", step_index=None, decided=None, note=""):
+def _gate(gate_id="spec", step_index=None, decided=None, note=""):
     """An awaiting-owner gate, or a decided one when `decided` is a verdict."""
     gate = {
         "id": gate_id,
@@ -43,7 +44,7 @@ def _gate(gate_id="G1", step_index=None, decided=None, note=""):
         "status": "awaiting-owner",
         "decision": None,
         "notified": False,
-        "token": f"FLOW-DSI-payoff-books-{gate_id}-20260718T091403Z-7QF3",
+        "token": "gate-tok-" + gate_id,
         "opened_at": TS,
     }
     if decided is not None:
@@ -114,87 +115,128 @@ def test_design_stage_advances():
 
 # --- gate_open --------------------------------------------------------------
 
-def test_breakdown_with_no_gate_opens_g1():
+def test_breakdown_is_flow_advance_without_a_gate():
     action = fp.next_action(_flow(stage="breakdown"), None, {})
-    assert action.kind == "gate_open"
-    assert action.gate_id == "G1"
-    assert action.step_index is None
+    assert action.kind == "flow_advance"
+    assert action.gate_id is None
     assert action.blocking == ""
-    assert action.guidance_key == "gate_open.g1"
+    assert action.command == "/flow advance dsi/payoff-books"
+    assert action.guidance_key == "flow_advance.breakdown"
+    assert "without a gate" in action.why
 
 
-def test_grill_phase_with_no_gate_opens_g2_for_the_current_step():
+def test_grill_opens_spec_with_the_name_key():
     action = fp.next_action(_execute_flow("grill", index=1), None, {})
     assert action.kind == "gate_open"
-    assert action.gate_id == "G2"
+    assert action.gate_id == "spec"
     assert action.step_index == 1
-    assert action.guidance_key == "gate_open.g2"
-
-
-def test_learn_phase_with_no_gate_opens_g3_for_the_current_step():
-    action = fp.next_action(_execute_flow("learn", index=2), None, {})
-    assert action.kind == "gate_open"
-    assert action.gate_id == "G3"
-    assert action.step_index == 2
+    assert action.guidance_key == "gate_open.spec"
 
 
 # --- gate_await -------------------------------------------------------------
 
 def test_open_undecided_gate_blocks_on_human():
-    flow = _flow(stage="breakdown", status="awaiting-owner", gate=_gate("G1"))
+    flow = _execute_flow("grill", gate=_gate("spec", step_index=0))
     action = fp.next_action(flow, None, {})
     assert action.kind == "gate_await"
     assert action.blocking == "human"
-    assert action.gate_id == "G1"
+    assert action.gate_id == "spec"
     assert action.command == "/flow gate dsi/payoff-books <verdict>"
-    assert action.guidance_key == "gate_await.g1"
+    assert action.guidance_key == "gate_await.spec"
+
+
+def test_stored_g2_await_uses_the_spec_key():
+    flow = _execute_flow("grill", gate=_gate("spec", step_index=0))
+    action = fp.next_action(flow, None, {})
+    assert action.kind == "gate_await"
+    assert action.gate_id == "spec"
+    assert action.guidance_key == "gate_await.spec"
 
 
 def test_gate_await_why_names_every_allowed_verdict():
-    flow = _flow(stage="breakdown", status="awaiting-owner", gate=_gate("G1"))
+    flow = _execute_flow("grill", gate=_gate("spec", step_index=0))
     why = fp.next_action(flow, None, {}).why
     for verdict in ("approve", "reject", "park"):
         assert verdict in why
 
 
-def test_gate_await_at_g3_names_the_g3_verdicts():
-    flow = _execute_flow("learn", gate=_gate("G3", step_index=0))
-    why = fp.next_action(flow, None, {}).why
-    for verdict in ("proceed", "adapt", "close", "park"):
-        assert verdict in why
+def test_learn_is_flow_advance_and_a_hold_halts():
+    flow = _execute_flow("learn", index=1)
+    action = fp.next_action(flow, None, {})
+    assert action.kind == "flow_advance"
+    assert action.gate_id is None
+    assert action.blocking == ""
+    assert action.guidance_key == "flow_advance.learn"
+    assert action.why.endswith(
+        "the step is accepted, so learnings run without a gate and the flow "
+        "moves to the next step's grill, or closes after the last step")
+    held = fp.next_action(flow, None, {"held": {"reason": "needs a retest"}})
+    assert held.kind == "halt"
+    assert held.guidance_key == "halt.held"
+    assert "needs a retest" in held.why
+    assert "foreman_run.py ship <ref>" in held.why
+
+
+def test_retired_gate_at_learn_advances_elsewhere_halts():
+    for old in ("G3", "H4"):
+        flow = _execute_flow("learn", gate=_gate(old, step_index=0))
+        action = fp.next_action(flow, None, {})
+        assert action.kind == "flow_advance", old
+        assert action.gate_id is None
+        held = fp.next_action(flow, None, {"held": {"reason": "x"}})
+        assert held.guidance_key == "halt.held", old
+        for phase in ("grill", "sprint"):
+            flow = _execute_flow(phase, gate=_gate(old, step_index=0))
+            halted = fp.next_action(flow, None, {})
+            assert halted.guidance_key == "halt.malformed_gate", (old, phase)
+            assert "is retired" in halted.why
+    breakdown = _flow(stage="breakdown", gate=_gate("G3", step_index=0))
+    assert fp.next_action(breakdown, None, {}).kind == "halt"
+
+
+def test_unknown_gate_id_is_not_recognised():
+    flow = _execute_flow("grill", gate=_gate("bogus", step_index=0))
+    action = fp.next_action(flow, None, {})
+    assert action.guidance_key == "halt.malformed_gate"
+    assert "is not recognised" in action.why
+
+
+def test_reopened_accept_at_learn_is_consumed_not_advanced():
+    gate = _gate("accept", step_index=0, decided="ship")
+    flow = _execute_flow("learn", gate=gate)
+    action = fp.next_action(flow, None, {"shipped": True})
+    assert action.kind == "gate_consume"
+    assert action.gate_id == "accept"
+    assert action.guidance_key == "gate_consume.accept.ship"
 
 
 # --- gate_consume -----------------------------------------------------------
 
 def test_decided_gate_is_consumed():
-    flow = _flow(stage="breakdown", gate=_gate("G1", decided="approve"))
+    flow = _execute_flow("grill", gate=_gate("spec", step_index=0,
+                                             decided="approve"))
     action = fp.next_action(flow, None, {})
     assert action.kind == "gate_consume"
     assert action.blocking == ""
-    assert action.gate_id == "G1"
+    assert action.gate_id == "spec"
     assert action.command == "/flow advance dsi/payoff-books"
-    assert action.guidance_key == "gate_consume.g1.approve"
+    assert action.guidance_key == "gate_consume.spec.approve"
 
 
 def test_every_verdict_at_every_gate_is_consumed_and_keyed():
     cases = [
-        ("G1", None, ("approve", "reject", "park")),
-        ("G2", 0, ("approve", "reject", "park")),
-        ("G3", 0, ("proceed", "adapt", "close", "park")),
+        ("spec", "grill", ("approve", "reject", "park")),
+        ("accept", "sprint", ("ship", "hold", "park")),
     ]
-    for gate_id, step_index, verdicts in cases:
+    for gate_id, phase, verdicts in cases:
         for verdict in verdicts:
-            gate = _gate(gate_id, step_index=step_index, decided=verdict)
-            if gate_id == "G1":
-                flow = _flow(stage="breakdown", gate=gate)
-            else:
-                phase = "grill" if gate_id == "G2" else "learn"
-                flow = _execute_flow(phase, gate=gate)
-            action = fp.next_action(flow, None, {})
+            gate = _gate(gate_id, step_index=0, decided=verdict)
+            flow = _execute_flow(phase, gate=gate)
+            action = fp.next_action(flow, None, {"shipped": True})
             assert action.kind == "gate_consume", (gate_id, verdict)
             assert action.gate_id == gate_id
             assert action.guidance_key == \
-                "gate_consume.{}.{}".format(gate_id.lower(), verdict)
+                "gate_consume.{}.{}".format(gate_id, verdict)
             assert verdict in action.why
 
 
@@ -237,7 +279,7 @@ def test_chain_cap_defaults_to_twelve():
 
 
 def test_halt_beats_an_open_gate():
-    flow = _flow(stage="breakdown", status="awaiting-owner", gate=_gate("G1"))
+    flow = _execute_flow("grill", gate=_gate("spec", step_index=0))
     action = fp.next_action(flow, None, {"halt": True})
     assert action.kind == "halt"
 
@@ -261,28 +303,28 @@ def test_decided_gate_with_no_decision_halts_rather_than_a_malformed_key():
     # when status == "decided", so this is a valid flow.json. Feeding it
     # through used to produce guidance_key "gate_consume.g1." (a trailing
     # dot, from an empty verdict string) instead of halting.
-    gate = _gate("G1")
+    gate = _gate("spec", step_index=0)
     gate["status"] = "decided"
     gate["decision"] = None
-    flow = _flow(stage="breakdown", gate=gate)
+    flow = _execute_flow("grill", gate=gate)
     action = fp.next_action(flow, None, {})
     assert action.kind == "halt"
     assert action.guidance_key == "halt.malformed_gate"
 
 
 def test_gate_with_no_id_halts_rather_than_a_question_mark_key():
-    gate = _gate("G1", decided="approve")
+    gate = _gate("spec", step_index=0, decided="approve")
     gate["id"] = None
-    flow = _flow(stage="breakdown", gate=gate)
+    flow = _execute_flow("grill", gate=gate)
     action = fp.next_action(flow, None, {})
     assert action.kind == "halt"
     assert action.guidance_key == "halt.malformed_gate"
 
 
 def test_unrecognised_gate_status_halts_rather_than_guessing():
-    gate = _gate("G1")
+    gate = _gate("spec", step_index=0)
     gate["status"] = "opening"
-    flow = _flow(stage="breakdown", gate=gate)
+    flow = _execute_flow("grill", gate=gate)
     action = fp.next_action(flow, None, {})
     assert action.kind == "halt"
     assert action.guidance_key == "halt.malformed_gate"
@@ -374,62 +416,60 @@ def test_recorded_preflight_opens_the_ship_gate():
     driver = {"preflight": {"clean_tree": True, "tests_pass": True}}
     action = fp.next_action(_sprint_flow(), _sprint_json("passing"), driver)
     assert action.kind == "gate_open"
-    assert action.gate_id == "G4"
-    assert action.guidance_key == "gate_open.g4"
+    assert action.gate_id == "accept"
+    assert action.guidance_key == "gate_open.accept"
 
 
-def test_ship_verdict_at_g4_executes_the_ship():
-    gate = _gate("G4", step_index=0, decided="ship")
+def test_ship_verdict_at_accept_executes_the_ship():
+    gate = _gate("accept", step_index=0, decided="ship")
     action = fp.next_action(_sprint_flow(gate=gate), _sprint_json("passing"), {})
     assert action.kind == "ship_execute"
     assert action.blocking == ""
     assert action.command == ""
-    assert action.gate_id == "G4"
+    assert action.gate_id == "accept"
     assert action.guidance_key == "ship_execute"
     assert "sprint/payoff-books" in action.why
 
 
+def test_stored_g4_ship_verdict_still_executes_the_ship():
+    gate = _gate("accept", step_index=0, decided="ship")
+    action = fp.next_action(_sprint_flow(gate=gate), _sprint_json("passing"), {})
+    assert action.kind == "ship_execute"
+    assert action.gate_id == "accept"
+
+
 def test_ship_execute_is_not_repeated_once_shipped():
-    gate = _gate("G4", step_index=0, decided="ship")
+    gate = _gate("accept", step_index=0, decided="ship")
     action = fp.next_action(_sprint_flow(gate=gate), _sprint_json("passing"),
                             {"shipped": True})
     assert action.kind == "gate_consume"
-    assert action.gate_id == "G4"
+    assert action.gate_id == "accept"
 
 
-def test_hold_and_park_at_g4_are_plain_consumes():
+def test_hold_and_park_at_accept_are_plain_consumes():
     for verdict in ("hold", "park"):
-        gate = _gate("G4", step_index=0, decided=verdict)
+        gate = _gate("accept", step_index=0, decided=verdict)
         action = fp.next_action(_sprint_flow(gate=gate),
                                 _sprint_json("passing"), {})
         assert action.kind == "gate_consume", verdict
-        assert action.guidance_key == "gate_consume.g4.{}".format(verdict)
+        assert action.guidance_key == "gate_consume.accept.{}".format(verdict)
 
 
-def test_open_g4_awaits_and_names_the_ship_verdicts():
-    gate = _gate("G4", step_index=0)
+def test_open_accept_awaits_and_names_the_ship_verdicts():
+    gate = _gate("accept", step_index=0)
     action = fp.next_action(_sprint_flow(gate=gate), _sprint_json("passing"), {})
     assert action.kind == "gate_await"
-    assert action.gate_id == "G4"
+    assert action.gate_id == "accept"
     for verdict in ("ship", "hold", "park"):
         assert verdict in action.why
 
 
-def test_ship_gate_constants_agree_with_flow_state_once_it_knows_g4():
-    # Slice c adds G4 to flow_state. Until it does, this asserts nothing about
-    # flow_state; after it does, it fails the moment the two disagree.
-    if fp.SHIP_GATE_ID in fs_gate_ids():
-        assert tuple(fs_verdicts(fp.SHIP_GATE_ID)) == fp.SHIP_VERDICTS
-
-
-def fs_gate_ids():
+def test_ship_gate_is_accept():
     import flow_state
-    return flow_state.GATE_IDS
-
-
-def fs_verdicts(gate_id):
-    import flow_state
-    return flow_state.VERDICTS_BY_GATE.get(gate_id, ())
+    assert fp.SHIP_GATE_ID == "accept"
+    assert fp.SPEC_GATE_ID == "spec"
+    assert fp.SHIP_VERDICTS == flow_state.VERDICTS_BY_GATE["accept"]
+    assert not hasattr(fp, "_RECOGNISED_GATE_IDS")
 
 
 # --- Task 3: the tail -------------------------------------------------------
@@ -479,16 +519,17 @@ def test_complete_tail_closes_the_flow():
 
 def _corpus():
     """(kind, flow, sprint, driver) covering every ACTION_KINDS value once."""
-    ship_gate = _gate("G4", step_index=0, decided="ship")
+    ship_gate = _gate("accept", step_index=0, decided="ship")
     full_tail = {"tail": {"brief_written": True, "hub_ingested": True,
                           "hub_refreshed": True}}
     return [
         ("flow_advance", _flow(stage="idea"), None, {}),
-        ("gate_open", _flow(stage="breakdown"), None, {}),
-        ("gate_await", _flow(stage="breakdown", status="awaiting-owner",
-                             gate=_gate("G1")), None, {}),
-        ("gate_consume", _flow(stage="breakdown",
-                               gate=_gate("G1", decided="approve")), None, {}),
+        ("gate_open", _execute_flow("grill"), None, {}),
+        ("gate_await", _execute_flow("grill", gate=_gate("spec", step_index=0)),
+         None, {}),
+        ("gate_consume", _execute_flow(
+            "grill", gate=_gate("spec", step_index=0, decided="approve")),
+         None, {}),
         ("sprint_launch", _sprint_flow(), None, {}),
         ("sprint_await", _sprint_flow(), _sprint_json("running"), {}),
         ("sprint_recover", _sprint_flow(), _sprint_json("failed"), {}),
@@ -524,7 +565,7 @@ TS_HP = "2026-07-18T09:14:03Z"
 
 
 def _consume_g4(flow, driver):
-    """Clear a decided G4 via the real transition function.
+    """Clear a decided accept via the real transition function.
 
     Was a hand-simulated stand-in (flow["gate"] = None; phase = "learn")
     before the 2026-08-24 ship-flag-reset fix. Now calls the production
@@ -536,7 +577,7 @@ def _consume_g4(flow, driver):
     """
     gate = dict(flow["gate"])
     cs = dict(flow["current_step"])
-    ft._consume_g4(flow, gate, cs, driver)
+    ft._consume_accept(flow, gate, cs, driver)
 
 
 def _drive_happy_path():
@@ -557,11 +598,7 @@ def _drive_happy_path():
     ft.advance(flow, TS_HP)                                  # idea -> design
     step()
     ft.advance(flow, TS_HP)                                  # design -> breakdown
-    step()
-    ft.open_gate(flow, "G1", None, TS_HP, "7QF3")
-    step()
-    ft.apply_gate_decision(flow, "approve", "", "session", TS_HP)
-    step()
+    step()                                                   # breakdown, no gate
     ft.advance(flow, TS_HP, steps=titles)                    # -> execute, grill
 
     running = {"status": "running", "worktree_branch": "sprint/payoff-books"}
@@ -569,7 +606,7 @@ def _drive_happy_path():
 
     for index in range(3):
         step()
-        ft.open_gate(flow, "G2", index, TS_HP, "7QF3")
+        ft.open_gate(flow, "spec", index, TS_HP, "7QF3")
         step()
         ft.apply_gate_decision(flow, "approve", "", "session", TS_HP)
         step()
@@ -578,21 +615,17 @@ def _drive_happy_path():
         step(sprint=running)                                 # sprint_await
         step(sprint=passing)                                 # ship_preflight
         driver["preflight"] = {"clean_tree": True}
-        step(sprint=passing)                                 # gate_open G4
-        ft.open_gate(flow, "G4", index, TS_HP, "7QF3")
-        step(sprint=passing)                                 # gate_await G4
+        step(sprint=passing)                                 # gate_open accept
+        ft.open_gate(flow, "accept", index, TS_HP, "7QF3")
+        step(sprint=passing)                                 # gate_await accept
         ft.apply_gate_decision(flow, "ship", "", "session", TS_HP)
         step(sprint=passing)                                 # ship_execute
         driver["shipped"] = True
-        step(sprint=passing)                                 # gate_consume G4
+        step(sprint=passing)                                 # gate_consume accept
         _consume_g4(flow, driver)
         assert not driver.get("shipped")
         assert "preflight" not in driver
-        step()                                               # gate_open G3
-        ft.open_gate(flow, "G3", index, TS_HP, "7QF3")
-        step()                                               # gate_await G3
-        ft.apply_gate_decision(flow, "proceed", "", "session", TS_HP)
-        step()                                               # gate_consume G3
+        step()                                               # flow_advance learn
         ft.advance(flow, TS_HP)                              # next step, or closed
 
     assert flow["stage"] == "closed"
@@ -608,16 +641,15 @@ def _drive_happy_path():
 
 
 _PER_STEP = [
-    ("gate_open", "G2"), ("gate_await", "G2"), ("gate_consume", "G2"),
+    ("gate_open", "spec"), ("gate_await", "spec"), ("gate_consume", "spec"),
     ("sprint_launch", None), ("sprint_await", None), ("ship_preflight", None),
-    ("gate_open", "G4"), ("gate_await", "G4"), ("ship_execute", "G4"),
-    ("gate_consume", "G4"), ("gate_open", "G3"), ("gate_await", "G3"),
-    ("gate_consume", "G3"),
+    ("gate_open", "accept"), ("gate_await", "accept"),
+    ("ship_execute", "accept"), ("gate_consume", "accept"),
+    ("flow_advance", None),
 ]
 
 HAPPY_PATH = (
-    [("flow_advance", None), ("flow_advance", None), ("gate_open", "G1"),
-     ("gate_await", "G1"), ("gate_consume", "G1")]
+    [("flow_advance", None), ("flow_advance", None), ("flow_advance", None)]
     + _PER_STEP * 3
     + [("brief_write", None), ("hub_ingest", None), ("hub_refresh", None),
        ("flow_close", None)]
@@ -625,16 +657,15 @@ HAPPY_PATH = (
 
 
 def test_the_full_happy_path_for_a_three_step_flow():
-    assert len(HAPPY_PATH) == 48
+    assert len(HAPPY_PATH) == 3 + 11 * 3 + 4
     assert _drive_happy_path() == HAPPY_PATH
 
 
 def test_the_happy_path_stops_for_a_human_exactly_at_the_gates():
     waits = [pair for pair in _drive_happy_path() if pair[0] == "gate_await"]
-    expected = [("gate_await", "G1")]
+    expected = []
     for _index in range(3):
-        expected += [("gate_await", "G2"), ("gate_await", "G4"),
-                     ("gate_await", "G3")]
+        expected += [("gate_await", "spec"), ("gate_await", "accept")]
     assert waits == expected
 
 
@@ -660,13 +691,10 @@ def test_next_action_does_not_mutate_its_inputs():
 
 
 def test_an_awaiting_gate_never_yields_a_non_blocking_action():
-    for gate_id, phase, step_index in (("G1", None, None), ("G2", "grill", 0),
-                                       ("G3", "learn", 0), ("G4", "sprint", 0)):
-        gate = _gate(gate_id, step_index=step_index)
-        if phase is None:
-            flow = _flow(stage="breakdown", status="awaiting-owner", gate=gate)
-        else:
-            flow = _execute_flow(phase, gate=gate, spec_path=SPEC_PATH)
+    for gate_id, phase in (("spec", "grill"), ("G2", "grill"),
+                           ("accept", "sprint"), ("G4", "sprint")):
+        gate = _gate(gate_id, step_index=0)
+        flow = _execute_flow(phase, gate=gate, spec_path=SPEC_PATH)
         action = fp.next_action(flow, _sprint_json("passing"), {})
         assert action.blocking == "human", gate_id
         assert action.kind == "gate_await", gate_id

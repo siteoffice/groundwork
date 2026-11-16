@@ -73,7 +73,17 @@
     "approve_action": "Genehmigen",
     "save_layout": "Layout speichern",
     "layout_saved": "Layout gespeichert",
-    "sync_helper_offline": "Sync-Helper offline"
+    "sync_helper_offline": "Sync-Helper offline",
+    "gate_decide": "Entscheiden",
+    "gate_spec": "Spezifikation freigeben",
+    "gate_accept": "Abnehmen",
+    "gate_retired": "eingestellt (Erkenntnisse laufen ohne Gate)",
+    "gate_position": "Gate {n} von {total}",
+    "verdict_approve": "Freigeben",
+    "verdict_reject": "Ablehnen (diesen Schritt nicht bauen)",
+    "verdict_park": "Parken (pausieren, später antworten)",
+    "verdict_ship": "Ausliefern (abnehmen und mergen)",
+    "verdict_hold": "Zurückhalten (zurückschicken)"
   },
   "_verify": {
     "hours_criterion": "Urencriterium (1.225 Stunden) und der Status der startersaftrek nach 2026 sind RELAYED, VERIFY gegen belastingdienst.nl; siehe 04_assets/_grill_state.md",

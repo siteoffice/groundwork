@@ -29,6 +29,9 @@ import outbox
 
 # --- reply-ignored reasons (module constants so tests assert on them) -------
 WRONG_TOKEN = "wrong-token"
+GATE_RETIRED = "gate retired"
+
+_WRAP_CHARS = "`*_~\"'<>()[]{}.,;:!?"
 NOT_THREADED = "not-threaded-and-wrong-subject"
 BEFORE_OPEN = "before-open"
 ALREADY_PROCESSED = "already-processed"
@@ -37,7 +40,7 @@ INVALID_VERB_FOR_GATE = "invalid-verb-for-gate"
 NO_RECOGNIZED_VERB = "no-recognized-verb"
 
 # Every verb the parser recognizes at body start (union across all gates).
-# ship / hold are G4's, added by slice c (spec 2026-08-17 item 9): the terminal
+# ship / hold are the accept gate's, added by slice c (spec 2026-08-17 item 9): the terminal
 # sweep now stops at the ship gate, so a reply to that notification has to parse.
 RECOGNIZED_VERBS = ("approve", "reject", "proceed", "adapt", "close", "park",
                     "ship", "hold")
@@ -241,6 +244,16 @@ def _is_threaded(message: dict, ctx: dict) -> bool:
     return False
 
 
+def _retired_token_in(body: str) -> Optional[str]:
+    """First word of the body that is a gate token for a retired gate, else None."""
+    for word in (body or "").split():
+        word = word.strip(_WRAP_CHARS)
+        gate = outbox.token_gate(word)
+        if gate and fs.is_retired_gate(gate):
+            return word
+    return None
+
+
 def plan_decisions(messages, flows, surface: str = "email") -> dict:
     """Turn fetched mailbox replies into /flow gate decisions (spec lines 36-52).
 
@@ -270,18 +283,31 @@ def plan_decisions(messages, flows, surface: str = "email") -> dict:
         ctx = _match_flow(message, flows)
         if ctx is None:
             # Not ours: no open/decided gate token present. Do NOT ledger.
-            ignored.append({"message_id": mid, "reason": WRONG_TOKEN,
-                            "token": None})
+            retired = _retired_token_in(message.get("body", ""))
+            if retired is not None:
+                ignored.append({"message_id": mid, "reason": WRONG_TOKEN,
+                                "token": retired, "detail": GATE_RETIRED})
+            else:
+                ignored.append({"message_id": mid, "reason": WRONG_TOKEN,
+                                "token": None})
             continue
 
         flow = ctx["flow"]
         gate = flow["gate"]
         token = gate["token"]
 
-        def _ignore(reason: str, ledger: bool = True):
-            ignored.append({"message_id": mid, "reason": reason, "token": token})
+        def _ignore(reason: str, ledger: bool = True, detail: Optional[str] = None):
+            rec = {"message_id": mid, "reason": reason, "token": token}
+            if detail:
+                rec["detail"] = detail
+            ignored.append(rec)
             if ledger and mid not in mark_processed:
                 mark_processed.append(mid)
+
+        # A flow whose stored gate is retired takes no decision.
+        if fs.is_retired_gate(gate.get("id")):
+            _ignore(WRONG_TOKEN, detail=GATE_RETIRED)
+            continue
 
         # First-decision-wins: a matched-but-decided gate is closed to replies.
         if gate.get("status") == "decided":

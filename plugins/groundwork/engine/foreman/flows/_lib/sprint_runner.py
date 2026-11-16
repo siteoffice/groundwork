@@ -169,8 +169,14 @@ def run_once(flow_dir, project: str, slug: str, command: str, spec_path: str,
             # Terminal first: "someone already ran it" is the more useful
             # sentence in the receipt than "the line looks wrong" when both are
             # true, and it is the cheaper mistake to make.
+            try:
+                cleared = ft.load_flow(flow_dir).get("regrill_cleared") or ()
+            except (OSError, ValueError):
+                cleared = ()  # no readable flow.json: nothing was re-grilled
+            extra = {"exclude_ids": cleared} if cleared else {}
             match = ts.has_terminal_sprint(project, spec_path,
-                                           ts.discover_sprints(sprints_root))
+                                           ts.discover_sprints(sprints_root),
+                                           **extra)
             if match:
                 _receipt(flow_dir, now, session_id, "skipped_terminal",
                          "sprint {} status={} already terminal for this spec".format(

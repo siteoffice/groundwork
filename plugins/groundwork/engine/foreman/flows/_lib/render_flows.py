@@ -162,6 +162,8 @@ def render_status_text(flow_dir) -> str:
         flow = json.loads(fp.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         return f"error: flow.json malformed: {exc}"
+    import flow_state as fs  # local: the vendored-layout test loads this file alone
+    fs.normalize_flow(flow)
     gate = flow.get("gate") if isinstance(flow.get("gate"), dict) else None
     lines = [
         "-" * 60,

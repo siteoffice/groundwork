@@ -8,7 +8,7 @@ import slack_channel as slk
 PARENT_TS = "1721640000.000000"   # 2024-... parent; exact value irrelevant
 
 
-def _gate(project="dsi", slug="payoff", gate_id="G2", step_index=2,
+def _gate(project="dsi", slug="payoff", gate_id="spec", step_index=2,
           status="awaiting-owner", opened_at="2026-07-18T09:14:03Z", nonce="7QF3"):
     token = fs.gate_token(project, slug, gate_id, step_index, opened_at, nonce)
     return {"id": gate_id, "step_index": step_index, "status": status,
@@ -116,7 +116,7 @@ def test_normalize_already_processed_is_noop():
 
 
 def test_normalize_invalid_verb_for_gate_yields_courtesy():
-    flow = _flow(_gate(gate_id="G1", step_index=None))   # G1: approve|reject|park
+    flow = _flow(_gate(gate_id="spec", step_index=0))   # spec: approve|reject|park
     tok = flow["gate"]["token"]
     replies = [_reply(_ts_after_open(), f"proceed token {tok}")]
     msgs, ctx2 = slk.normalize_thread(PARENT_TS, "C123", replies, _ctx(flow))
@@ -131,7 +131,7 @@ def test_compose_gate_prompt_contains_token_verbatim():
     tok = flow["gate"]["token"]
     body = slk.compose_gate_prompt(flow["gate"], flow)
     assert tok in body                                   # still shown, for reference
-    assert "spec approval" in body                       # outbox.gate_name("G2")
+    assert "Approve spec" in body                        # outbox.gate_name("spec")
     assert "approve" in body and "reject" in body        # outbox.reply_verbs_line
     assert "file:///" in body                            # dashboard link
     assert "measure payoff" in body                      # flow idea (more context)
@@ -145,7 +145,7 @@ def test_compose_reminder_repeats_context_and_verbs():
     tok = flow["gate"]["token"]
     body = slk.compose_reminder(flow["gate"], flow)
     assert "dsi/payoff" in body                          # project/slug context
-    assert "spec approval" in body                       # gate name
+    assert "Approve spec" in body                        # gate name
     assert "measure payoff" in body                      # idea
     assert "approve" in body and "reject" in body        # reply verbs, not just a token
     assert tok in body
@@ -155,10 +155,10 @@ def test_compose_reminder_repeats_context_and_verbs():
 
 def test_compose_alert_digest_has_gates_and_week_plan():
     body = slk.compose_alert_digest(
-        open_gates=["dsi/payoff G2 (spec approval)"],
+        open_gates=["dsi/payoff spec (spec approval)"],
         week_plan=["WED: DSI S1 calls", "THU: DSI build behind S1"],
         generated_at="2026-07-22T08:00:00Z")
-    assert "dsi/payoff G2 (spec approval)" in body      # open-gate list
+    assert "dsi/payoff spec (spec approval)" in body      # open-gate list
     assert "WED: DSI S1 calls" in body                  # this-week plan
     assert "—" not in body
 

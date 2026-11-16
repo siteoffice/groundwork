@@ -4,7 +4,7 @@ without the private ZND hub installed.
 Same isolation technique flows/_lib/test_lib_imports.py already uses: a
 child interpreter with ONLY foreman\\flows\\_lib on sys.path, cwd outside any
 repository, PYTHONPATH cleared and no ZND_HUB_ROOT/ZND_DATA_ROOT pointing at
-the real hub. The child creates a flow, opens a G2 gate and approves it,
+the real hub. The child creates a flow, opens a spec gate and approves it,
 using nothing but this package plus stdlib. Proves the engine runs standalone
 from a customer-style checkout, not merely that it imports (test_lib_imports.py
 already proved the import).
@@ -33,7 +33,7 @@ flow["steps"] = [{{"index": 2, "title": "build it", "status": "running"}}]
 ft.write_flow(flow_dir, flow)
 
 flow = ft.load_flow(flow_dir)
-ft.persist_open_gate(flow_dir, flow, "G2", 2,
+ft.persist_open_gate(flow_dir, flow, "spec", 2,
                       now="2026-09-16T09:05:00Z", nonce="AB12")
 ft.cmd_gate(flow_dir, "approve", surface="session",
             now="2026-09-16T09:06:00Z")

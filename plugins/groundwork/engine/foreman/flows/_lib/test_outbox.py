@@ -1,3 +1,4 @@
+# Old codes (G1 to G4) below are stored old records kept on purpose (OF30).
 """Tests for outbox.py. Plain pytest, stdlib only, hermetic (tmp_path).
 
 Covers the four spec assertions (spec lines 75-84):
@@ -12,7 +13,7 @@ import flow_state as fs
 import outbox
 
 
-def _flow(project="dsi", slug="payoff", gate_id="G2", step_index=2,
+def _flow(project="dsi", slug="payoff", gate_id="spec", step_index=2,
           now="2026-07-18T09:14:03Z", nonce="7QF3"):
     """A flow parked in execute with a fresh awaiting-owner gate (Task-1 fixture).
 
@@ -45,13 +46,13 @@ def _flow(project="dsi", slug="payoff", gate_id="G2", step_index=2,
 
 
 def test_compose_subject_uses_flow_gate_name_convention():
-    flow = _flow(project="dsi", slug="payoff", gate_id="G2")
+    flow = _flow(project="dsi", slug="payoff", gate_id="spec")
     subject, _body = outbox.compose(flow["gate"], flow)
-    assert subject == "[FLOW dsi/payoff] gate: spec approval"
+    assert subject == "[FLOW dsi/payoff] gate: Approve spec"
 
 
 def test_compose_body_contains_token_link_command_and_verbs():
-    flow = _flow(gate_id="G2")
+    flow = _flow(gate_id="spec")
     gate = flow["gate"]
     _subject, body = outbox.compose(gate, flow)
     # flow ID and gate token
@@ -66,13 +67,21 @@ def test_compose_body_contains_token_link_command_and_verbs():
     assert "approve" in body and "reject" in body and "park" in body
 
 
-def test_compose_g3_body_offers_proceed_adapt_close_verbs():
+def test_compose_g3_body_offers_only_park():
     flow = _flow(gate_id="G3", step_index=1)
     _subject, body = outbox.compose(flow["gate"], flow)
-    assert "proceed" in body
-    assert "adapt: <note>" in body
-    assert "close" in body
     assert "park" in body
+    assert "adapt: <note>" not in body  # retired gate: only park remains
+
+
+def test_compose_names_the_gate_position_and_lists_verdict_meanings():
+    flow = _flow(gate_id="accept", step_index=1)
+    subject, body = outbox.compose(flow["gate"], flow)
+    assert subject == "[FLOW dsi/payoff] gate: Accept"
+    assert "Accept, gate 2 of 2 gate (accept)" in body
+    assert "Reply with: ship | hold | park\n" in body
+    assert "  ship: Ship (accept and merge)\n" in body
+    assert "  hold: Hold (send back)\n" in body
 
 
 def test_compose_is_pure_same_inputs_same_outputs():
@@ -112,8 +121,8 @@ def test_append_gate_open_writes_one_pending_entry_with_send_after(tmp_path):
     # send_after == opened_at + 15 min (spec lines 42-44)
     assert row["send_after"] == "2026-07-18T09:29:03Z"
     # record carries the composed subject/body and the derived links
-    assert row["subject"] == "[FLOW dsi/payoff] gate: spec approval"
-    assert row["gate_id"] == "G2"
+    assert row["subject"] == "[FLOW dsi/payoff] gate: Approve spec"
+    assert row["gate_id"] == "spec"
     assert row["token"] == flow["gate"]["token"]
     assert row["dashboard_link"] == outbox.dashboard_link(flow)
     assert row["next_command"] == "/flow dsi payoff"

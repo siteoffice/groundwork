@@ -40,10 +40,9 @@ FLOWS_ROOT = roots.flows_root()
 
 # Gate display names (flow-system-design lines 28-30).
 GATE_NAMES = {
-    "G1": "design approval",
-    "G2": "spec approval",
-    "G3": "learnings review",
-    "G4": "ship approval",
+    "decide": "Decide",
+    "spec": "Approve spec",
+    "accept": "Accept",
 }
 
 _TS_FMT = "%Y-%m-%dT%H:%M:%SZ"
@@ -56,7 +55,7 @@ OUTBOX_STATUSES = ("pending", "sent", "voided", "failed")
 
 def gate_name(gate_id: str) -> str:
     """Human gate name for the subject line; unknown ids fall back to the id."""
-    return GATE_NAMES.get(gate_id, gate_id)
+    return GATE_NAMES.get(fs.canonical_gate(gate_id), gate_id)
 
 
 def dashboard_link(flow: dict, flows_root: Optional[pathlib.Path] = None) -> str:
@@ -79,12 +78,22 @@ def reply_verbs_line(gate_id: str) -> str:
     """Gate-appropriate reply verbs, e.g. 'approve | reject | park'.
 
     Sourced from flow_state.valid_verdicts so this never drifts from the schema.
-    The G3 'adapt' verb is rendered as 'adapt: <note>' (spec line 58).
     """
-    parts = []
-    for verb in fs.valid_verdicts(gate_id):
-        parts.append("adapt: <note>" if verb == "adapt" else verb)
-    return " | ".join(parts)
+    return " | ".join(fs.valid_verdicts(gate_id))
+
+
+def breakdown_block(gate: dict, flow: dict) -> str:
+    """The step list a first spec card shows (step_index 0): every step as
+    `<n>. <title>`, or `Breakdown: one step`. Empty for any other gate."""
+    if fs.canonical_gate(gate.get("id")) != "spec" or gate.get("step_index") != 0:
+        return ""
+    titles = [st.get("title") if isinstance(st, dict) else st
+              for st in (flow.get("steps") or [])]
+    if len(titles) <= 1:
+        return "Breakdown: one step\n"
+    return "Breakdown:\n" + "".join(
+        "{}. {}\n".format(i + 1, str(t).replace("\n", " "))
+        for i, t in enumerate(titles))
 
 
 def compose(gate: dict, flow: dict,
@@ -99,29 +108,46 @@ def compose(gate: dict, flow: dict,
     """
     gid = gate["id"]
     name = gate_name(gid)
+    regrill = gate.get("regrill")
+    if regrill:
+        name = f"re-grill ({gid})"
     subject = f"[FLOW {flow['project']}/{flow['slug']}] gate: {name}"
 
     link = dashboard_link(flow, flows_root=flows_root)
     cmd = next_command(flow)
     verbs = reply_verbs_line(gid)
+    meanings = "".join(
+        f"  {v}: {fs.VERDICT_MEANINGS[v]}\n"
+        for v in fs.valid_verdicts(gid) if v in fs.VERDICT_MEANINGS)
     token = gate["token"]
     idea = flow.get("idea", "")
 
+    position = fs.gate_label(gid)
+    shown = f"{name}, {position}" if position else name
     context = (
         f"Flow {flow['flow_id']} ({flow['project']}/{flow['slug']}) has reached the "
-        f"{name} gate ({gid}) in stage {flow.get('stage')}. Idea: {idea}. "
+        f"{shown} gate ({gid}) in stage {flow.get('stage')}. Idea: {idea}. "
         f"It is waiting on your decision before it can proceed."
     )
+    breakdown = breakdown_block(gate, flow)
     body = (
         f"{context}\n\n"
+        f"{breakdown + chr(10) if breakdown else ''}"
         f"Flow ID: {flow['flow_id']}\n"
         f"Gate token: {token}\n"
         f"Dashboard: {link}\n"
         f"Next command: {cmd}\n\n"
         f"Reply with: {verbs}\n"
+        f"{meanings}"
         f"Reply in-thread, or send a fresh mail with the same subject, "
         f"quoting the token {token}.\n"
     )
+
+    if regrill:
+        body += (
+            "\nRe-grill after {}, iteration {}/{}. Sprint report: {}\n".format(
+                regrill.get("status"), regrill.get("iteration"),
+                regrill.get("max_iterations"), regrill.get("report")))
 
     sweep = gate.get("sweep_context")
     if sweep:
@@ -175,24 +201,31 @@ def read_outbox(flow_dir) -> List[dict]:
 # Anchored at the end and matched as a whole because a slug may itself contain
 # hyphens (flow_state.slugify joins up to five hyphen-separated tokens), so
 # splitting the token by position is not safe.
-_STEP_TOKEN_RE = re.compile(r"-(G\d+)-S(\d+)-(\d{8}T\d{6}Z)-([A-Za-z0-9]+)$")
+_STEP_TOKEN_RE = re.compile(
+    r"-(G\d+|H\d+|decide|spec|accept)-S(\d+)-(\d{8}T\d{6}Z)-([A-Za-z0-9]+)$")
 
 
 def token_step_index(token: str) -> Optional[int]:
     """The step index encoded in a gate token, or None.
 
-    None for a G1 token (flow_state.gate_token omits the -S<step> part when
+    None for a plan gate token (flow_state.gate_token omits the -S<step> part when
     step_index is None) and for anything that is not a gate token. Pure.
     """
     m = _STEP_TOKEN_RE.search(token or "")
     return int(m.group(2)) if m else None
 
 
+def token_gate(token: str) -> Optional[str]:
+    """The raw gate part of a gate token (spec, accept, ...), or None. Pure."""
+    m = _STEP_TOKEN_RE.search(token or "")
+    return m.group(1) if m else None
+
+
 def find_step_parent_ts(flow_dir, step_index) -> Optional[str]:
     """The earliest Slack thread parent ts recorded for this flow's step.
 
-    One step can open several gates (a G2 spec gate, then a G4 ship gate, then
-    a G3 learn gate). Without this lookup each gate opens a fresh Slack thread
+    One step can open several gates (a spec gate, then an accept gate, then
+    a learn gate). Without this lookup each gate opens a fresh Slack thread
     and the step's conversation is scattered across three of them; the connector
     host calls this before composing a new prompt and threads the prompt into
     the found ts instead.

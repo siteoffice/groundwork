@@ -7,19 +7,37 @@ shipped files exist and are well formed. render_guidance's own behaviour is
 tested against an injected guidance_root in test_render_guidance.py.
 """
 import pathlib
+import re
 
 GUIDANCE_ROOT = pathlib.Path(__file__).resolve().parent / "guidance"
 
 EXPECTED_KEYS = (
-    "gate_open.g1", "gate_open.g2", "gate_open.g3", "gate_open.g4",
-    "gate_await.g1", "gate_await.g2", "gate_await.g3", "gate_await.g4",
-    "gate_consume.g1.approve", "sprint_await", "sprint_launch", "ship_execute",
+    "gate_open.spec", "gate_await.spec", "gate_consume.spec.approve",
+    "gate_open.accept", "gate_await.accept",
+    "sprint_await", "sprint_launch", "ship_execute",
 )
 
 
-def test_the_guidance_directory_holds_exactly_the_twelve_expected_fragments():
-    found = sorted(p.name for p in GUIDANCE_ROOT.glob("*.md"))
-    assert found == sorted(key + ".md" for key in EXPECTED_KEYS)
+def test_the_guidance_directory_holds_the_expected_fragments():
+    for key in EXPECTED_KEYS:
+        assert (GUIDANCE_ROOT / (key + ".md")).is_file(), key
+
+
+def test_the_guidance_directory_holds_exactly_the_eight_expected_fragments():
+    assert sorted(p.name for p in GUIDANCE_ROOT.glob("*.md")) == sorted(
+        k + ".md" for k in EXPECTED_KEYS)
+
+
+def test_no_gate_coded_file_remains():
+    leftovers = [p.name for p in GUIDANCE_ROOT.iterdir()
+                 if re.search(r"\.g[1-4]\.", p.name)]
+    assert leftovers == []
+
+
+def test_no_fragment_names_an_old_gate_code():
+    for key in EXPECTED_KEYS:
+        text = (GUIDANCE_ROOT / (key + ".md")).read_text(encoding="utf-8")
+        assert not re.search(r"G[1-4]", text), key
 
 
 def test_every_fragment_is_non_empty():

@@ -221,7 +221,7 @@ class TestRoadmapPanel(unittest.TestCase):
             (node_dir / "02_roadmap").mkdir()
             soon = (date.today() + timedelta(days=5)).isoformat()
             (node_dir / "02_roadmap" / "roadmap.md").write_text(
-                f"# roadmap\n\n1. Ship the thing, due {soon} [gate:G4]\n", encoding="utf-8",
+                f"# roadmap\n\n1. Ship the thing, due {soon} [gate:accept]\n", encoding="utf-8",
             )
             manifest = render_board.load_manifest(node_dir)
             state, data = tpl_roadmap.collect(manifest)
@@ -229,7 +229,7 @@ class TestRoadmapPanel(unittest.TestCase):
                 data, render_board.all_labels_for("en", manifest["labels"]), state
             )
             self.assertIn("tl-gate", html)
-            self.assertIn('<span class="tl-gate-label">G4</span>', html)
+            self.assertIn('<span class="tl-gate-label">accept</span>', html)
             # The tag is stripped from both the timeline title and the
             # priority-list line, never shown verbatim.
             self.assertNotIn("[gate:", html)
@@ -259,7 +259,7 @@ class TestRoadmapPanel(unittest.TestCase):
             (node_dir / "02_roadmap").mkdir()
             (node_dir / "02_roadmap" / "roadmap.md").write_text(
                 "# roadmap\n\n1. Only priority\n\n"
-                "## Backlog\n\n- idea one [gate:G2]\n- idea two [gate:G2]\n- plain idea\n",
+                "## Backlog\n\n- idea one [gate:spec]\n- idea two [gate:G2]\n- plain idea\n",
                 encoding="utf-8",
             )
             manifest = render_board.load_manifest(node_dir)
@@ -267,15 +267,15 @@ class TestRoadmapPanel(unittest.TestCase):
             html = tpl_roadmap.render(
                 data, render_board.all_labels_for("en", manifest["labels"]), state
             )
-            self.assertIn('<div class="group"><div class="group-head"><h3>G2</h3>', html)
+            self.assertIn('<div class="group"><div class="group-head"><h3>spec</h3>', html)
             self.assertIn("2 items", html)
             self.assertIn(
                 '<div class="group-head"><h3>Ungrouped</h3>', html,
             )
             self.assertIn("1 item<", html)
-            self.assertIn('data-slice-btn="G2"', html)
+            self.assertIn('data-slice-btn="spec"', html)
             self.assertIn('data-slice-btn="all"', html)
-            self.assertEqual(html.count('data-gate="G2"'), 2)
+            self.assertEqual(html.count('data-gate="spec"'), 2)
             # The tag itself never leaks into the displayed item text.
             self.assertNotIn("[gate:", html)
 
@@ -317,34 +317,52 @@ class TestRoadmapPanel(unittest.TestCase):
             self.assertNotIn("slice-rail", html)
             self.assertIn('<div class="group-head"><h3>Ungrouped</h3>', html)
 
-    def test_backlog_groups_render_in_gate_execution_order_not_numeric(self):
-        # Foreman's real sequence is G1 -> G2 -> G4 -> G3 (G4 fires before
-        # G3, docs\znd_os_flow_operator_guide.html section 06). Group
-        # headers and the slice rail must follow that order, not G1 < G2 <
-        # G3 < G4, so the rail reads left to right as gates actually happen.
+    def _render_roadmap(self, body):
         with tempfile.TemporaryDirectory() as tmp:
             node_dir = pathlib.Path(tmp)
             _write_manifest(node_dir)
             (node_dir / "02_roadmap").mkdir()
-            (node_dir / "02_roadmap" / "roadmap.md").write_text(
-                "# roadmap\n\n1. Only priority\n\n"
-                "## Backlog\n\n"
-                "- learn item [gate:G3]\n"
-                "- ship item [gate:G4]\n"
-                "- breakdown item [gate:G1]\n"
-                "- grill item [gate:G2]\n",
-                encoding="utf-8",
-            )
+            (node_dir / "02_roadmap" / "roadmap.md").write_text(body, encoding="utf-8")
             manifest = render_board.load_manifest(node_dir)
             state, data = tpl_roadmap.collect(manifest)
-            html = tpl_roadmap.render(
+            return tpl_roadmap.render(
                 data, render_board.all_labels_for("en", manifest["labels"]), state
             )
-            headings_order = [
-                g for g in ("G1", "G2", "G4", "G3")
-            ]
-            positions = [html.index(f"<h3>{g}</h3>") for g in headings_order]
-            self.assertEqual(positions, sorted(positions))
+
+    def test_backlog_groups_render_in_gate_order_with_learnings_last(self):
+        # Grouping follows board_common.GATE_ORDER (decide, spec, accept),
+        # then learnings; old codes read through the alias table.
+        html = self._render_roadmap(
+            "# roadmap\n\n1. Only priority\n\n## Backlog\n\n"
+            "- learn item [gate:G3]\n"
+            "- ship item [gate:accept]\n"
+            "- breakdown item [gate:G1]\n"
+            "- decide item [gate:decide]\n"
+        )
+        positions = [html.index(f"<h3>{g}</h3>") for g in ("decide", "spec", "accept", "learnings")]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn('data-slice-btn="decide"', html)
+        self.assertIn('data-slice-btn="spec"', html)
+        self.assertIn('data-slice-btn="accept"', html)
+        self.assertNotIn('data-slice-btn="learnings"', html)
+        self.assertNotIn("[gate:", html)
+
+    def test_old_codes_g1_g2_g4_read_as_names(self):
+        html = self._render_roadmap(
+            "# roadmap\n\n1. Only priority\n\n## Backlog\n\n"
+            "- a [gate:G1]\n- b [gate:G2]\n- c [gate:G4]\n"
+        )
+        self.assertEqual(html.count('data-gate="spec"'), 2)
+        self.assertEqual(html.count('data-gate="accept"'), 1)
+        self.assertNotIn("<h3>G1</h3>", html)
+
+    def test_learnings_priority_renders_as_plain_mark_not_a_gate(self):
+        soon = (date.today() + timedelta(days=5)).isoformat()
+        html = self._render_roadmap(
+            f"# roadmap\n\n1. Look back, due {soon} [gate:G3]\n"
+        )
+        self.assertIn("tl-mark", html)
+        self.assertNotIn("tl-gate", html)
 
 
 class TestChildrenPanel(unittest.TestCase):
@@ -660,13 +678,61 @@ class TestFunnelPanel(unittest.TestCase):
             self.assertEqual(state, tpl_funnel.STATE_NORMAL)
             columns = {c["stage"]: c for c in data["columns"]}
             self.assertEqual(len(columns["01_inbox"]["cards"]), 2)
-            self.assertEqual(columns["01_inbox"]["cards"][0]["gate"], "G1")
+            self.assertEqual(columns["01_inbox"]["cards"][0]["gate"], "decide")
             self.assertTrue(columns["01_inbox"]["overLimit"])
             self.assertFalse(columns["02_shaped"]["overLimit"])
             html = tpl_funnel.render(
                 data, render_board.all_labels_for("en", manifest["labels"]), state
             )
             self.assertIn("chip dirty", html)
+
+    def _gate_funnel(self, tmp, stages, loose=True):
+        node_dir = pathlib.Path(tmp)
+        _write_manifest(node_dir)
+        funnel_dir = node_dir / "00_funnel"
+        funnel_dir.mkdir(parents=True)
+        if loose:
+            (funnel_dir / "a.md").write_text("# loose a", encoding="utf-8")
+        for name in stages:
+            d = funnel_dir / name
+            d.mkdir()
+            (d / "c.md").write_text("# card " + name, encoding="utf-8")
+        return node_dir, funnel_dir
+
+    def test_funnel_gate_with_zero_one_and_three_stage_folders(self):
+        def gates(stages):
+            with tempfile.TemporaryDirectory() as tmp:
+                _node, funnel_dir = self._gate_funnel(tmp, stages)
+                return [
+                    (name, [c["gate"] for c in cards])
+                    for name, _label, cards in tpl_funnel.collect_columns(funnel_dir)
+                ]
+        self.assertEqual(gates([]), [("inbox", [None])])
+        self.assertEqual(gates(["01_x"]), [("inbox", ["decide"]), ("01_x", [None])])
+        self.assertEqual(
+            gates(["01_a", "02_b", "03_c"]),
+            [("inbox", [None]), ("01_a", [None]), ("02_b", ["decide"]), ("03_c", [None])],
+        )
+
+    def test_waiting_on_you_lists_only_decide_cards(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            node_dir, _f = self._gate_funnel(tmp, ["01_a", "02_b", "03_c"], loose=False)
+            manifest = render_board.load_manifest(node_dir)
+            state, data = tpl_waiting_on_you.collect(manifest)
+            self.assertEqual(state, tpl_waiting_on_you.STATE_NORMAL)
+            self.assertEqual(len(data["items"]), 1)
+            self.assertIn("02_b: card 02_b", data["items"][0]["text"])
+
+    def test_funnel_chip_shows_decide_without_a_number(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            node_dir, _f = self._gate_funnel(tmp, ["01_a", "02_b", "03_c"], loose=False)
+            manifest = render_board.load_manifest(node_dir)
+            state, data = tpl_funnel.collect(manifest)
+            html = tpl_funnel.render(
+                data, render_board.all_labels_for("en", manifest["labels"]), state
+            )
+            self.assertEqual(html.count('<span class="chip mono">decide</span>'), 1)
+            self.assertNotIn("gate 1 of", html)
 
     def test_filename_parsing_bad_filename_falls_back_to_mtime_and_unknown(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1031,6 +1097,36 @@ class TestReceiptsPanel(unittest.TestCase):
                 data, render_board.all_labels_for("en", manifest["labels"]), state
             )
             self.assertIn("overruled", html)
+
+    def test_old_codes_and_gate_names_in_the_log_count_the_same(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            node_dir = pathlib.Path(tmp)
+            _write_manifest(node_dir, flows="flows")
+            now = datetime.now(timezone.utc)
+            t1 = (now - timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            t2 = (now - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+            def log(first, second):
+                return [
+                    {"ts": t1, "action": "driver_fence", "outcome": "blocked",
+                     "detail": "execute_error: something broke"},
+                    {"ts": t2, "action": "gate_decided", "outcome": "pass",
+                     "detail": f"{first} verdict=approve"},
+                    {"ts": t2, "action": "gate_decided", "outcome": "pass",
+                     "detail": f"{second} verdict=ship"},
+                ]
+            self._write_flow_log(node_dir, "proj", "old", log("G1", "G4"))
+            self._write_flow_log(node_dir, "proj", "new", log("spec", "accept"))
+            manifest = render_board.load_manifest(node_dir)
+            state, data = tpl_receipts.collect(manifest)
+            self.assertEqual(state, tpl_receipts.STATE_NORMAL)
+            self.assertEqual(data["window_30"]["decided"], 4)
+            self.assertEqual(data["window_30"]["overruled"], 2)
+            old_only = tpl_receipts._flow_gate_decisions(
+                node_dir / "flows" / "proj" / "old" / "flow-log.ndjson")
+            new_only = tpl_receipts._flow_gate_decisions(
+                node_dir / "flows" / "proj" / "new" / "flow-log.ndjson")
+            self.assertEqual([d[1:] for d in old_only], [d[1:] for d in new_only])
 
     def test_reject_after_a_blocked_entry_is_not_an_override(self):
         """R06: even rejecting the work must not increase the override

@@ -1,3 +1,4 @@
+# Old codes (G1 to G4) below are stored old records kept on purpose (OF30).
 """Tests for sweep_core.py. Plain pytest, stdlib only, fixtures only.
 
 No live mailbox is read and no email is sent anywhere in these tests or in the
@@ -11,7 +12,7 @@ import sweep_core as sc
 
 # --- shared fixture builders (used by Tasks 1-3) ---------------------------
 
-def _gate(project="dsi", slug="payoff", gate_id="G2", step_index=2,
+def _gate(project="dsi", slug="payoff", gate_id="spec", step_index=2,
           status="awaiting-owner", opened_at="2026-07-18T09:14:03Z",
           nonce="7QF3", verdict=None):
     token = fs.gate_token(project, slug, gate_id, step_index, opened_at, nonce)
@@ -107,14 +108,14 @@ def test_parse_verb_adapt_with_backtick_wrapper_still_captures_note():
 
 
 def test_recognized_verbs_cover_every_gate_verdict():
-    for gid in fs.GATE_IDS:
+    for gid in fs.ACTIVE_GATES:
         for verdict in fs.valid_verdicts(gid):
             assert verdict in sc.RECOGNIZED_VERBS
 
 
 def test_recognized_verbs_cover_the_ship_gate_verdicts():
     """Spec item 9: a reply to the sweep's G4 notification has to parse."""
-    for verdict in fs.valid_verdicts("G4"):
+    for verdict in fs.valid_verdicts("accept"):
         assert verdict in sc.RECOGNIZED_VERBS
 
 
@@ -308,7 +309,7 @@ def test_plan_decisions_accepts_fresh_mail_by_exact_subject():
     tok = _token_of(flow)
     # Not a thread reply (in_reply_to unknown), but exact gate subject + token.
     msg = _msg(message_id="<FRESH>", body=f"approve token {tok}",
-               subject="[FLOW dsi/payoff] gate: spec approval",
+               subject="[FLOW dsi/payoff] gate: Approve spec",
                in_reply_to="<unrelated>")
     out = sc.plan_decisions([msg], [_flow_ctx(flow)])
     assert len(out["decisions"]) == 1
@@ -356,7 +357,7 @@ def test_plan_decisions_rejects_already_processed_id():
 
 
 def test_plan_decisions_invalid_verb_for_gate_yields_courtesy():
-    flow = _flow(gate=_gate(gate_id="G1", step_index=None))  # G1: approve|reject|park
+    flow = _flow(gate=_gate(gate_id="spec", step_index=0))  # spec: approve|reject|park
     tok = _token_of(flow)
     msg = _msg(message_id="<EEE>", body=f"proceed token {tok}",
                subject="[FLOW dsi/payoff] gate: design approval")
@@ -365,7 +366,7 @@ def test_plan_decisions_invalid_verb_for_gate_yields_courtesy():
     assert out["ignored"][0]["reason"] == sc.INVALID_VERB_FOR_GATE
     assert len(out["courtesy_replies"]) == 1
     cr = out["courtesy_replies"][0]
-    assert cr["gate_id"] == "G1"
+    assert cr["gate_id"] == "spec"
     assert "approve" in cr["valid_verbs"] and "reject" in cr["valid_verbs"]
     assert "proceed" not in cr["valid_verbs"]
     assert "<EEE>" in out["mark_processed"]
@@ -381,16 +382,13 @@ def test_plan_decisions_first_decision_wins_on_decided_gate():
     assert "<FFF>" in out["mark_processed"]
 
 
-def test_plan_decisions_extracts_adapt_note_on_g3():
+def test_plan_decisions_ignores_adapt_on_retired_g3():
     flow = _flow(gate=_gate(gate_id="G3", step_index=1))  # G3: proceed|adapt|close|park
     tok = _token_of(flow)
     msg = _msg(message_id="<GGG>", body=f"adapt: shrink the batch size\n\ntoken {tok}",
                subject="[FLOW dsi/payoff] gate: learnings review")
     out = sc.plan_decisions([msg], [_flow_ctx(flow)])
-    assert len(out["decisions"]) == 1
-    d = out["decisions"][0]
-    assert d["verdict"] == "adapt"
-    assert d["note"] == "shrink the batch size"
+    assert out["decisions"] == []  # adapt is a retired learnings verdict
 
 
 def test_plan_decisions_surface_defaults_email_and_honors_override():

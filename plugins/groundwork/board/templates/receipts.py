@@ -55,9 +55,11 @@ STATE_EMPTY = "empty"
 STATE_NORMAL = "normal"
 
 _WINDOWS = (30, 90)
-# Verdicts that mean "went ahead despite the finding": G1/G2 approve, G4
-# ship, G3 proceed. reject/park/adapt/close/hold all decline or defer the
-# risky path instead, so a decision using one of them is never an override.
+# Verdicts that mean "went ahead despite the finding": spec approve, accept
+# ship, and `proceed`, kept for old records. The gate itself (name or old
+# code) is never read, only verdict=. reject/park/adapt/close/hold all decline
+# or defer the risky path instead, so a decision using one of them is never
+# an override.
 _OVERRIDE_VERDICTS = {"approve", "ship", "proceed"}
 _VERDICT_RE = re.compile(r"verdict=(\S+)")
 _CONFIDENCE_LEVELS = ("high", "medium", "low")

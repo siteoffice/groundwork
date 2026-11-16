@@ -74,7 +74,7 @@ def _write_flow(root, project, slug, gate_status):
     d.mkdir(parents=True)
     gate = None
     if gate_status:
-        gate = {"id": "G2", "step_index": 2, "status": gate_status,
+        gate = {"id": "spec", "step_index": 2, "status": gate_status,
                 "decision": None, "notified": False,
                 "token": "TOK", "opened_at": "2026-07-27T08:00:00Z"}
     (d / "flow.json").write_text(json.dumps(

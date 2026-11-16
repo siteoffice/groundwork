@@ -73,7 +73,17 @@
     "approve_action": "Aprobar",
     "save_layout": "Guardar diseño",
     "layout_saved": "Diseño guardado",
-    "sync_helper_offline": "Sync helper sin conexión"
+    "sync_helper_offline": "Sync helper sin conexión",
+    "gate_decide": "Decidir",
+    "gate_spec": "Aprobar la especificación",
+    "gate_accept": "Aceptar",
+    "gate_retired": "retirada (los aprendizajes se ejecutan sin puerta)",
+    "gate_position": "puerta {n} de {total}",
+    "verdict_approve": "Aprobar",
+    "verdict_reject": "Rechazar (no construir este paso)",
+    "verdict_park": "Aparcar (pausar, responder más tarde)",
+    "verdict_ship": "Entregar (aceptar y fusionar)",
+    "verdict_hold": "Retener (devolver)"
   },
   "_verify": {
     "hours_criterion": "El criterio de horas (1.225 h, urencriterium) y el estado de la startersaftrek después de 2026 están RELAYED, VERIFY contra belastingdienst.nl; ver 04_assets/_grill_state.md",

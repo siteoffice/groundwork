@@ -47,9 +47,9 @@ def test_flow_state_imports_with_only_flows_lib_on_syspath(tmp_path):
 
 
 def test_foreman_status_imports_with_only_flows_lib_on_syspath(tmp_path):
-    proc = _run_isolated("foreman_status", "m.GATE_ORDER", tmp_path)
+    proc = _run_isolated("foreman_status", "m.fs.GATE_ORDER", tmp_path)
     assert proc.returncode == 0, proc.stderr
-    assert proc.stdout.strip() == "('G1', 'G2', 'G3', 'G4')"
+    assert proc.stdout.strip() == "('decide', 'spec', 'accept')"
 
 
 def test_foreman_run_imports_with_only_flows_lib_on_syspath(tmp_path):

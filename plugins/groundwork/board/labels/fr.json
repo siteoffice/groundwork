@@ -73,7 +73,17 @@
     "approve_action": "Approuver",
     "save_layout": "Enregistrer la disposition",
     "layout_saved": "Disposition enregistrée",
-    "sync_helper_offline": "Sync helper hors ligne"
+    "sync_helper_offline": "Sync helper hors ligne",
+    "gate_decide": "Décider",
+    "gate_spec": "Approuver la spécification",
+    "gate_accept": "Accepter",
+    "gate_retired": "retiré (les enseignements s'exécutent sans validation)",
+    "gate_position": "validation {n} sur {total}",
+    "verdict_approve": "Approuver",
+    "verdict_reject": "Rejeter (ne pas construire cette étape)",
+    "verdict_park": "Mettre en attente (pause, répondre plus tard)",
+    "verdict_ship": "Livrer (accepter et fusionner)",
+    "verdict_hold": "Suspendre (renvoyer)"
   },
   "_verify": {
     "hours_criterion": "Le critère d'heures (1 225 h, urencriterium) et le statut de la startersaftrek après 2026 sont RELAYED, VERIFY contre belastingdienst.nl; voir 04_assets/_grill_state.md",

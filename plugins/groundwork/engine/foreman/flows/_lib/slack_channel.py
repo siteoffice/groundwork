@@ -19,6 +19,7 @@ from __future__ import annotations
 import datetime as _dt
 from typing import List, Tuple
 
+import flow_state as fs
 import outbox
 
 _TS_FMT = "%Y-%m-%dT%H:%M:%SZ"
@@ -102,13 +103,17 @@ def compose_gate_prompt(gate: dict, flow: dict) -> str:
     verbs = outbox.reply_verbs_line(gid)
     link = outbox.dashboard_link(flow)
     idea = flow.get("idea", "")
+    position = fs.gate_label(gid)
+    shown = f"{name}, {position}" if position else name
     context = (
-        f"*{flow['project']}/{flow['slug']}* reached the *{name}* gate ({gid}), "
+        f"*{flow['project']}/{flow['slug']}* reached the *{shown}* gate ({gid}), "
         f"stage {flow.get('stage')}.\n"
         f"Idea: {idea}"
     )
+    breakdown = outbox.breakdown_block(gate, flow)
     return (
         f"{context}\n\n"
+        f"{breakdown + chr(10) if breakdown else ''}"
         f"Reply in this thread with just: *{verbs}*\n"
         f"(no need to include the token, replying in this thread is enough)\n\n"
         f"Gate token: `{token}` (reference only)\n"

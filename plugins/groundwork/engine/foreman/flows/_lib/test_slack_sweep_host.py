@@ -1,3 +1,4 @@
+# Old codes (G1 to G4) below are stored old records kept on purpose (OF30).
 """Tests for slack_sweep_host.py. Plain pytest, stdlib only, hermetic.
 
 No live Slack anywhere: send_message and read_thread are always injected
@@ -19,7 +20,7 @@ TS_BEFORE_OPEN = "1700000000.000000"
 PARENT_TS = "1784538850.000000"
 
 
-def _flow_dir(tmp_path, project="dsi", slug="payoff", gate_id="G2",
+def _flow_dir(tmp_path, project="dsi", slug="payoff", gate_id="spec",
               step_index=2, now=GATE_OPENED_AT, nonce="7QF3"):
     """A real flow tree parked in execute with one open gate."""
     flow_dir, flow = ft.cmd_new(tmp_path, project, "measure the payoff",
@@ -122,13 +123,13 @@ def _open_next_gate(flow_dir, gate_id, step_index, now, nonce):
 
 
 def test_second_gate_of_a_step_posts_into_the_first_gates_thread(tmp_path):
-    flow_dir = _flow_dir(tmp_path, gate_id="G2", step_index=2)
+    flow_dir = _flow_dir(tmp_path, gate_id="spec", step_index=2)
     send_message, calls = _stub_send(ts=PARENT_TS)
     host.process_open_gate(flow_dir, ft.load_flow(flow_dir), send_message,
                            _stub_read([]), now="2026-07-18T09:15:00Z")
     assert calls[0][2] is None  # first gate opens the thread
 
-    flow = _open_next_gate(flow_dir, "G3", 2, "2026-07-18T11:00:00Z", "BBBB")
+    flow = _open_next_gate(flow_dir, "accept", 2, "2026-07-18T11:00:00Z", "BBBB")
     send_message, calls = _stub_send(ts="1784550000.000000")
     result = host.process_open_gate(flow_dir, flow, send_message,
                                     _stub_read([]), now="2026-07-18T11:01:00Z")
@@ -136,15 +137,15 @@ def test_second_gate_of_a_step_posts_into_the_first_gates_thread(tmp_path):
     assert result == {"action": "posted", "threaded": True}
     assert calls[0][2] == PARENT_TS
     entries = {e["gate_id"]: e for e in outbox.read_outbox(flow_dir)}
-    assert entries["G3"]["slack_parent_ts"] == PARENT_TS
+    assert entries["accept"]["slack_parent_ts"] == PARENT_TS
 
 
 def test_third_gate_of_a_step_finds_the_same_thread(tmp_path):
-    flow_dir = _flow_dir(tmp_path, gate_id="G2", step_index=2)
+    flow_dir = _flow_dir(tmp_path, gate_id="spec", step_index=2)
     send_message, _calls = _stub_send(ts=PARENT_TS)
     host.process_open_gate(flow_dir, ft.load_flow(flow_dir), send_message,
                            _stub_read([]), now="2026-07-18T09:15:00Z")
-    for gate_id, opened, nonce in (("G4", "2026-07-18T11:00:00Z", "BBBB"),
+    for gate_id, opened, nonce in (("accept", "2026-07-18T11:00:00Z", "BBBB"),
                                    ("G3", "2026-07-18T12:00:00Z", "CCCC")):
         flow = _open_next_gate(flow_dir, gate_id, 2, opened, nonce)
         send_message, calls = _stub_send(ts="1784550000.000000")
@@ -157,12 +158,12 @@ def test_third_gate_of_a_step_finds_the_same_thread(tmp_path):
 
 
 def test_a_different_step_opens_its_own_thread(tmp_path):
-    flow_dir = _flow_dir(tmp_path, gate_id="G2", step_index=2)
+    flow_dir = _flow_dir(tmp_path, gate_id="spec", step_index=2)
     send_message, _calls = _stub_send(ts=PARENT_TS)
     host.process_open_gate(flow_dir, ft.load_flow(flow_dir), send_message,
                            _stub_read([]), now="2026-07-18T09:15:00Z")
 
-    flow = _open_next_gate(flow_dir, "G2", 3, "2026-07-18T13:00:00Z", "DDDD")
+    flow = _open_next_gate(flow_dir, "spec", 3, "2026-07-18T13:00:00Z", "DDDD")
     send_message, calls = _stub_send(ts="1784560000.000000")
     result = host.process_open_gate(flow_dir, flow, send_message,
                                     _stub_read([]), now="2026-07-18T13:01:00Z")
@@ -172,14 +173,14 @@ def test_a_different_step_opens_its_own_thread(tmp_path):
 
 
 def test_stale_reply_in_a_reused_thread_does_not_decide_the_new_gate(tmp_path):
-    flow_dir = _flow_dir(tmp_path, gate_id="G2", step_index=2)
+    flow_dir = _flow_dir(tmp_path, gate_id="spec", step_index=2)
     send_message, _calls = _stub_send(ts=PARENT_TS)
     host.process_open_gate(flow_dir, ft.load_flow(flow_dir), send_message,
                            _stub_read([]), now="2026-07-18T09:15:00Z")
 
     # G3 opens at 11:00 and reuses the thread. The old "approve" reply landed
     # before that, so the after-open check must drop it.
-    flow = _open_next_gate(flow_dir, "G3", 2, "2026-07-18T11:00:00Z", "BBBB")
+    flow = _open_next_gate(flow_dir, "accept", 2, "2026-07-18T11:00:00Z", "BBBB")
     send_message, _calls = _stub_send(ts="1784550000.000000")
     host.process_open_gate(flow_dir, flow, send_message, _stub_read([]),
                            now="2026-07-18T11:01:00Z")
@@ -265,9 +266,9 @@ def test_render_read_verb_table(tmp_path):
 # --- compound verdicts -------------------------------------------------------
 
 def test_compound_stops_at_the_verb_it_cannot_apply_and_says_so(tmp_path):
-    # G4 accepts ship/hold/park. cmd_gate records the ship decision but never
+    # accept accepts ship/hold/park. cmd_gate records the ship decision but never
     # opens G3, so "proceed" has no open gate and the compound stops there.
-    flow_dir = _posted_thread(tmp_path, gate_id="G4", step_index=2)
+    flow_dir = _posted_thread(tmp_path, gate_id="accept", step_index=2)
     send_message, calls = _stub_send()
     result = host.process_open_gate(
         flow_dir, ft.load_flow(flow_dir), send_message,
@@ -286,7 +287,7 @@ def test_compound_stops_at_the_verb_it_cannot_apply_and_says_so(tmp_path):
 
 
 def test_compound_with_an_invalid_element_applies_nothing(tmp_path):
-    flow_dir = _posted_thread(tmp_path, gate_id="G4", step_index=2)
+    flow_dir = _posted_thread(tmp_path, gate_id="accept", step_index=2)
     before_gate = ft.load_flow(flow_dir)["gate"]["status"]
     send_message, calls = _stub_send()
     result = host.process_open_gate(
@@ -301,11 +302,11 @@ def test_compound_with_an_invalid_element_applies_nothing(tmp_path):
 
 
 def test_compound_containing_adapt_is_rejected(tmp_path):
-    flow_dir = _posted_thread(tmp_path, gate_id="G3", step_index=2)
+    flow_dir = _posted_thread(tmp_path, gate_id="spec", step_index=2)
     send_message, calls = _stub_send()
     result = host.process_open_gate(
         flow_dir, ft.load_flow(flow_dir), send_message,
-        _stub_read([_reply(TS_AFTER_OPEN, "proceed+adapt: tighten it")]),
+        _stub_read([_reply(TS_AFTER_OPEN, "approve+adapt: tighten it")]),
         now="2026-07-18T09:20:00Z")
 
     assert result["decided"] == 0
@@ -314,24 +315,23 @@ def test_compound_containing_adapt_is_rejected(tmp_path):
     assert len(calls) == 1
 
 
-def test_single_adapt_with_a_plus_in_its_note_still_decides(tmp_path):
-    flow_dir = _posted_thread(tmp_path, gate_id="G3", step_index=2)
+def test_a_single_adapt_is_no_longer_a_verb_at_any_gate(tmp_path):
+    """adapt belonged to the retired learnings gate; at an open spec gate it
+    decides nothing, even when its note contains a plus."""
+    flow_dir = _posted_thread(tmp_path, gate_id="spec", step_index=2)
     send_message, calls = _stub_send()
     result = host.process_open_gate(
         flow_dir, ft.load_flow(flow_dir), send_message,
         _stub_read([_reply(TS_AFTER_OPEN, "adapt: rename a+b")]),
         now="2026-07-18T09:20:00Z")
 
-    assert result["decided"] == 1
-    assert result["stopped"] is None
-    decision = ft.load_flow(flow_dir)["gate"]["decision"]
-    assert decision["verdict"] == "adapt"
-    assert decision["note"] == "rename a+b"
-    assert calls == []
+    assert result["decided"] == 0
+    assert ft.load_flow(flow_dir)["gate"]["status"] == "awaiting-owner"
+    assert len(calls) == 1
 
 
 def test_single_verb_reply_is_unchanged_by_the_compound_path(tmp_path):
-    cases = (("G2", "approve"), ("G3", "proceed"), ("G4", "ship"))
+    cases = (("spec", "approve"), ("accept", "ship"))
     for gate_id, verb in cases:
         flow_dir = _posted_thread(tmp_path / gate_id, gate_id=gate_id,
                                   step_index=2)

@@ -1,3 +1,4 @@
+# Old codes (G1 to G4) below are stored old records kept on purpose (OF30).
 """Tests for foreman_status.py. Plain pytest, stdlib only, hermetic.
 
 The pure section is tested with literal fixtures and an injected `now`; the
@@ -33,7 +34,7 @@ def _flow(stage="execute", status="running", phase="sprint", index=0, of=3,
     }
 
 
-def _gate(gate_id="G3", step_index=0, decided=None, opened_at="2026-08-01T11:38:00Z"):
+def _gate(gate_id="accept", step_index=0, decided=None, opened_at="2026-08-01T11:38:00Z"):
     gate = {"id": gate_id, "step_index": step_index, "status": "awaiting-owner",
             "decision": None, "notified": False, "opened_at": opened_at,
             "token": "FLOW-DSI-payoff-books-{}-X-7QF3".format(gate_id)}
@@ -103,43 +104,52 @@ def test_resolve_sprint_requires_the_same_project():
 
 # --- gate_history -----------------------------------------------------------
 
-def test_gate_history_covers_all_four_ids_in_order():
+def test_gate_history_covers_both_active_gates_in_order():
     labels = fst.gate_history([], None, NOW)
-    assert tuple(g for g, _ in labels) == ("G1", "G2", "G3", "G4")
+    assert tuple(g for g, _ in labels) == ("spec", "accept")
     assert all(label == "-" for _, label in labels)
 
 
-def test_gate_history_shows_a_decided_gate_with_its_verdict():
-    log = [_entry("2026-07-31T15:04:00Z", "gate_decided", "G1 verdict=approve",
+def test_gate_history_reads_old_and_new_ids_through_the_name():
+    log = [_entry("2026-07-31T15:04:00Z", "gate_decided", "G2 verdict=approve",
+                  actor="session", outcome="pass"),
+           _entry("2026-07-31T16:04:00Z", "gate_decided", "accept verdict=ship",
                   actor="session", outcome="pass")]
     labels = dict(fst.gate_history(log, None, NOW))
-    assert labels["G1"] == "approve 07-31"
+    assert labels["spec"] == "approve 07-31"
+    assert labels["accept"] == "ship 07-31"
+
+
+def test_gate_history_skips_a_retired_gate():
+    log = [_entry("2026-07-31T15:04:00Z", "gate_decided", "G3 verdict=proceed")]
+    labels = dict(fst.gate_history(log, None, NOW))
+    assert labels == {"spec": "-", "accept": "-"}
 
 
 def test_gate_history_adds_the_time_for_a_decision_made_today():
-    log = [_entry("2026-08-01T10:04:00Z", "gate_decided", "G2 verdict=approve",
+    log = [_entry("2026-08-01T10:04:00Z", "gate_decided", "spec verdict=approve",
                   actor="session", outcome="pass")]
     labels = dict(fst.gate_history(log, None, NOW))
-    assert labels["G2"] == "approve 08-01 10:04"
+    assert labels["spec"] == "approve 08-01 10:04"
 
 
 def test_gate_history_marks_the_open_gate_with_its_wait():
-    gate = _gate("G3", opened_at="2026-08-01T11:38:00Z")
+    gate = _gate("accept", opened_at="2026-08-01T11:38:00Z")
     labels = dict(fst.gate_history([], gate, NOW))
-    assert labels["G3"] == "awaiting 22m"
+    assert labels["accept"] == "awaiting 22m"
 
 
 def test_gate_history_uses_the_latest_decision_per_gate():
-    log = [_entry("2026-07-30T09:00:00Z", "gate_decided", "G3 verdict=adapt"),
-           _entry("2026-07-31T09:00:00Z", "gate_decided", "G3 verdict=proceed")]
+    log = [_entry("2026-07-30T09:00:00Z", "gate_decided", "accept verdict=hold"),
+           _entry("2026-07-31T09:00:00Z", "gate_decided", "accept verdict=ship")]
     labels = dict(fst.gate_history(log, None, NOW))
-    assert labels["G3"] == "proceed 07-31"
+    assert labels["accept"] == "ship 07-31"
 
 
 # --- blocked_since ----------------------------------------------------------
 
 def test_blocked_since_uses_the_gate_open_time_for_a_human_block():
-    gate = _gate("G3", opened_at="2026-08-01T11:38:00Z")
+    gate = _gate("accept", opened_at="2026-08-01T11:38:00Z")
     flow = _flow(phase="learn", status="awaiting-owner", gate=gate)
     action = fp.next_action(flow, None, {})
     assert action.blocking == "human"
@@ -311,7 +321,7 @@ def _tree(tmp_path, project="dsi", slug="payoff-books", awaiting=False):
         flow["steps"] = [{"index": 0, "title": "only step", "status": "running"}]
         ft.write_flow(flow_dir, flow)
         flow = ft.load_flow(flow_dir)
-        ft.persist_open_gate(flow_dir, flow, "G3", 0,
+        ft.persist_open_gate(flow_dir, flow, "accept", 0,
                              now="2026-08-01T11:38:00Z", nonce="7QF3")
     return flows_root, flow_dir
 
@@ -495,19 +505,19 @@ def test_banner_renders_every_unknown_as_a_dash_never_as_none():
     assert "None" not in banner
 
 
-def test_banner_gates_line_lists_all_four_gates_pipe_separated():
-    gate = _gate("G3", opened_at="2026-08-01T11:38:00Z")
+def test_banner_gates_line_lists_both_gates_pipe_separated():
+    gate = _gate("accept", opened_at="2026-08-01T11:38:00Z")
     flow = _flow(phase="learn", status="awaiting-owner", gate=gate)
     status = fst.build_status(flow, [], None, {}, NOW)
     banner = fst.render_banner([status], NOW, BOARD)
     gates_line = [l for l in banner.splitlines() if l.startswith("GATES")][0]
-    assert gates_line.count("|") == 3
-    for gate_id in ("G1", "G2", "G3", "G4"):
-        assert gate_id in gates_line
+    assert gates_line.count("|") == 1
+    assert "spec, gate 1 of 2:" in gates_line
+    assert "accept, gate 2 of 2:" in gates_line
 
 
 def test_banner_blocked_line_reports_the_wait():
-    gate = _gate("G3", opened_at="2026-08-01T11:38:00Z")
+    gate = _gate("accept", opened_at="2026-08-01T11:38:00Z")
     flow = _flow(phase="learn", status="awaiting-owner", gate=gate)
     status = fst.build_status(flow, [], None, {}, NOW)
     assert status.blocking == "human"
@@ -813,7 +823,7 @@ def test_next_surfaces_a_gate_open_flow_whose_blocking_is_empty():
     import dataclasses
     status = dataclasses.replace(
         _status_with("", 3600, slug="gate-open-flow"),
-        kind="gate_open", gate_id="G2",
+        kind="gate_open", gate_id="spec",
         command="/flow advance p/gate-open-flow",
         why="step 5 of 10 has no open gate and execute needs a G2 decision, "
             "so the gate opens next",
@@ -853,11 +863,11 @@ def test_next_says_nothing_is_waiting_and_counts_only_the_agent_blocked():
 
 
 def test_next_names_the_allowed_verdicts_at_an_open_gate():
-    gate = _gate("G3", opened_at="2026-08-01T11:38:00Z")
+    gate = _gate("accept", opened_at="2026-08-01T11:38:00Z")
     flow = _flow(phase="learn", status="awaiting-owner", gate=gate)
     status = fst.build_status(flow, [], None, {}, NOW)
     text = fst.render_next([status])
-    assert "proceed, adapt, close, park" in text
+    assert "ship, hold, park" in text
 
 
 def test_why_shows_the_last_five_receipts_then_the_current_action():
@@ -955,18 +965,20 @@ def _build_corpus(now):
         _corpus_flow("corp", "flow-advance", "idea"), [], None, {}, now))
 
     rows.append(fst.build_status(
-        _corpus_flow("corp", "gate-open", "breakdown"), [], None, {}, now))
+        _corpus_flow("corp", "gate-open", "execute",
+                     current_step={"index": 0, "of": 1, "phase": "grill"}),
+        [], None, {}, now))
 
     rows.append(fst.build_status(
         _corpus_flow("corp", "gate-await", "execute",
                      current_step={"index": 0, "of": 1, "phase": "learn"},
-                     gate=_gate("G3", opened_at="2026-08-01T11:00:00Z")),
+                     gate=_gate("accept", opened_at="2026-08-01T11:00:00Z")),
         [], None, {}, now))
 
     rows.append(fst.build_status(
         _corpus_flow("corp", "gate-consume", "execute",
                      current_step={"index": 0, "of": 1, "phase": "learn"},
-                     gate=_gate("G2", decided="approve")),
+                     gate=_gate("spec", decided="approve")),
         [], None, {}, now))
 
     rows.append(fst.build_status(
@@ -992,7 +1004,7 @@ def _build_corpus(now):
     rows.append(fst.build_status(
         _corpus_flow("corp", "ship-execute", "execute",
                      current_step={"index": 0, "of": 1, "phase": "sprint"},
-                     gate=_gate("G4", decided="ship")),
+                     gate=_gate("accept", decided="ship")),
         [], None, {}, now))
 
     rows.append(fst.build_status(

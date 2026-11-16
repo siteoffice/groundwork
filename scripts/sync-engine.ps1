@@ -61,7 +61,11 @@ $rules = @(
     @{ Rx = ('\b' + $nm + '\b'); To = 'Sam'; TestToo = $true },
     @{ Rx = ('\b' + $nm.ToLower() + '\b'); To = 'sam'; TestToo = $true },
     # The board tests used the Siteoffice repo itself as a fixture. Point them at the Molenwerk example.
-    @{ Rx = 'PROJECT_ROOT = BOARD_DIR\.parent  #[^\r\n]*'; To = 'PROJECT_ROOT = BOARD_DIR.parent.parent.parent / "templates" / "molenwerk"  # the Molenwerk example tree'; TestToo = $true }
+    @{ Rx = 'PROJECT_ROOT = BOARD_DIR\.parent  #[^\r\n]*'; To = 'PROJECT_ROOT = BOARD_DIR.parent.parent.parent / "templates" / "molenwerk"  # the Molenwerk example tree'; TestToo = $true },
+    # The gate-table drift test looks for the board next to foreman; here it sits one level up, beside engine.
+    @{ Rx = '\.parents\[3\](\s+/ "board" / "board_common\.py")'; To = '.parents[4]$1'; TestToo = $true },
+    # operator.json is per-operator state and is not shipped (SkipNames), so its repo check does not apply.
+    @{ Rx = '(\r?\n)(def test_operator_json_in_the_repo_has_no_opt_in_gates_key\(\):)'; To = '$1@pytest.mark.skip(reason="Groundwork ships no operator.json")$1$2'; TestToo = $true }
 )
 
 $components = @{

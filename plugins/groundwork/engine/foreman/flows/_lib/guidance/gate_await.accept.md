@@ -1,4 +1,4 @@
-## G4 is open and waiting on you
+## accept is open and waiting on you
 
 The pre-flight checks have run and the merge is one verdict away. Nothing has
 been merged and nothing has been pushed yet.
@@ -11,4 +11,6 @@ How to answer, PowerShell from C:\work\10_holding:
 
     py flows\_lib\flow.py gate <project>/<slug> ship
 
-Verdicts: `ship`, `hold`, `park`.
+Verdicts: `ship` (Ship, accept and merge), `hold` (Hold, send back), `park` (Park, pause,
+answer later). After `ship` or `hold` the learnings run without a gate. A `hold` stays
+put until `foreman_run.py ship <ref>` reopens it.
