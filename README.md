@@ -129,7 +129,7 @@ to it.
    for <that change>." `one-loop` creates the flow and stops at the spec gate.
 4. Answer the two gates. Spec: approve; reject (do not build this step); park (pause, answer later).
    Accept: ship (accept and merge); hold (send back); park (pause, answer later). Learnings run
-   without a gate.
+   without a gate. In Groundwork, ship writes the receipt; the merge is yours to do.
    [docs/tour.md](docs/tour.md) shows every screen and what to do next.
 5. Say "ship" at the accept gate when you accept the result. The receipt lands in
    `flows\<project>\<slug>\receipts\`.

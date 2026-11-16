@@ -68,7 +68,8 @@ verdicts it accepts. Run the next command only after you have read it.
 5. **The work.** Do the step, here, with the user watching. Run the checks the spec names.
 6. **The accept gate (gate 2 of 2).** `advance` opens `accept`. Show what changed and what
    the checks said. Ask: ship (accept and merge); hold (send back); park (pause, answer
-   later). Only `ship` accepts the change and writes the receipt. Record with
+   later). Only `ship` accepts the change and writes the receipt. Groundwork merges nothing:
+   tell the user the merge is theirs to do. Record with
    `gate <project>/<slug> ship "<note>"`.
 7. **Learn, without a gate.** `advance` moves to learn. Write what held and what broke, in
    `learnings.md` in the flow folder. `advance` then goes to the next step's spec, or closes
