@@ -5,6 +5,17 @@ All notable changes. The version is one clock for the whole repository: `groundw
 
 ## Unreleased
 
+## 0.5.0
+
+- **Two named gates.** The loop stops at `spec` and `accept`. Old ids read as names: G1 and G2
+  read as spec, G4 as accept, G3 is retired, and learnings run without a gate.
+- **Old records stay readable.** Flow logs and stored tokens are never rewritten.
+- **`--steps` is read at the breakdown-to-execute crossing.** No plan gate opens.
+- **A receipt is written on `ship` at the accept gate.** This includes old records whose open
+  gate is stored as G4.
+- **The one-loop skill, the tour and the READMEs name the two gates.**
+- **Engine synced from Siteoffice `f0c6b76` (0.11.0).**
+
 ## 0.4.3
 
 - **siteoffice-setup writes refusals with their reason.** Each AGENTS.md refusal from the
