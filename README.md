@@ -7,7 +7,7 @@ folder. No chat window holds the only copy.
 
 Groundwork is a folder structure, one loop and a board for a person or small team that works with
 an AI agent every day. It lets you say what was decided, by whom, and what can be undone, because
-the agent stops at four gates and you decide.
+the agent stops at two gates and you decide.
 
 It is a set of plugins for Claude Code and Claude Desktop, plus plain Markdown that other tools
 can read. The engine is Python and needs nothing beyond the standard library. The current version
@@ -19,7 +19,7 @@ Groundwork is one part of a small set of tools. Each part does one job.
 
 | Part | Job | Does Groundwork need it? |
 |---|---|---|
-| Foreman | The process: idea, plan, spec, work, review | No. `one-loop` carries the same four gates in a folder you control. |
+| Foreman | The process: idea, plan, spec, work, review | No. `one-loop` carries the same two gates in a folder you control. |
 | BurnMon and BurnMon Dev | Watching: tokens, cost, sessions | No. Only two status lines use it (below). |
 | Control Centre | Steering: your folders and gates in one window | No. |
 | Skills (`plugins\groundwork\skills`) | The tools you call by name | Yes. They are the product. |
@@ -58,7 +58,7 @@ below, so this table claims no result. Each row uses only what the linked source
 
 | Group | What the source says | Groundwork's line | Source |
 |---|---|---|---|
-| Spec-driven frameworks: Spec Kit, OpenSpec, BMAD, Kiro | Published with a spec-driven development benchmark (Uvik, 50 tickets). | One loop with four gates where you decide, and a local receipt when you accept. | https://uvik.net/blog/spec-driven-development-benchmark/ and https://www.testmuai.com/blog/spec-driven-development-tools/ |
+| Spec-driven frameworks: Spec Kit, OpenSpec, BMAD, Kiro | Published with a spec-driven development benchmark (Uvik, 50 tickets). | One loop with two gates where you decide, and a local receipt when you accept. | https://uvik.net/blog/spec-driven-development-benchmark/ and https://www.testmuai.com/blog/spec-driven-development-tools/ |
 | Parallel-agent desktop apps: Emdash, Superset, Orca, Conductor, Treebeard | They run agents in worktrees. | Groundwork does not run agents in worktrees at scale. It gates them. | https://www.morphllm.com/emdash-ai-coding-agent and https://github.com/stablyai/orca |
 
 ## 3. Install
@@ -126,10 +126,12 @@ to it.
    says hooks are skipped, your Claude organisation manages settings: the agent policy and the Git
    guard do not run, and the rest still works.
 3. Pick a change you were going to make anyway, a small bug or a small feature. Say: "Start a flow
-   for <that change>." `one-loop` creates the flow and stops at the plan gate.
-4. Answer the gates: plan (G1), spec (G2), ship (G4), learn (G3).
+   for <that change>." `one-loop` creates the flow and stops at the spec gate.
+4. Answer the two gates. Spec: approve; reject (do not build this step); park (pause, answer later).
+   Accept: ship (accept and merge); hold (send back); park (pause, answer later). Learnings run
+   without a gate.
    [docs/tour.md](docs/tour.md) shows every screen and what to do next.
-5. Say "ship" at G4 when you accept the result. The receipt lands in
+5. Say "ship" at the accept gate when you accept the result. The receipt lands in
    `flows\<project>\<slug>\receipts\`.
 
 What lands in your repo: one `flows\` folder at the root, with the plan, the gate decisions and
@@ -160,11 +162,13 @@ Starting from an empty folder instead: say "set up my company hub", or copy
 
 - **The record lives in your folder.** A flow is plain files: `flow.json` and a log. Look at
   `templates\skeleton\` and `templates\molenwerk\` for the layout.
-- **You decide at the gates.** The engine has four: plan, spec, ship, learn. No step moves
-  without your verdict. `plugins\groundwork\skills\one-loop\SKILL.md` is the whole procedure.
-- **A receipt when you accept.** Shipping at the last gate writes a readable page and a JSON file
+- **You decide at the gates.** The engine has two: spec and accept. Learnings run without a gate. No step
+  moves without your verdict. `plugins\groundwork\skills\one-loop\SKILL.md` is the whole procedure.
+- **A receipt when you accept.** Shipping at the accept gate writes a readable page and a JSON file
   (screenshots below). Hold and park write none; `plugins\groundwork\engine\groundwork\test_gw.py`
   shows both cases.
+- **Old records stay readable.** Older flow logs name the gates G1 to G4: G1 and G2 read as spec,
+  G4 as accept, and G3 is retired. Nothing is rewritten.
 - **The agent starts read-only.** It may write drafts, it cannot send, and it cannot delete
   without a named person. Every write is logged with a receipt and an undo note. The rules are one
   plain file: `plugins\groundwork-mods\policy\agent-policy.json`.

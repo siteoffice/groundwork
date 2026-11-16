@@ -1,6 +1,6 @@
 # Engine
 
-The state machine behind the one-loop skill: flows, gates (G1 to G4), sprints, locks and the
+The state machine behind the one-loop skill: flows, gates (spec and accept), sprints, locks and the
 local receipt. Python 3.9 or newer, standard library only. No service, no network call, no
 account is needed to run a flow.
 
