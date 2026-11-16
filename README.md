@@ -167,8 +167,8 @@ Starting from an empty folder instead: say "set up my company hub", or copy
 - **A receipt when you accept.** Shipping at the accept gate writes a readable page and a JSON file
   (screenshots below). Hold and park write none; `plugins\groundwork\engine\groundwork\test_gw.py`
   shows both cases.
-- **Old records stay readable.** Older flow logs name the gates G1 to G4: G1 and G2 read as spec,
-  G4 as accept, and G3 is retired. Nothing is rewritten.
+- **Old records stay readable.** Older flows keep their old gate codes and still read; the 0.5.0
+  entry in `CHANGELOG.md` lists how they map. Nothing is rewritten.
 - **The agent starts read-only.** It may write drafts, it cannot send, and it cannot delete
   without a named person. Every write is logged with a receipt and an undo note. The rules are one
   plain file: `plugins\groundwork-mods\policy\agent-policy.json`.

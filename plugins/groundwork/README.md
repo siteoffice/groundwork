@@ -50,7 +50,8 @@ Say "start a flow for <your change>" and `one-loop` stops at the spec gate. Ther
 Spec: approve; reject (do not build this step); park (pause, answer later). Accept: ship (accept
 and merge); hold (send back); park (pause, answer later). Learnings run without a gate. Shipping at
 the accept gate writes a receipt to `flows\<project>\<slug>\receipts\`; it is the only verdict that
-does. Old records stay readable: G1 and G2 read as spec, G4 as accept, and G3 is retired.
+does. Old records stay readable: older flows keep their old gate codes and still read, and the 0.5.0
+entry in `CHANGELOG.md` lists how they map.
 Say "retro" for the monthly check-up. The first 15 minutes are
 in the [repo README](../../README.md#4-use), and every screen is in [docs\tour.md](../../docs/tour.md).
 

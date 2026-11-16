@@ -137,8 +137,8 @@ see the README) says the same in words: "BurnMon is not installed", "BurnMon is 
 2. Say: "Start a flow for <your idea>". The `one-loop` skill takes it from there.
 3. You decide at two gates: spec and accept. Learnings run without a gate. At spec you approve,
    reject (do not build this step) or park (pause, answer later). At accept you ship (accept and
-   merge), hold (send back) or park. Old records stay readable: G1 and G2 read as spec, G4 as
-   accept, G3 is retired.
+   merge), hold (send back) or park. Old records stay readable: older flows keep their old gate
+   codes and still read; the 0.5.0 entry in `CHANGELOG.md` lists how they map.
 4. Say "ship" at the accept gate when you accept the result. That writes a receipt, a readable page and a JSON
    file, under `flows\<project>\<slug>\receipts\`. It is self-issued and not signed: your own
    record, not proof to anyone else.
