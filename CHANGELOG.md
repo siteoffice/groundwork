@@ -5,6 +5,14 @@ All notable changes. The version is one clock for the whole repository: `groundw
 
 ## Unreleased
 
+## 0.5.2
+
+- **The engine tests run on Python 3.9 again.** One vendored fixture called
+  `Path.write_text(..., newline=)`, which needs Python 3.10, so six engine tests failed on 3.9 in
+  the install matrix. The fixture now writes bytes, and a new engine test fails on any
+  `write_text(newline=)` or `read_text(newline=)`. No runtime code changed.
+- **Engine synced from Siteoffice `83d26fa` (0.11.1).**
+
 ## 0.5.1
 
 - **The marketplace text of `groundwork-mods` names the Fleet and the Git lane.** Both stay behind

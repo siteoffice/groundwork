@@ -42,8 +42,8 @@ def _old_flow_dir(tmp_path, slug="legacy", gate=None, phase="grill",
     flow["gate"] = gate
     # raw write on purpose: ft.write_flow would normalize, and this fixture
     # models a file written by the old engine.
-    (flow_dir / "flow.json").write_text(json.dumps(flow, indent=2) + "\n",
-                                        encoding="utf-8", newline="\n")
+    # bytes, not write_text(newline=): that keyword needs Python 3.10, the engine runs on 3.9.
+    (flow_dir / "flow.json").write_bytes((json.dumps(flow, indent=2) + "\n").encode("utf-8"))
     log = flow_dir / "flow-log.ndjson"
     lines = [
         {"ts": T0, "stage": "execute", "actor": "orchestrator",
