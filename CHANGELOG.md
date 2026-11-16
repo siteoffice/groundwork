@@ -5,6 +5,14 @@ All notable changes. The version is one clock for the whole repository: `groundw
 
 ## Unreleased
 
+## 0.5.1
+
+- **The marketplace text of `groundwork-mods` names the Fleet and the Git lane.** Both stay behind
+  their own switch and off by default, as the plugin README says.
+- **Two new tests.** The two `Invoke-SiteofficeAudit.ps1` copies (siteoffice-cleanup and
+  siteoffice-migrate) must stay equal byte for byte, and the marketplace text must name the Fleet
+  and the Git lane as switches that are off by default.
+
 ## 0.5.0
 
 - **Two named gates.** The loop stops at `spec` and `accept`. Old ids read as names: G1 and G2
