@@ -1,3 +1,4 @@
+# Old codes (G1 to G4) below are stored old records kept on purpose (OF30).
 """Tests for terminal_sweep.py. Plain pytest, stdlib only, fixtures only.
 
 No sprint is launched and no email is sent anywhere in these tests or in the
@@ -273,7 +274,7 @@ def test_host_sequence_success_flow(tmp_path):
     # sweep no longer walks past it to G3: every terminal sprint now gets an
     # operator ship / hold decision, and `hold` is the right answer for a
     # failed one.
-    assert final["gate"]["id"] == "G4"
+    assert final["gate"]["id"] == "accept"
     assert final["gate"]["status"] == "awaiting-owner"
     log = [json.loads(x) for x in
            (flow_dir / "flow-log.ndjson").read_text(encoding="utf-8").splitlines() if x.strip()]
@@ -341,7 +342,7 @@ def test_host_per_flow_error_is_isolated(tmp_path):
     (bad_dir / "flow.json").write_text("{ not json", encoding="utf-8")
     summary = ts.sweep_once(flows_root, sprints_root, now="2026-07-21T11:00:00Z")
     assert summary["matched"] == 1  # good flow still swept
-    assert ft.load_flow(good_dir)["gate"]["id"] == "G4"
+    assert ft.load_flow(good_dir)["gate"]["id"] == "accept"
 
 
 # =============================================================================
@@ -533,7 +534,7 @@ def test_main_without_diagnose_still_sweeps_exactly_as_before(tmp_path, capsys):
                   "--sprints-root", str(sprints_root)])
     assert rc == 0
     assert "matched=1" in capsys.readouterr().out
-    assert ft.load_flow(flow_dir)["gate"]["id"] == "G4"
+    assert ft.load_flow(flow_dir)["gate"]["id"] == "accept"
 
 
 def test_apply_match_stops_at_g4_and_its_context_reaches_the_notification(tmp_path):
@@ -550,13 +551,13 @@ def test_apply_match_stops_at_g4_and_its_context_reaches_the_notification(tmp_pa
     assert result["skipped"] is False
 
     gate = ft.load_flow(flow_dir)["gate"]
-    assert gate["id"] == "G4"
+    assert gate["id"] == "accept"
     assert gate["status"] == "awaiting-owner"
 
     records = outbox.read_outbox(flow_dir)
     assert len(records) == 1
-    assert records[0]["gate_id"] == "G4"
-    assert "ship approval" in records[0]["subject"]
+    assert records[0]["gate_id"] == "accept"
+    assert "Accept" in records[0]["subject"]
     assert "ship | hold | park" in records[0]["body"]
     # the sweep_context block outbox.compose appends when it is present
     assert "Sprint status:" in records[0]["body"]
@@ -607,12 +608,13 @@ def test_apply_match_with_lock_false_crosses_while_the_caller_holds_the_lock(tmp
     sprint = {"sprint_id": "dsi__x__1", "status": "failed"}
     with fl.acquire(flow_dir, "caller-session", now=NOW):
         result = ts.apply_match(flow_dir, sprint, now=NOW, lock=False)
-    assert result == {"skipped": False, "sprint_id": "dsi__x__1"}
+    assert result == {"skipped": False, "sprint_id": "dsi__x__1",
+                      "regrill": True}
     flow = ft.load_flow(flow_dir)
-    assert isinstance(flow.get("gate"), dict)
+    assert flow["gate"]["id"] == "spec"
     records = outbox.read_outbox(flow_dir)
     assert len(records) == 1
-    assert "Sprint status:" in records[0]["body"]
+    assert "re-grill after failed" in records[0]["body"].lower()
 
 
 def test_apply_match_still_takes_the_lock_by_default(tmp_path):

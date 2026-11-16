@@ -55,8 +55,8 @@ STOP_REASONS = (
     "budget",           # per-flow token-cost ceiling reached
     "cowork",           # running under the Cowork mount, this kind is refused there
     "wip_limit",        # one sprint in dev per repo, already at the limit
-    "needs_steps",      # G1 approve cannot be consumed without a step list
-    "needs_spec",       # G2 approve on a multi-step flow with no per-step spec
+    "spec_precondition",  # the first spec card needs spec_lint PASS     (host only)
+    "needs_spec",       # spec approve on a multi-step flow with no per-step spec
     "malformed_launch", # the launch line failed a shape check    (host only)
     "not_executable",   # no executor built for this kind yet (see decision 1)
     "needs_judgment",   # gate_open: the artifact this gate judges may not exist yet
@@ -76,6 +76,7 @@ class HostFacts:
     wip_limit: int = 1
     cost_usd: Optional[float] = None      # None means unknown, which never trips
     budget_usd: Optional[float] = None    # None means no ceiling set
+    precondition_detail: str = ""          # non-empty: the first spec card's precondition failed
 
 
 @dataclasses.dataclass(frozen=True)
@@ -126,10 +127,9 @@ _STOP_DETAIL = {
               "laptop instead of being executed here",
     "wip_limit": "{count} sprint(s) are already non-terminal in this repo and "
                  "the limit is {limit}, so a second sprint does not launch",
-    "needs_steps": "G1 is decided approve, but consuming it needs the step list "
-                   "the breakdown produces, which the driver cannot derive from "
-                   "flow.json",
-    "needs_spec": "G2 is decided approve on a multi-step flow that records no "
+    "spec_precondition": "the first spec card is not opened until its spec "
+                         "passes spec_lint: {detail}",
+    "needs_spec": "spec is decided approve on a multi-step flow that records no "
                   "spec_path, so consuming it here would leave this step and "
                   "every later one falling back to the whole-flow spec; consume "
                   "it through the /flow skill instead, which calls "
@@ -210,10 +210,13 @@ def decide(action: fp.NextAction, facts: HostFacts, verdict: str = "",
         return Decision(action, False, "wip_limit", _STOP_DETAIL["wip_limit"].format(
             count=facts.wip_count, limit=facts.wip_limit))
 
-    if kind == "gate_consume" and action.gate_id == "G1" and verdict == "approve":
-        return Decision(action, False, "needs_steps", _STOP_DETAIL["needs_steps"])
+    if (kind == "gate_open" and fs.canonical_gate(action.gate_id) == "spec"
+            and facts.precondition_detail):
+        return Decision(action, False, "spec_precondition",
+                         _STOP_DETAIL["spec_precondition"].format(
+                             detail=facts.precondition_detail))
 
-    if (kind == "gate_consume" and action.gate_id == "G2" and verdict == "approve"
+    if (kind == "gate_consume" and fs.canonical_gate(action.gate_id) == "spec" and verdict == "approve"
             and isinstance(step_of, int) and step_of > 1 and not flow_spec_path):
         return Decision(action, False, "needs_spec", _STOP_DETAIL["needs_spec"])
 
@@ -223,7 +226,7 @@ def decide(action: fp.NextAction, facts: HostFacts, verdict: str = "",
 
     if kind == "gate_open":
         return Decision(action, False, "needs_judgment",
-                         _STOP_DETAIL["needs_judgment"].format(gate=action.gate_id))
+                         _STOP_DETAIL["needs_judgment"].format(gate=fs.canonical_gate(action.gate_id)))
 
     if kind in EXECUTABLE_KINDS:
         return Decision(action, True, "", "")
@@ -264,6 +267,7 @@ def _gate_verdicts(gate_id: str) -> tuple:
     (foreman_plan.SHIP_GATE_ID / SHIP_VERDICTS, flow_state.valid_verdicts)
     rather than importing that module's private helper.
     """
+    gate_id = fs.canonical_gate(gate_id)
     if gate_id == fp.SHIP_GATE_ID:
         return fp.SHIP_VERDICTS
     return fs.valid_verdicts(gate_id)
@@ -506,6 +510,8 @@ def load_operator(path=None) -> dict:
             operator = loaded
     except (OSError, ValueError):
         operator = {}
+    fs.read_opt_in_gates(operator)
+    operator.pop("opt_in_gates", None)
     for key, value in OPERATOR_DEFAULTS:
         operator.setdefault(key, value)
     return operator
@@ -646,7 +652,7 @@ def execute_launch(flow_dir, action, sprints_root=None, now=None, session_id="")
     In order:
 
     1. Re-run both emit-time guards against disk AS IT IS NOW, not as it was at
-       G2-consume time. cmd_advance persists state and writes the
+       spec-consume time. cmd_advance persists state and writes the
        `sprint_emitted` log entry BEFORE cmd_advance_guarded runs its guards, so
        a refused advance still leaves a runnable-looking line in
        flow-log.ndjson, and nothing else would stop a driver from running it.
@@ -671,7 +677,9 @@ def execute_launch(flow_dir, action, sprints_root=None, now=None, session_id="")
 
     if sprints_root is None:
         sprints_root = ts.DEFAULT_SPRINTS_ROOT
-    match = ts.has_terminal_sprint(project, spec_path, ts.discover_sprints(sprints_root))
+    match = ts.has_terminal_sprint(
+        project, spec_path, ts.discover_sprints(sprints_root),
+        exclude_ids=ft.load_flow(flow_dir).get("regrill_cleared") or ())
     if match:
         ft.emit_sprint_line(flow, existing_terminal=match)   # raises RelaunchGuardError
 
@@ -743,7 +751,7 @@ def _preflight_ship_action(flow):
     """The NextAction shape execute_preflight's receipt needs when
     execute_ship finds no preflight recorded.
 
-    That shape arises whenever the terminal sweep opened this G4: apply_match
+    That shape arises whenever the terminal sweep opened this accept gate: apply_match
     opens the gate through flow_transition.cmd_advance directly and never
     runs the checks, so a `ship` decision on that gate would otherwise
     dead-end at ShipExecuteError forever (the reopen path, cmd_ship, needs
@@ -752,7 +760,7 @@ def _preflight_ship_action(flow):
     """
     return fp.NextAction(
         kind="ship_preflight",
-        why="G4 was answered ship but no pre-flight check dict was recorded "
+        why="accept was answered ship but no pre-flight check dict was recorded "
             "yet, so ship_execute runs the checks itself before merging on "
             "{}/{}".format(flow.get("project", "?"), flow.get("slug", "?")),
         blocking="", command="", gate_id=None,
@@ -825,7 +833,7 @@ def execute_ship(flow_dir, action, sprints_root=None, now=None, push=True):
             "revert to".format(flow.get("project", "?"), flow.get("slug", "?")))
 
     # 2026-08-17 review finding: the preflight-time revert_point above can be
-    # stale by the time this merge actually runs, since the G4 decision may
+    # stale by the time this merge actually runs, since the accept decision may
     # arrive long after the checks did and the target branch can move in
     # between. Re-read the target's tip right before merging and record THAT
     # sha instead: the guard above only needs to know preflight found some
@@ -899,13 +907,18 @@ def execute_recover(flow_dir, action, sprints_root=None, now=None) -> dict:
         raise ShipExecuteError(
             "refusing to recover {}: no sprint.json resolves for this step, so "
             "there is no terminal status to attach as sweep context".format(ref))
-    result = ts.apply_match(flow_dir, sprint, now=now, lock=False)
-    if result.get("skipped"):
+    root = pathlib.Path(sprints_root or ts.DEFAULT_SPRINTS_ROOT)
+    report = str(root / sprint.get("project", "") / sprint.get("slug", "")
+                 / "report.md")
+    try:
+        ft.cmd_regrill(flow_dir, sprint, report, now=now)
+    except ValueError as exc:
+        # The flow is no longer at phase sprint with no gate (something
+        # advanced it in between): nothing was crossed.
         raise ShipExecuteError(
-            "refusing to recover {}: the flow is no longer sweep-eligible "
-            "(reason {}), so nothing was crossed".format(
-                ref, result.get("reason") or "not_eligible"))
-    return result
+            "refusing to recover {}: {}".format(ref, exc))
+    return {"skipped": False, "sprint_id": sprint.get("sprint_id"),
+            "regrill": True}
 
 
 BRIEF_OWNER = "Wilco de Tree"
@@ -1117,7 +1130,7 @@ def execute_hub_refresh(flow_dir, action, now=None, hub_root=None) -> dict:
 
 
 class ShipReopenError(RuntimeError):
-    """`foreman_run.py ship` cannot reopen G4, with a named reason."""
+    """`foreman_run.py ship` cannot reopen the accept gate, with a named reason."""
 
 
 UNSHIP_NOTHING = ("no ship_execute receipt in {ref}'s flow-log.ndjson, so this "
@@ -1145,7 +1158,7 @@ def _preflight_reopen_action(flow):
     because a reopen is operator-initiated and never came off the ladder."""
     return fp.NextAction(
         kind="ship_preflight",
-        why="G4 is being reopened after a hold on {}/{}, so the checks re-run "
+        why="the accept gate is being reopened after a hold on {}/{}, so the checks re-run "
             "against disk as it is now".format(
                 flow.get("project", "?"), flow.get("slug", "?")),
         blocking="", command="", gate_id=None,
@@ -1154,7 +1167,7 @@ def _preflight_reopen_action(flow):
 
 
 def cmd_ship(flow_dir, sprints_root=None, now=None) -> dict:
-    """Reopen G4 on a held flow: re-check, then open a fresh gate.
+    """Reopen the accept gate on a held flow: re-check, then open a fresh gate.
 
     Valid only when driver["held"] is set, because that flag is the only record
     that a branch was deliberately left unmerged. The checks are re-run rather
@@ -1172,13 +1185,14 @@ def cmd_ship(flow_dir, sprints_root=None, now=None) -> dict:
     if not driver.get("held"):
         raise ShipReopenError(
             "{}: no hold is pending (the driver records no 'held'), so there "
-            "is no G4 to reopen; run the driver instead".format(ref))
+            "is no accept gate to reopen; run the driver instead".format(ref))
 
     gate = flow.get("gate")
     if isinstance(gate, dict) and gate.get("status") == "awaiting-owner":
         raise ShipReopenError(
             "{}: gate {} is already awaiting a decision; answer or park it "
-            "before reopening G4".format(ref, gate.get("id")))
+            "before reopening accept".format(
+                ref, fs.canonical_gate(gate.get("id"))))
 
     sprint = resolve_sprint_for(flow_dir, flow, sprints_root)
     repo_root = sp.repo_root_for(flow, sprint, dev_root=str(roots.dev_root()))
@@ -1203,10 +1217,10 @@ def cmd_ship(flow_dir, sprints_root=None, now=None) -> dict:
 
     flow = ft.load_flow(flow_dir)
     step_index = (flow.get("current_step") or {}).get("index", 0)
-    flow = ft.persist_open_gate(flow_dir, flow, "G4", step_index, now)
+    flow = ft.persist_open_gate(flow_dir, flow, "accept", step_index, now)
     ft.append_log(flow_dir, ft._log_entry(
         now, flow.get("stage", ""), RECEIPT_ACTOR, "driver_ship_reopen",
-        outcome="pass", detail="G4 reopened on {} after a hold".format(branch),
+        outcome="pass", detail="accept reopened on {} after a hold".format(branch),
         ref=flow["gate"]["token"]))
     return flow
 
@@ -1249,7 +1263,7 @@ def execute(flow_dir, action, sprints_root=None, now=None, session_id="",
 
     Eight explicit action kinds now, plus a defensive fallthrough.
     flow_advance and gate_consume are "cross the next boundary", which is
-    cmd_advance_guarded's job, and the G4 hold verdict is why that branch now
+    cmd_advance_guarded's job, and the accept hold verdict is why that branch now
     loads and writes the driver: flow_transition mutates the dict it is
     handed and deliberately does no foreman.json I/O of its own.
     sprint_launch authorises a line. ship_preflight annotates. ship_execute is
@@ -1485,7 +1499,8 @@ def flow_spec_path(flow) -> str:
     return (flow or {}).get("spec_path") or ""
 
 
-def host_facts(flow, sprints, driver, burnrate_db=None, sprint=None) -> HostFacts:
+def host_facts(flow, sprints, driver, burnrate_db=None, sprint=None,
+               precondition_detail="") -> HostFacts:
     """Assemble the facts `decide` is forbidden to compute itself, all
     injected: `cowork` from the repo root path, `wip_count` from the sprints
     the caller already discovered this pass, and `cost_usd` read from
@@ -1508,6 +1523,7 @@ def host_facts(flow, sprints, driver, burnrate_db=None, sprint=None) -> HostFact
         wip_limit=DEFAULT_WIP_LIMIT,
         cost_usd=cost,
         budget_usd=budget,
+        precondition_detail=precondition_detail,
     )
 
 
@@ -1548,7 +1564,7 @@ def render_board(flows_root, sprints_root, out_root=None) -> None:
 
 
 # The stop reasons that get a driver_fence receipt at the pre-execute stop
-# point in run_chain: budget/cowork/wip_limit/needs_steps are genuine host
+# point in run_chain: budget/cowork/wip_limit/spec_precondition are genuine host
 # facts refusing an otherwise-executable action, and a kill-switch, a pause or
 # the chain cap (decision.action.blocking == "fence") is the same kind of
 # fence. "complete" (nothing left to do), "needs_judgment" and
@@ -1558,8 +1574,8 @@ def render_board(flows_root, sprints_root, out_root=None) -> None:
 # there is nothing to dedupe and nothing worth a receipt for. A stop out of
 # execute_once itself (lock_busy / relaunch_guard / execute_error) is always
 # fenced, unconditionally, at its own call site in run_chain below.
-_HOST_FENCE_REASONS = frozenset({"budget", "cowork", "wip_limit", "needs_steps",
-                                 "needs_spec"})
+_HOST_FENCE_REASONS = frozenset({"budget", "cowork", "wip_limit",
+                                 "spec_precondition", "needs_spec"})
 
 
 def run_chain(flow_dir, sprints_root=None, session_id=None, now=None,
@@ -1643,7 +1659,14 @@ def run_chain(flow_dir, sprints_root=None, session_id=None, now=None,
             driver["launch"] = None
             write_driver(flow_dir, driver)
         action = fp.next_action(flow, sprint, driver)
-        facts = host_facts(flow, sprints, driver, burnrate_db, sprint=sprint)
+        precondition = ""
+        if (action.kind == "gate_open"
+                and fs.canonical_gate(action.gate_id) == "spec"):
+            precondition = ft.first_spec_precondition(flow)[1]
+            if precondition == "spec_lint PASS":
+                precondition = ""
+        facts = host_facts(flow, sprints, driver, burnrate_db, sprint=sprint,
+                           precondition_detail=precondition)
         decision = decide(action, facts, gate_verdict(flow),
                           step_of=step_of(flow),
                           flow_spec_path=flow_spec_path(flow))
@@ -1902,7 +1925,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     _add_common(p_resume)
 
     p_ship = sub.add_parser(
-        "ship", help="Reopen G4 on a flow whose ship gate was held")
+        "ship", help="Reopen the accept gate on a flow whose ship gate was held")
     _add_common(p_ship)
 
     p_unship = sub.add_parser(
@@ -1990,8 +2013,8 @@ def main(argv=None) -> int:
             print(str(exc))
             return 1
         print(_line("FOREMAN", ref))
-        print(_line("REOPENED", "G4 token {}".format(flow["gate"]["token"])))
-        print(_line("ANSWER", ", ".join(_gate_verdicts("G4"))))
+        print(_line("REOPENED", "accept token {}".format(flow["gate"]["token"])))
+        print(_line("ANSWER", ", ".join(_gate_verdicts("accept"))))
         return 0
 
     if args.cmd == "unship":

@@ -52,10 +52,27 @@ class TestNextLineMatchesGate(unittest.TestCase):
         self.assertIn("ship|hold|park", page)
         self.assertNotIn("approve|reject", page)
 
-    def test_g3_offers_proceed_adapt_close_park(self):
+    def test_an_open_g3_is_shown_as_retired(self):
         page = _render_flow_page("G3")
-        self.assertIn("proceed|adapt|close|park", page)
-        self.assertNotIn("approve|reject", page)
+        self.assertIn("retired", page)
+        self.assertNotIn("proceed|adapt", page)
+        self.assertIn("/flow advance proj slug", page)
+
+    def test_spec_shows_name_position_and_meanings(self):
+        page = _render_flow_page("spec")
+        for text in ("spec", "Approve spec", "gate 1 of 2", "approve|reject|park",
+                     "Reject (do not build this step)", "Park (pause, answer later)"):
+            self.assertIn(text, page)
+
+    def test_accept_shows_gate_2_of_2_and_meanings(self):
+        page = _render_flow_page("accept")
+        for text in ("gate 2 of 2", "ship|hold|park", "Ship (accept and merge)", "Hold (send back)"):
+            self.assertIn(text, page)
+
+    def test_old_g2_and_g4_records_still_get_their_verdicts(self):
+        self.assertIn("gate 1 of 2", _render_flow_page("G2"))
+        self.assertIn("approve|reject|park", _render_flow_page("G2"))
+        self.assertIn("ship|hold|park", _render_flow_page("G4"))
 
     def test_g2_still_offers_approve_reject(self):
         self.assertIn("approve|reject", _render_flow_page("G2"))

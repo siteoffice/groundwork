@@ -2,7 +2,7 @@
 
 Copies the Molenwerk example into a temp folder, shifts its dates to the render day (the board
 then shows no overdue line and a filled next two weeks), drives one flow from idea to close with
-gw.py, renders the board, the flow page at each gate and the receipt, and screenshots each
+gw.py, renders the board, the flow page at each gate and at learn, and the receipt, and screenshots each
 page in a light and a dark theme with Playwright (Chromium). The temp copy is always removed.
 
 Usage: python scripts/render-tour.py [--out DIR] [--no-screenshots] [--write-doc DOC]
@@ -31,14 +31,14 @@ IDEA = "add a stock check"
 SLUG = "add-a-stock-check"
 REF = PROJECT + "/" + SLUG
 
-# Numbering follows what a user meets: the engine opens G4 (ship) before G3 (learn).
+# Order follows what a user meets: spec, accept, then learn without a gate. A position such as
+# gate 1 of 2 is computed on screen (flow_state.gate_position), never stored.
 SCREENS = [
     ("01", "board"),
-    ("02", "flow-g1"),
-    ("03", "flow-g2"),
-    ("04", "flow-g4"),
-    ("05", "receipt"),
-    ("06", "flow-g3"),
+    ("02", "flow-spec"),
+    ("03", "flow-accept"),
+    ("04", "receipt"),
+    ("05", "flow-learn"),
 ]
 THEMES = ("light", "dark")
 VIEWPORT = {"width": 1280, "height": 800}
@@ -202,20 +202,18 @@ def _drive(copy: Path, tour_dir: Path) -> dict:
     gw("new", PROJECT, IDEA)
     gw("advance", REF)
     gw("advance", REF)
-    gate("G1", "02", "flow-g1", ("gate", REF, "approve"), before=board)
-
     gw("advance", REF, "--steps", "build the stock check")
-    gate("G2", "03", "flow-g2", ("gate", REF, "approve"))
+    gate("spec", "02", "flow-spec", ("gate", REF, "approve"), before=board)
 
     spec = copy / "spec.md"
     spec.write_text("A stock check before an order is confirmed.\n", encoding="utf-8")
     gw("advance", REF, "--spec", spec.as_posix())
-    gate("G4", "04", "flow-g4", ("gate", REF, "ship", "looks right"))
+    gate("accept", "03", "flow-accept", ("gate", REF, "ship", "looks right"))
 
-    gw("advance", REF)
-    gate("G3", "06", "flow-g3", ("gate", REF, "proceed"))
-
-    gw("advance", REF)
+    opener = ("advance", REF)
+    out = gw(*opener)
+    _snapshot_flow(copy, tour_dir, "05", "flow-learn")
+    transcript["learn"] = _entry(opener, out) + _entry(opener, gw(*opener))
     return transcript
 
 
@@ -274,7 +272,7 @@ def render_tour(out_dir, *, screenshots=True, work_parent=None, today=None) -> d
         raw = _drive(copy, tour_dir)
         receipts = _find_receipts(copy)
         if receipts:
-            shutil.copyfile(receipts[0], tour_dir / "05-receipt.html")
+            shutil.copyfile(receipts[0], tour_dir / "04-receipt.html")
         files = {name: tour_dir / "{}-{}.html".format(nn, name) for nn, name in SCREENS}
         missing = [str(p) for p in files.values() if not p.exists()]
         if missing:
@@ -301,7 +299,7 @@ def doc_block(transcript: str) -> str:
 
 
 def write_doc(doc, transcript: dict) -> None:
-    """Rewrite only the text between each <!-- tour:GX --> and <!-- /tour:GX --> pair."""
+    """Rewrite only the text between each <!-- tour:KEY --> and <!-- /tour:KEY --> pair."""
     doc = Path(doc)
     text = doc.read_text(encoding="utf-8")
     for key, value in transcript.items():
@@ -331,7 +329,7 @@ def main(argv=None) -> int:
     except Exception as exc:
         print("render-tour: {}".format(exc), file=sys.stderr)
         return 1
-    for key in ("G1", "G2", "G4", "G3"):
+    for key in ("spec", "accept", "learn"):
         print(result["transcript"][key])
     for png in result["pngs"]:
         print("wrote {}".format(png))

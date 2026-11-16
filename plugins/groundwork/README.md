@@ -5,7 +5,7 @@ first; `groundwork-mods` is optional.
 
 ## 1. What it is
 
-This plugin gives an AI agent a loop with four gates where you decide, and a record in plain files
+This plugin gives an AI agent a loop with two gates where you decide, and a record in plain files
 in your own folder. It also ships the skills for setting up, checking, moving and cleaning a
 folder tree.
 
@@ -23,7 +23,7 @@ or Claude Desktop. The whole picture is in the [repo README](../../README.md).
 
 ### The skills
 
-- `one-loop`: runs one piece of work from idea to close, with four gates where you decide and a local receipt when you accept.
+- `one-loop`: runs one piece of work from idea to close, with two gates where you decide and a local receipt when you accept.
 - `retro`: a monthly script-only check-up of your Claude Code and Cowork sessions that counts human touches, silent failures and secret exposures.
 - `handover`: ends a long chat with a short handover document so the next chat starts fresh.
 - `siteoffice-setup`: sets up or improves a Siteoffice folder structure for a holding, company, department or project.
@@ -46,9 +46,13 @@ In Claude Desktop: Settings, Plugins, Add marketplace, paste `siteoffice/groundw
 
 ## 4. Use
 
-Say "start a flow for <your change>" and `one-loop` stops at the plan gate. The gates are plan
-(G1), spec (G2), ship (G4) and learn (G3). Shipping at G4 writes a receipt to
-`flows\<project>\<slug>\receipts\`. Say "retro" for the monthly check-up. The first 15 minutes are
+Say "start a flow for <your change>" and `one-loop` stops at the spec gate. There are two gates.
+Spec: approve; reject (do not build this step); park (pause, answer later). Accept: ship (accept
+and merge); hold (send back); park (pause, answer later). Learnings run without a gate. Shipping at
+the accept gate writes a receipt to `flows\<project>\<slug>\receipts\`; it is the only verdict that
+does. Old records stay readable: older flows keep their old gate codes and still read, and the 0.5.0
+entry in `CHANGELOG.md` lists how they map.
+Say "retro" for the monthly check-up. The first 15 minutes are
 in the [repo README](../../README.md#4-use), and every screen is in [docs\tour.md](../../docs/tour.md).
 
 ## 5. Settings

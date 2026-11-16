@@ -1,10 +1,10 @@
-"""receipt.py - the local receipt written when a change is accepted at the G4 ship gate.
+"""receipt.py - the local receipt written when a change is accepted at the accept gate.
 
 One accepted change gives two files in <flow_dir>\\receipts: a JSON file for machines and a
 readable HTML page. Both say plainly that the receipt is self-issued and not signed: it is a
 record you keep for yourself, not proof to a third party.
 
-Only a G4 verdict of "ship" writes a receipt. "hold", "park" and a rejected gate write nothing.
+Only a "ship" verdict at the accept gate writes a receipt. "hold", "park" and a rejected gate write nothing.
 Stdlib only. Python 3.8+.
 """
 from __future__ import annotations
@@ -13,6 +13,15 @@ import hashlib
 import html
 import json
 import pathlib
+import sys
+
+_HERE = pathlib.Path(__file__).resolve().parent
+_LIB = _HERE.parent / "foreman" / "flows" / "_lib"
+for _p in (str(_LIB), str(_HERE)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+import flow_state as fs  # noqa: E402
 
 LABEL = "self-issued, not signed"
 SCHEMA = 1
@@ -76,7 +85,7 @@ def render_page(r):
         ("Project", r["project"]),
         ("Change", r["step_title"] or r["idea"]),
         ("Idea", r["idea"]),
-        ("Decision", "%s at %s" % (r["verdict"], r["gate"])),
+        ("Decision", "%s at the %s gate" % (r["verdict"], fs.canonical_gate(r["gate"]))),
         ("Decided at (UTC)", r["decided_at"]),
         ("Decided in", r["surface"]),
         ("Note", r["note"]),
@@ -99,7 +108,7 @@ def render_page(r):
 
 
 def write_receipt(flow, gate, flow_dir):
-    """Write the JSON and HTML receipt for a decided G4 'ship' gate. Returns (json, html) paths."""
+    """Write the JSON and HTML receipt for a decided 'ship' at the accept gate. Returns (json, html) paths."""
     flow_dir = pathlib.Path(flow_dir)
     rec = build_receipt(flow, gate, flow_dir)
     n = (rec["step_index"] if isinstance(rec["step_index"], int) else 0) + 1

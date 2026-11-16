@@ -1,4 +1,4 @@
-"""terminal_sweep.py - terminal-state sweep that opens G3 automatically.
+"""terminal_sweep.py - terminal-state sweep that opens the accept gate.
 
 This module is the pure-core of the terminal-state sweep (spec:
 2026-07-21-sprint-terminal-sweep-g3-design.md). It is DISTINCT from
@@ -9,7 +9,7 @@ Responsibilities:
 - Match flows parked at execute/phase=sprint/gate=null to terminal sprint.json
   files via the spec_path recorded in the latest sprint_emitted receipt.
 - Classify terminal sprints (success vs needs-guidance).
-- Build the status-aware sweep_context payload for the G3 notification body.
+- Build the status-aware sweep_context payload for the accept gate notification body.
 
 Invariants (spec §Invariants, never violated):
 - Never launches a sprint.
@@ -136,7 +136,8 @@ def match_terminal_sprints(
 
 
 def has_terminal_sprint(project: str, spec_path: str,
-                        sprints: List[dict]) -> Optional[dict]:
+                        sprints: List[dict],
+                        exclude_ids=()) -> Optional[dict]:
     """Return the most recent terminal sprint for (project, spec_path), else None.
 
     The relaunch-guard lookup: flow_transition.emit_sprint_line builds a launch
@@ -157,7 +158,8 @@ def has_terminal_sprint(project: str, spec_path: str,
     candidates = [s for s in sprints or []
                   if s.get("project") == project
                   and s.get("spec_path") == spec_path
-                  and s.get("status") in TERMINAL_STATUSES]
+                  and s.get("status") in TERMINAL_STATUSES
+                  and s.get("sprint_id") not in exclude_ids]
     if not candidates:
         return None
     return max(candidates, key=lambda s: s.get("created_at", ""))
@@ -174,7 +176,7 @@ def _summary(block) -> str:
 
 
 def build_sweep_context(sprint: dict) -> dict:
-    """Build the status-aware sweep_context payload for the G3 notification body.
+    """Build the status-aware sweep_context payload for the accept gate notification body.
 
     Returns a dict with: status, class, verify_summary, test_summary,
     suggested_verbs. For needs-guidance sprints the verbs steer toward
@@ -272,7 +274,7 @@ def diagnose_unmatched(flows: List[dict], sprints: List[dict]) -> List[dict]:
     Pure and read-only: no I/O, no clock, nothing written to a receipt or to
     flow-log.ndjson. An empty swept_index is passed to match_terminal_sprints
     because an already-swept flow is no longer sweep-eligible (its phase is
-    learn and G3 is open), so it cannot hide a real unmatched flow.
+    learn and the accept gate is open), so it cannot hide a real unmatched flow.
     """
     sprints = sprints or []
     matched_ids = {flow.get("flow_id")
@@ -348,7 +350,7 @@ def discover_flows(flows_root) -> list:
             flows.append({"flow": None, "log": [], "flow_dir": flow_dir,
                          "load_error": True})
             continue
-        flows.append({"flow": flow,
+        flows.append({"flow": fs.normalize_flow(flow),
                      "log": _read_ndjson(flow_dir / "flow-log.ndjson"),
                      "flow_dir": flow_dir})
     return flows
@@ -386,15 +388,25 @@ def build_swept_index(flows) -> dict:
     return index
 
 
-def _apply_match_body(flow_dir, sprint: dict, now: str) -> dict:
+def _apply_match_body(flow_dir, sprint: dict, now: str,
+                      sprints_root=None) -> dict:
     """The crossing itself, with no locking of its own. One implementation,
     two callers: apply_match below takes the lock for the scheduled sweep,
     and foreman_run.execute_recover calls this through apply_match(lock=False)
     because execute_once already holds that same lock and foreman_lock.acquire
     is not re-entrant.
     """
+    if classify_terminal(sprint) == "needs-guidance":
+        # D2: a needs-guidance sprint always re-grills. cmd_regrill logs the
+        # gate_opened, regrill and sprint_swept lines and queues the card.
+        root = pathlib.Path(sprints_root or DEFAULT_SPRINTS_ROOT)
+        report = str(root / sprint.get("project", "")
+                     / sprint.get("slug", "") / "report.md")
+        ft.cmd_regrill(flow_dir, sprint, report, now=now)
+        return {"skipped": False, "sprint_id": sprint.get("sprint_id"),
+                "regrill": True}
     # Slice c (spec 2026-08-17 items 6 and 9) gated this boundary: one
-    # cmd_advance at phase sprint now OPENS G4 rather than moving to learn, so
+    # cmd_advance at phase sprint now OPENS the accept gate rather than moving to learn, so
     # a second call would raise "cannot advance: gate awaiting decision". The
     # conditional second call keeps this correct for any boundary that is
     # still gate-free.
@@ -413,7 +425,8 @@ def _apply_match_body(flow_dir, sprint: dict, now: str) -> dict:
     return {"skipped": False, "sprint_id": sprint.get("sprint_id")}
 
 
-def apply_match(flow_dir, sprint: dict, now=None, lock: bool = True) -> dict:
+def apply_match(flow_dir, sprint: dict, now=None, lock: bool = True,
+                sprints_root=None) -> dict:
     """Pre-write re-assert + the spec section-3 sequence for one match.
 
     Returns {"skipped": bool, "sprint_id": ...}. Never launches a sprint,
@@ -429,12 +442,12 @@ def apply_match(flow_dir, sprint: dict, now=None, lock: bool = True) -> dict:
     current = ft.load_flow(flow_dir)
     if not is_sweep_eligible(current):
         # Pre-write eligibility re-assert (spec safety guard): an in-session
-        # advance opened G3 (or moved the step) in the window between
+        # advance opened a gate (or moved the step) in the window between
         # discovery and write. No-op this flow; no double advance.
         return {"skipped": True, "sprint_id": sprint.get("sprint_id")}
 
     if not lock:
-        return _apply_match_body(flow_dir, sprint, now)
+        return _apply_match_body(flow_dir, sprint, now, sprints_root)
 
     # The advisory flow lock (Foreman slice b). Two cmd_advance calls in a row
     # is exactly the sequence the driver must not interleave with. LockBusy is
@@ -442,7 +455,7 @@ def apply_match(flow_dir, sprint: dict, now=None, lock: bool = True) -> dict:
     try:
         with foreman_lock.acquire(flow_dir, "terminal-sweep", now=now,
                                   stage=current.get("stage", "")):
-            return _apply_match_body(flow_dir, sprint, now)
+            return _apply_match_body(flow_dir, sprint, now, sprints_root)
     except foreman_lock.LockBusy:
         return {"skipped": True, "sprint_id": sprint.get("sprint_id"),
                 "reason": "lock_busy"}
@@ -494,7 +507,7 @@ def main(argv=None) -> int:
     completed (even if some per-flow matches errored); non-zero only on a
     total walk failure."""
     parser = argparse.ArgumentParser(
-        description="Terminal-sprint sweep: open G3 for flows whose step's "
+        description="Terminal-sprint sweep: open the accept gate for flows whose step's "
                     "sprint reached a terminal state. Never launches a sprint, "
                     "never sends email, never writes sprint.json.")
     parser.add_argument("--flows-root", default=DEFAULT_FLOWS_ROOT)

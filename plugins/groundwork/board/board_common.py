@@ -87,3 +87,37 @@ def json_safe(obj):
     if isinstance(obj, date):
         return obj.isoformat()
     return obj
+
+
+# Gate names and the old codes that map onto them. A local copy of the table in
+# C:\work\50_projects\siteoffice\foreman\flows\_lib\flow_state.py; the board never
+# imports the engine.
+GATE_ORDER = ("decide", "spec", "accept")
+ACTIVE_GATES = ("spec", "accept")
+LEARNINGS = "learnings"
+GATE_ALIASES = {"G1": "spec", "G2": "spec", "G4": "accept", "H3": "accept"}
+RETIRED_GATES = ("G3", "H4")
+
+
+def canonical_gate(gate_id):
+    """Gate name for any stored id. A name returns itself, an alias its name,
+    a retired id `learnings`; anything else (None included) comes back as given.
+    Codes match case-insensitively. Pure."""
+    if not isinstance(gate_id, str):
+        return gate_id
+    if gate_id in GATE_ORDER:
+        return gate_id
+    code = gate_id.strip().upper()
+    if code in GATE_ALIASES:
+        return GATE_ALIASES[code]
+    if code in RETIRED_GATES:
+        return LEARNINGS
+    return gate_id
+
+
+def gate_position(gate_id):
+    """1-based position in ACTIVE_GATES, or None (decide, retired, unknown)."""
+    name = canonical_gate(gate_id)
+    if name in ACTIVE_GATES:
+        return ACTIVE_GATES.index(name) + 1
+    return None

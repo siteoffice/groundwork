@@ -133,5 +133,18 @@ class TestBodyCopyCeiling(unittest.TestCase):
                     )
 
 
+class TestGateAndVerdictLabels(unittest.TestCase):
+    def test_gate_and_verdict_keys_exist_in_every_language(self):
+        keys = ("gate_decide", "gate_spec", "gate_accept", "gate_retired", "gate_position",
+                "verdict_approve", "verdict_reject", "verdict_park", "verdict_ship", "verdict_hold")
+        for tag in ALL_LANGS:
+            labels = _load(tag)["labels"]
+            for key in keys:
+                with self.subTest(lang=tag, key=key):
+                    self.assertIn(key, labels)
+            self.assertIn("{n}", labels["gate_position"])
+            self.assertIn("{total}", labels["gate_position"])
+
+
 if __name__ == "__main__":
     unittest.main()

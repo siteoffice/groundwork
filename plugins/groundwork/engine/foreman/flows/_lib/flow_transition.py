@@ -22,6 +22,8 @@ import sys
 from typing import Optional, Tuple
 
 import flow_state as fs
+import outbox
+import spec_lint
 
 # flows/_lib and sprints/_lib are flat sibling directories with no __init__.py,
 # so importing model_map needs the sibling _lib dir on sys.path. Deliberate
@@ -37,14 +39,15 @@ import model_map as mm  # noqa: E402  (must follow the sys.path bootstrap)
 
 def load_flow(flow_dir) -> dict:
     """Read flow.json from a flow directory."""
-    return json.loads(
+    return fs.normalize_flow(json.loads(
         (pathlib.Path(flow_dir) / "flow.json").read_text(encoding="utf-8")
-    )
+    ))
 
 
 def write_flow(flow_dir, flow: dict) -> pathlib.Path:
     """Overwrite flow.json with the current snapshot."""
     out = pathlib.Path(flow_dir) / "flow.json"
+    fs.normalize_flow(flow)
     out.write_text(json.dumps(flow, indent=2) + "\n", encoding="utf-8")
     return out
 
@@ -92,8 +95,8 @@ def set_spec_path(flow: dict, spec_path: str, now: str) -> dict:
     """The ONE write path for flow['spec_path'] (spec scope A).
 
     Both entry points that can learn a spec route through here: cmd_new at
-    creation time, and the advance() G2 consume when the grill has produced the
-    spec (the spec IS the G2 artifact). Mirrors the single-decision-write-path
+    creation time, and the advance() spec consume when the grill has produced the
+    spec (the spec IS the spec-gate artifact). Mirrors the single-decision-write-path
     discipline cmd_gate already has for gate verdicts, so the two write points
     can never disagree about the field's shape or about touching updated_at.
 
@@ -120,7 +123,7 @@ def clear_spec_path(flow: dict) -> dict:
     Deliberately NOT cleared at the sprint to learn boundary: the terminal
     sweep matches a finished sprint back to its flow through
     has_terminal_sprint(project, spec_path, sprints), so the value has to
-    survive learn AND the G3 decision or G3 auto-open breaks. Re-entry to
+    survive learn AND the learn decision or the learn auto-open breaks. Re-entry to
     grill is the latest safe point. The key is REMOVED rather than set to
     null, matching new_flow's absent-key convention.
     """
@@ -199,13 +202,14 @@ def open_gate(flow: dict, gate_id: str, step_index, now: str,
     """Pure: attach a fresh awaiting-owner gate and set flow status.
 
     Generates the self-describing token once (spec lines 56-63). step_index is
-    None for G1, an int for G2/G3. Mutates and returns `flow`.
+    an int (every gate belongs to a step). The gate id is stored as its
+    canonical name. Mutates and returns `flow`.
     """
     nonce = nonce or secrets.token_hex(2).upper()  # 4 hex chars, e.g. '7QF3'
     token = fs.gate_token(flow["project"], flow["slug"], gate_id, step_index,
                           now, nonce)
     flow["gate"] = {
-        "id": gate_id,
+        "id": fs.canonical_gate(gate_id),
         "step_index": step_index,
         "status": "awaiting-owner",
         "decision": None,
@@ -353,6 +357,13 @@ class SpecMissingError(RuntimeError):
     """
 
 
+class SpecLintFailError(RuntimeError):
+    """cmd_advance_guarded refused to open the first spec card (step 0) because
+    the spec it would judge is missing or fails spec_lint. Raised BEFORE
+    cmd_advance runs: nothing is mutated and nothing is logged. A human fixes
+    the spec, then advances again."""
+
+
 class NoGenuineTerminalSprintError(RuntimeError):
     """cmd_advance_guarded found the flow parked at phase=="sprint" (sweep-eligible)
     with no genuine new terminal sprint backing it (terminal_sweep.is_sweep_eligible
@@ -376,7 +387,7 @@ class SprintNotTerminalError(RuntimeError):
     pre-call guard cannot see: terminal_sweep.is_sweep_eligible also requires
     gate is None, but advance()'s phase=="sprint" branch does not check gate
     at all. A flow at phase=="sprint" with a non-null gate (should not happen
-    on the normal G2-approve path, since _consume_g2 always clears gate in the
+    on the normal spec-approve path, since _consume_spec always clears gate in the
     same write that sets phase to sprint; only reachable via a hand-edited
     flow.json or a bug elsewhere) is not sweep-eligible, so the pre-call guard
     never evaluates it, and cmd_advance runs the crossing anyway. This guard
@@ -387,7 +398,7 @@ class SprintNotTerminalError(RuntimeError):
     SpecMissingError above: raising this neither launches, blocks nor rolls
     back anything. cmd_advance has already flipped phase to 'learn' and
     persisted it (and logged 'advanced') before this guard runs, so the flow
-    is left at phase == 'learn' with no G3 opened, the same shape of stuck
+    is left at phase == 'learn' with no learn gate opened, the same shape of stuck
     state the underlying bug already produces at phase == 'sprint', one phase
     further along. A human reads the named project, spec_path and
     sprint_emitted timestamp and decides explicitly what should happen next.
@@ -406,6 +417,26 @@ def _resolve_spec_path(flow: dict) -> str:
     return flow.get("spec_path") or (
         f"C:\\work\\{project}\\docs\\superpowers\\specs\\{slug}.md"
     )
+
+
+def first_spec_precondition(flow: dict) -> Tuple[bool, str]:
+    """Would the next crossing open the first spec card (step 0), and if so is
+    its spec present and lint-clean. Returns (ok, detail). Applies only at
+    stage execute, phase grill, no gate, step index 0; everywhere else
+    (True, ""). Reads the spec from disk; a host that cannot see the path
+    reports it missing."""
+    cs = flow.get("current_step") or {}
+    if not (flow.get("stage") == "execute" and cs.get("phase") == "grill"
+            and flow.get("gate") is None and cs.get("index") == 0):
+        return True, ""
+    resolved = _resolve_spec_path(flow)
+    local = local_spec_path(resolved)
+    if local is None or not pathlib.Path(local).exists():
+        return False, "spec missing: {}".format(resolved)
+    failures = spec_lint.lint(local)
+    if failures:
+        return False, "spec_lint FAIL: {}".format(failures[0])
+    return True, "spec_lint PASS"
 
 
 # The Windows work tree every emitted /sprint line is written against. The line
@@ -550,12 +581,12 @@ def advance(flow: dict, now: str, steps: Optional[list] = None,
     consume an already-decided gate's verdict, or cross a gate-free boundary
     directly (spec "Mechanism principle" - exactly one of these per call).
 
-    `steps` is a list of step titles; required only to consume a G1
-    'approve' verdict at the breakdown -> execute boundary (ignored
+    `steps` is a list of step titles; required only to consume a stored
+    old plan-gate 'approve' at the breakdown -> execute boundary (ignored
     otherwise, per "steps arrive only via the explicit steps argument").
 
     `spec_path` is the second write point for flow['spec_path'] (spec scope A):
-    the spec is the G2 artifact, so a call that consumes a G2 'approve' records
+    the spec is the spec-gate artifact, so a call that consumes a spec 'approve' records
     it through set_spec_path before emit_sprint_line builds the line. It is
     ignored at every other boundary and defaults to None, so an existing caller
     that passes nothing behaves exactly as before.
@@ -563,7 +594,7 @@ def advance(flow: dict, now: str, steps: Optional[list] = None,
     `driver` is the advisory foreman.json record, MUTATED IN PLACE and never
     read from or written to disk here: this module does no foreman.json I/O and
     must not import foreman_run (that would be a cycle). Only one branch uses
-    it, the G4 `hold` verdict, which has to leave a mark somewhere for
+    it, the accept `hold` verdict, which has to leave a mark somewhere for
     `foreman_run.py ship` to find and the flow schema has no field for "held".
     Every other boundary ignores it, so a caller that passes nothing behaves
     exactly as before.
@@ -578,6 +609,10 @@ def advance(flow: dict, now: str, steps: Optional[list] = None,
     if flow.get("status") == "paused":
         raise ValueError("cannot advance: flow is paused")
     gate = flow.get("gate")
+    if (isinstance(gate, dict) and fs.is_retired_gate(gate.get("id"))
+            and flow.get("stage") == "execute"
+            and (flow.get("current_step") or {}).get("phase") == "learn"):
+        flow["gate"] = gate = None  # D2: a retired learnings gate is dropped
     if isinstance(gate, dict) and gate.get("status") == "awaiting-owner":
         raise ValueError("cannot advance: gate awaiting decision")
 
@@ -592,50 +627,66 @@ def advance(flow: dict, now: str, steps: Optional[list] = None,
         flow["status"] = "running"
     elif stage == "breakdown":
         if isinstance(gate, dict) and gate.get("status") == "decided":
-            flow = _consume_g1(flow, gate, steps)
+            flow = _consume_breakdown_legacy(flow, gate, steps)
         else:
-            flow = open_gate(flow, "G1", None, now)
+            flow = _enter_execute(flow, steps)
     elif stage == "execute":
         cs = dict(flow.get("current_step") or {})
         phase = cs.get("phase")
         if phase == "grill":
             if isinstance(gate, dict) and gate.get("status") == "decided":
-                flow, sprint_line = _consume_g2(flow, gate, cs, now, spec_path)
+                flow, sprint_line = _consume_spec(flow, gate, cs, now, spec_path)
             else:
-                flow = open_gate(flow, "G2", cs.get("index"), now)
+                flow = open_gate(flow, "spec", cs.get("index"), now)
         elif phase == "sprint":
             if isinstance(gate, dict) and gate.get("status") == "decided":
-                flow, driver = _consume_g4(flow, gate, cs, driver)
+                flow, driver = _consume_accept(flow, gate, cs, driver)
             else:
-                flow = open_gate(flow, "G4", cs.get("index"), now)
+                flow = open_gate(flow, "accept", cs.get("index"), now)
+        elif phase == "learn" and _is_decided_accept(gate):
+            # A reopened accept (foreman_run ship after a hold) sits at learn:
+            # honour its verdict through the normal consumption, never drop it.
+            flow, driver = _consume_accept(flow, gate, cs, driver)
         elif phase == "learn":
-            if isinstance(gate, dict) and gate.get("status") == "decided":
-                flow = _consume_g3(flow, gate, cs)
-            else:
-                flow = open_gate(flow, "G3", cs.get("index"), now)
+            if isinstance(driver, dict) and driver.get("held"):
+                raise ValueError(
+                    "cannot advance: a hold is pending on this step; reopen it "
+                    "with foreman_run.py ship or close the flow")
+            flow = _learn_auto(flow, cs)
     # stage == "closed": no-op, nothing left to advance.
 
     flow["updated_at"] = now
     return flow, sprint_line
 
 
-def _consume_g1(flow: dict, gate: dict, steps: Optional[list]) -> dict:
-    """Apply a decided G1 verdict at the breakdown boundary, clearing the gate."""
+def _enter_execute(flow: dict, steps: Optional[list]) -> dict:
+    """Cross breakdown -> execute with no gate. Titles come from `steps`, else
+    the flow's own steps, else the idea as a single step."""
+    titles = list(steps) if steps else [
+        s.get("title") for s in (flow.get("steps") or [])
+        if isinstance(s, dict) and s.get("title")]
+    if not titles:
+        titles = [flow["idea"]]
+    step_list = [{"index": i, "title": title, "status": "pending"}
+                 for i, title in enumerate(titles)]
+    step_list[0]["status"] = "running"
+    flow["steps"] = step_list
+    flow["stage"] = "execute"
+    flow["current_step"] = {"index": 0, "of": len(step_list), "phase": "grill"}
+    flow["status"] = "running"
+    flow["gate"] = None
+    return flow
+
+
+def _consume_breakdown_legacy(flow: dict, gate: dict,
+                              steps: Optional[list]) -> dict:
+    """Apply a stored, decided old plan gate (spec) at breakdown, clearing it.
+    New flows never open one; this only reads a flow written before the plan
+    gate was folded into spec."""
     verdict = gate["decision"]["verdict"]
     if verdict == "approve":
-        if not steps:
-            raise ValueError(
-                "advance: 'steps' (non-empty list of titles) required to "
-                "consume a G1 approve at breakdown -> execute"
-            )
-        step_list = [{"index": i, "title": t, "status": "pending"}
-                     for i, t in enumerate(steps)]
-        step_list[0]["status"] = "running"
-        flow["steps"] = step_list
-        flow["stage"] = "execute"
-        flow["current_step"] = {"index": 0, "of": len(step_list), "phase": "grill"}
-        flow["status"] = "running"
-    elif verdict == "reject":
+        return _enter_execute(flow, steps)
+    if verdict == "reject":
         flow["stage"] = "design"
         flow["status"] = "running"
     elif verdict == "park":
@@ -644,9 +695,9 @@ def _consume_g1(flow: dict, gate: dict, steps: Optional[list]) -> dict:
     return flow
 
 
-def _consume_g2(flow: dict, gate: dict, cs: dict, now: str,
+def _consume_spec(flow: dict, gate: dict, cs: dict, now: str,
                 spec_path: Optional[str] = None) -> Tuple[dict, Optional[str]]:
-    """Apply a decided G2 verdict at the grill boundary, clearing the gate.
+    """Apply a decided spec verdict at the grill boundary, clearing the gate.
 
     On 'approve' with a spec_path supplied, records it through the shared
     set_spec_path setter FIRST, so the /sprint line this function emits names
@@ -661,7 +712,7 @@ def _consume_g2(flow: dict, gate: dict, cs: dict, now: str,
         flow["status"] = "running"
         sprint_line = emit_sprint_line(flow)
     elif verdict == "reject":
-        flow["status"] = "running"  # phase stays "grill"; next call opens a fresh G2
+        flow["status"] = "running"  # phase stays "grill"; next call opens a fresh spec gate
     elif verdict == "park":
         flow["status"] = "paused"
     flow["current_step"] = cs
@@ -669,36 +720,32 @@ def _consume_g2(flow: dict, gate: dict, cs: dict, now: str,
     return flow, sprint_line
 
 
-def _consume_g3(flow: dict, gate: dict, cs: dict) -> dict:
-    """Apply a decided G3 verdict at the learn boundary, clearing the gate."""
-    verdict = gate["decision"]["verdict"]
+def _is_decided_accept(gate) -> bool:
+    return (isinstance(gate, dict) and gate.get("status") == "decided"
+            and fs.canonical_gate(gate.get("id")) == "accept")
+
+
+def _learn_auto(flow: dict, cs: dict) -> dict:
+    """Cross the learn boundary with no gate (D2): the step is done, the next
+    step goes to grill, or the flow closes after the last step. Any gate left
+    at learn (a retired learn gate) is dropped."""
     steps = flow.get("steps") or []
     i = cs.get("index", 0)
-    if verdict == "proceed":
-        if 0 <= i < len(steps):
-            steps[i]["status"] = "done"
-        new_index = i + 1
-        cs["index"] = new_index
-        if new_index == cs.get("of"):
-            flow["stage"] = "closed"
-            flow["status"] = "closed"
-        else:
-            if 0 <= new_index < len(steps):
-                steps[new_index]["status"] = "running"
-            cs["phase"] = "grill"
-            flow["status"] = "running"
-        flow["steps"] = steps
-    elif verdict == "adapt":
-        cs["phase"] = "grill"
-        flow["status"] = "running"
-    elif verdict == "close":
+    if 0 <= i < len(steps):
+        steps[i]["status"] = "done"
+    new_index = i + 1
+    cs["index"] = new_index
+    if new_index == cs.get("of"):
         flow["stage"] = "closed"
         flow["status"] = "closed"
-    elif verdict == "park":
-        flow["status"] = "paused"
-    # A new grill produces a new spec, so the old one must not survive into it.
-    # Covers 'proceed' to a further step and 'adapt' re-grilling this one; a
-    # closed or parked flow keeps its last spec_path as a record.
+    else:
+        if 0 <= new_index < len(steps):
+            steps[new_index]["status"] = "running"
+        cs["phase"] = "grill"
+        flow["status"] = "running"
+    flow["steps"] = steps
+    # A new grill produces a new spec, so the old one must not survive into it;
+    # a closed flow keeps its last spec_path as a record.
     if cs.get("phase") == "grill":
         clear_spec_path(flow)
     flow["current_step"] = cs
@@ -706,17 +753,17 @@ def _consume_g3(flow: dict, gate: dict, cs: dict) -> dict:
     return flow
 
 
-def _consume_g4(flow: dict, gate: dict, cs: dict,
+def _consume_accept(flow: dict, gate: dict, cs: dict,
                 driver: Optional[dict]) -> Tuple[dict, dict]:
-    """Apply a decided G4 verdict at the sprint boundary, clearing the gate.
+    """Apply a decided accept verdict at the sprint boundary, clearing the gate.
 
     Returns (flow, driver). The only _consume_* that touches the driver, and
-    the reason its signature differs from _consume_g1 / _consume_g2 /
-    _consume_g3: `hold` has to record that a reopen is pending, and flow.json
+    the reason its signature differs from _consume_breakdown_legacy /
+    _consume_spec / _learn_auto: `hold` has to record that a reopen is pending, and flow.json
     has no field for it.
 
     `ship` and `hold` produce the SAME state transition, deliberately: the step
-    is finished either way and G3 reviews the learnings next. The only
+    is finished either way and the learnings run without a gate next. The only
     difference is whether the branch was merged, and merging is foreman_run's
     ship_execute, not this function's. The branch a `hold` leaves behind is
     simply never merged.
@@ -726,6 +773,14 @@ def _consume_g4(flow: dict, gate: dict, cs: dict,
     was this held" is "when it was decided".
     """
     verdict = gate["decision"]["verdict"]
+    if driver is None and (verdict == "hold" or (
+            verdict == "park" and cs.get("phase") == "learn")):
+        # foreman.json belongs to the Foreman driver; with none passed the
+        # pending hold would be recorded nowhere and learn would be crossed.
+        raise ValueError(
+            "cannot advance: a {} on this accept is recorded by the Foreman "
+            "driver, which owns foreman.json; run foreman_run.py run "
+            "<project>/<slug> instead of /flow advance".format(verdict))
     driver = driver if isinstance(driver, dict) else {}
     if verdict in ("ship", "hold"):
         driver.pop("shipped", None)
@@ -741,9 +796,33 @@ def _consume_g4(flow: dict, gate: dict, cs: dict,
             }
     elif verdict == "park":
         flow["status"] = "paused"
+        if cs.get("phase") == "learn":
+            # A park on a reopened accept (foreman_run ship cleared the hold):
+            # restore the pending hold so a resume cannot cross learn and drop
+            # the ship decision. `ship` can then reopen accept again.
+            decision = gate["decision"]
+            driver.pop("shipped", None)
+            driver.pop("preflight", None)
+            driver.pop("ship", None)
+            driver["held"] = {
+                "reason": decision.get("note")
+                          or "accept parked at the reopened ship gate",
+                "ts": decision.get("decided_at") or flow.get("updated_at", ""),
+            }
     flow["current_step"] = cs
     flow["gate"] = None
     return flow, driver
+
+
+def _read_held_driver(flow_dir) -> Optional[dict]:
+    """Read-only peek at <flow_dir>/foreman.json for a pending hold. No
+    foreman_run import (cycle); a missing or bad file reads as no hold."""
+    try:
+        data = json.loads((pathlib.Path(flow_dir) / "foreman.json")
+                          .read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
 
 
 def cmd_advance(flow_dir, now: Optional[str] = None,
@@ -753,10 +832,10 @@ def cmd_advance(flow_dir, now: Optional[str] = None,
     """Load, advance, persist, and log. Returns (flow, sprint_line).
 
     `steps` is a list of step titles, threaded through to `advance()`;
-    required only when this call consumes a G1 'approve' verdict. `spec_path`
+    used only when this call consumes a stored old plan-gate 'approve' (else the flow's own steps or the idea are used). `spec_path`
     is threaded through to advance(); it is recorded only when this call
-    consumes a G2 'approve'. `driver` is passed straight through to advance();
-    it is mutated in place, only by a G4 hold, and never written to disk here.
+    consumes a spec 'approve'. `driver` is passed straight through to advance();
+    it is mutated in place, only by an accept hold, and never written to disk here.
     A gate opened by this call is persisted
     (flow.json write) and logged as 'gate_opened' before returning
     (persist-then-prompt); a sprint step is EMITTED as a /sprint line (logged
@@ -764,6 +843,17 @@ def cmd_advance(flow_dir, now: Optional[str] = None,
     """
     now = now or fs.iso_utc_now()
     flow = load_flow(flow_dir)
+    learn_before = None
+    if flow.get("stage") == "execute":
+        cs0 = flow.get("current_step") or {}
+        if cs0.get("phase") == "learn" and not _is_decided_accept(
+                flow.get("gate")):
+            g0 = flow.get("gate")
+            learn_before = {
+                "dropped": isinstance(g0, dict)
+                           and fs.is_retired_gate(g0.get("id"))}
+            if driver is None:
+                driver = _read_held_driver(flow_dir)
     flow, sprint_line = advance(flow, now, steps=steps, spec_path=spec_path,
                                 driver=driver)
     write_flow(flow_dir, flow)
@@ -777,10 +867,68 @@ def cmd_advance(flow_dir, now: Optional[str] = None,
     elif sprint_line:
         append_log(flow_dir, _log_entry(now, flow.get("stage", ""), "orchestrator",
                    "sprint_emitted", outcome="info", detail=sprint_line))
+    elif learn_before is not None:
+        found = (pathlib.Path(flow_dir) / "learnings.md").is_file()
+        detail = "learn step crossed, " + (
+            "learnings.md found" if found else "no learnings.md")
+        if learn_before["dropped"]:
+            detail += " (retired gate G3 dropped)"
+        append_log(flow_dir, _log_entry(now, flow.get("stage", ""), "auto",
+                   "learn_auto", outcome="info", detail=detail))
     else:
         append_log(flow_dir, _log_entry(now, flow.get("stage", ""), "orchestrator",
                    "advanced", outcome="info", detail=f"stage={flow.get('stage')}"))
     return flow, sprint_line
+
+
+def cmd_regrill(flow_dir, sprint: dict, report_path: str,
+                now: Optional[str] = None) -> dict:
+    """Send a failed step back to the spec gate (D2, always).
+
+    The needs-guidance crossing: the step returns to phase grill and spec
+    opens marked `regrill`, instead of moving to learn. The spec is amended in
+    place, so spec_path is kept; the failed sprint id is recorded in
+    flow["regrill_cleared"] so the relaunch guard lets the amended spec
+    launch again. Raises ValueError unless the flow is at execute / phase
+    sprint with no gate. Writes flow.json once, then logs and queues the card.
+    """
+    now = now or fs.iso_utc_now()
+    flow = load_flow(flow_dir)
+    cs = dict(flow.get("current_step") or {})
+    if (flow.get("stage") != "execute" or cs.get("phase") != "sprint"
+            or flow.get("gate") is not None):
+        raise ValueError("cannot regrill: flow must be at execute / phase "
+                         "sprint with no open gate")
+    sprint_id = sprint.get("sprint_id")
+    cs["phase"] = "grill"
+    flow["current_step"] = cs
+    cleared = list(flow.get("regrill_cleared") or [])
+    if sprint_id and sprint_id not in cleared:
+        cleared.append(sprint_id)
+    flow["regrill_cleared"] = cleared
+    open_gate(flow, "spec", cs.get("index"), now)
+    gate = flow["gate"]
+    gate["regrill"] = {"status": sprint.get("status"),
+                       "iteration": sprint.get("iteration"),
+                       "max_iterations": sprint.get("max_iterations"),
+                       "report": report_path}
+    write_flow(flow_dir, flow)
+
+    stage = flow.get("stage", "")
+    append_log(flow_dir, _log_entry(
+        now, stage, "orchestrator", "gate_opened", outcome="info",
+        detail=f"{gate['id']} token {gate['token']}", ref=gate["token"]))
+    append_log(flow_dir, _log_entry(
+        now, stage, "orchestrator", "regrill", outcome="info",
+        detail="re-grill after {}, iteration {}/{}".format(
+            sprint.get("status"), sprint.get("iteration"),
+            sprint.get("max_iterations")),
+        ref=sprint_id))
+    append_log(flow_dir, _log_entry(
+        now, stage, "orchestrator", "sprint_swept", outcome="info",
+        detail=f"{sprint_id} status={sprint.get('status')}", ref=sprint_id))
+    outbox.append_gate_open(flow_dir, flow, now)
+    return flow
 
 
 def cmd_advance_guarded(flow_dir, sprints_root: Optional[str] = None,
@@ -795,7 +943,7 @@ def cmd_advance_guarded(flow_dir, sprints_root: Optional[str] = None,
 
     Calls cmd_advance(flow_dir, now, spec_path=spec_path): this function adds
     read-only checks afterward, and also passes `spec_path` straight through
-    to cmd_advance so the production /flow advance entry point can record a G2
+    to cmd_advance so the production /flow advance entry point can record a spec
     spec the same way the inner function can (spec scope A, criterion 2).
     `spec_path` is the last keyword argument and defaults to None, so every
     existing positional or keyword call is unaffected.
@@ -808,7 +956,7 @@ def cmd_advance_guarded(flow_dir, sprints_root: Optional[str] = None,
     caller here). This crossing happens on two different shapes, and only one
     of them gets re-checked:
 
-    - `gate_before` is NOT a decided gate with id "G4" (either gate is None,
+    - `gate_before` is NOT a decided gate with id "accept" (either gate is None,
       the real auto-sweep-eligible shape the pre-call guard above already
       requires a genuine terminal sprint for, or it is some other decided
       gate a hand edit or bug left sitting at phase=="sprint"): this function
@@ -824,16 +972,16 @@ def cmd_advance_guarded(flow_dir, sprints_root: Optional[str] = None,
       SprintNotTerminalError naming project, spec_path and that receipt's
       timestamp, instead of returning silently as if the crossing were
       routine.
-    - `gate_before` IS a decided gate with id "G4" (a genuine ship/hold
-      consumption via `_consume_g4`): the re-check is skipped entirely. A
-      gate with id "G4" only ever gets created by open_gate(flow, "G4", ...),
+    - `gate_before` IS a decided gate with id "accept" (a genuine ship/hold
+      consumption via `_consume_accept`): the re-check is skipped entirely. A
+      gate with id "accept" only ever gets created by open_gate(flow, "accept", ...),
       which this module's phase=="sprint" branch of advance() only reaches
       through the pre-call guard above or terminal_sweep.apply_match, both of
       which already ran the genuine terminal-sprint match before opening it.
       match_terminal_sprints would always return [] here regardless of
       whether the sprint is terminal (is_sweep_eligible requires gate is
       None), so re-running it against the pre-crossing snapshot (which by
-      definition still carries the just-consumed G4 gate) is not a second
+      definition still carries the just-consumed accept gate) is not a second
       opinion, it is a guaranteed false positive.
 
     This is the second half of the relaunch guard's job: the first half
@@ -903,6 +1051,10 @@ def cmd_advance_guarded(flow_dir, sprints_root: Optional[str] = None,
     before_flow = load_flow(flow_dir)
     phase_before = (before_flow.get("current_step") or {}).get("phase")
 
+    ok, detail = first_spec_precondition(before_flow)
+    if not ok:
+        raise SpecLintFailError(detail)
+
     if ts.is_sweep_eligible(before_flow):
         log = ts._read_ndjson(pathlib.Path(flow_dir) / "flow-log.ndjson")
         ctx = {"flow": before_flow, "log": log}
@@ -940,8 +1092,8 @@ def cmd_advance_guarded(flow_dir, sprints_root: Optional[str] = None,
     phase_after = (flow.get("current_step") or {}).get("phase")
     if phase_before == "sprint" and phase_after == "learn":
         gate_before = before_flow.get("gate")
-        # A decided gate whose id is "G4" only ever got there through
-        # open_gate(flow, "G4", ...), which this module's own phase=="sprint"
+        # A decided gate whose id is "accept" only ever got there through
+        # open_gate(flow, "accept", ...), which this module's own phase=="sprint"
         # branch of advance() only reaches via the pre-call guard above (a
         # validated match) or terminal_sweep.apply_match (same validation).
         # Its ship/hold consumption has nothing left to re-verify, so it
@@ -950,7 +1102,7 @@ def cmd_advance_guarded(flow_dir, sprints_root: Optional[str] = None,
         # went through that validated open) still gets the full re-check
         # below: is_sweep_eligible would exclude it too (gate is not None),
         # so it is exactly the case the re-check exists to catch.
-        if not (isinstance(gate_before, dict) and gate_before.get("id") == "G4"):
+        if not (isinstance(gate_before, dict) and fs.canonical_gate(gate_before.get("id")) == "accept"):
             log = _read_flow_log(flow_dir)
             sprints = ts.discover_sprints(sprints_root or ts.DEFAULT_SPRINTS_ROOT)
             matches = ts.match_terminal_sprints(
@@ -973,7 +1125,9 @@ def cmd_advance_guarded(flow_dir, sprints_root: Optional[str] = None,
     project = flow.get("project", "")
     resolved_spec_path = _resolve_spec_path(flow)
     sprints = ts.discover_sprints(sprints_root or ts.DEFAULT_SPRINTS_ROOT)
-    match = ts.has_terminal_sprint(project, resolved_spec_path, sprints)
+    match = ts.has_terminal_sprint(
+        project, resolved_spec_path, sprints,
+        exclude_ids=flow.get("regrill_cleared") or ())
     if match:
         emit_sprint_line(flow, existing_terminal=match)  # raises RelaunchGuardError
     # local_spec_path returns None when this host cannot check the path at all

@@ -33,10 +33,6 @@ import terminal_sweep as ts
 
 # --- contracts ----------------------------------------------------------------
 
-# G4 is listed defensively for the same reason foreman_plan.SHIP_GATE_ID exists:
-# slice c has not added it to flow_state.GATE_IDS yet.
-GATE_ORDER: tuple = ("G1", "G2", "G3", "G4")
-
 BLOCKING_RANK: dict = {"human": 0, "fence": 1, "clock": 2, "agent": 3, "": 4}
 
 # The banner is the surface the UserPromptSubmit hook injects: its width, line
@@ -73,7 +69,7 @@ class FlowStatus:
     step_of: Optional[int]
     step_title: str               # "" when there are no steps
     phase: str                    # "" when current_step.phase is None
-    gates: tuple                  # (("G1", "approve 07-31"), ("G2", "-"), ...) for G1..G4
+    gates: tuple                  # (("spec", "approve 07-31"), ("accept", "-")) for fs.ACTIVE_GATES
     sprint_slug: str
     sprint_status: str
     iteration: Optional[int]
@@ -159,7 +155,7 @@ def _gate_label(verdict: str, ts_: str, now: str) -> str:
 # --- gate_history ---------------------------------------------------------------
 
 def gate_history(log: list, gate: Optional[dict], now: str) -> tuple:
-    """One (gate_id, label) pair per id in GATE_ORDER.
+    """One (gate_name, label) pair per id in fs.ACTIVE_GATES.
 
     One pass over the log collects the newest gate_decided receipt per gate
     id (the verdict parsed from detail with a 'verdict=' split; a receipt
@@ -174,17 +170,20 @@ def gate_history(log: list, gate: Optional[dict], now: str) -> tuple:
         if " verdict=" not in detail:
             continue
         gate_id, verdict = detail.split(" verdict=", 1)
-        gate_id = gate_id.strip()
+        gate_id = fs.canonical_gate(gate_id.strip())
+        if gate_id not in fs.ACTIVE_GATES:
+            continue  # retired (learnings) and unknown ids are not shown
+        verdict = verdict.split(" ", 1)[0]  # an accept ship adds " learn=..."
         entry_ts = entry.get("ts", "")
         if gate_id not in decided or entry_ts > decided[gate_id][0]:
             decided[gate_id] = (entry_ts, verdict)
 
     open_gate_id = None
     if isinstance(gate, dict) and gate.get("status") == "awaiting-owner":
-        open_gate_id = gate.get("id")
+        open_gate_id = fs.canonical_gate(gate.get("id"))
 
     out = []
-    for gate_id in GATE_ORDER:
+    for gate_id in fs.ACTIVE_GATES:
         if gate_id == open_gate_id:
             wait = fl.age_seconds(gate.get("opened_at"), now)
             out.append((gate_id, "awaiting {}".format(_short_wait(wait))))
@@ -354,8 +353,11 @@ def _line(label: str, content: str) -> str:
 
 def _gates_line_content(gates: tuple) -> str:
     by_id = dict(gates or ())
-    return " | ".join(
-        "{} {}".format(gate_id, by_id.get(gate_id, "-")) for gate_id in GATE_ORDER)
+    parts = []
+    for gate_id in fs.ACTIVE_GATES:
+        label = by_id.get(gate_id, "-")
+        parts.append("{}, {}: {}".format(gate_id, fs.gate_label(gate_id), label))
+    return " | ".join(parts)
 
 
 def _step_line_content(status: FlowStatus) -> str:

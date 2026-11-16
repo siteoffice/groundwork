@@ -26,7 +26,10 @@ if str(TEMPLATES_DIR) not in sys.path:
     sys.path.insert(0, str(TEMPLATES_DIR))
 
 import theme  # noqa: E402
-from board_common import esc, flow_gate_is_open, json_safe, read_ndjson  # noqa: E402
+from board_common import (  # noqa: E402
+    ACTIVE_GATES, LEARNINGS, canonical_gate, esc, flow_gate_is_open, gate_position,
+    json_safe, read_ndjson,
+)
 import table as tpl_table  # noqa: E402
 import activity as tpl_activity  # noqa: E402
 
@@ -61,31 +64,41 @@ def _log_detail(entry: dict, has_sprint_runner: bool):
     return entry.get("detail", "")
 
 
-# The verdicts each gate takes. A local copy of flow_state.VERDICTS_BY_GATE:
-# this module never imports flows\\_lib (hard rule). Unknown ids take only park.
+# The verdicts each gate takes, keyed by gate name and read through
+# board_common.canonical_gate (old G and H codes map onto a name there). A local
+# mirror of VERDICTS_BY_GATE in C:\work\50_projects\siteoffice\foreman\flows\_lib\flow_state.py; this
+# module never imports flows\\_lib (hard rule). Unknown ids take only park.
 _VERDICTS_BY_GATE = {
-    "G1": ("approve", "reject", "park"),
-    "G2": ("approve", "reject", "park"),
-    "G3": ("proceed", "adapt", "close", "park"),
-    "G4": ("ship", "hold", "park"),
+    "spec": ("approve", "reject", "park"),
+    "accept": ("ship", "hold", "park"),
 }
 
 
 def _flow_next_command(summary: dict) -> str:
     project, slug, gate = summary["project"], summary["slug"], summary["gate"]
     if summary["awaiting"] and gate:
-        verdicts = "|".join(_VERDICTS_BY_GATE.get(gate.get("id"), ("park",)))
+        name = canonical_gate(gate.get("id"))
+        if name == LEARNINGS:
+            return f"/flow advance {project} {slug}"
+        verdicts = "|".join(_VERDICTS_BY_GATE.get(name, ("park",)))
         return f"/flow gate {project} {slug} {verdicts}  (token {gate.get('token', '')})"
     if summary["status"] == "closed":
         return ""
     return f"/flow status {project} {slug}"
 
 
+def _gate_display_id(gate: dict) -> str:
+    """Canonical name for an active gate; the stored id for a retired or unknown one."""
+    stored = gate.get("id", "")
+    name = canonical_gate(stored)
+    return name if name in _VERDICTS_BY_GATE else stored
+
+
 def _flow_index_row(s: dict):
     last_log = s["log"][-1] if s["log"] else None
     last_log_text = last_log.get("action", "") if last_log else ""
     link = f'{s["project"]}/{s["slug"]}/index.html'
-    gate_text = f'{s["gate"].get("id", "")} {s["gate"].get("status", "")}'.strip()
+    gate_text = f'{_gate_display_id(s["gate"])} {s["gate"].get("status", "")}'.strip()
     return [
         esc(s["project"]),
         f'<a href="{esc(link)}">{esc(s["slug"])}</a>',
@@ -133,9 +146,30 @@ def _render_flow_page(s: dict, lang, languages, manifest_labels, label_bundle, r
     if gate:
         decision = gate.get("decision") or {}
         gate_sem = "wait" if gate.get("status") == "awaiting-owner" else "done"
+        stored_id = gate.get("id", "")
+        name = canonical_gate(stored_id)
+        if name == LEARNINGS:
+            heading = (f'gate {esc(stored_id)} &middot; '
+                       f'{esc(label_bundle.get("gate_retired", "gate_retired"))}')
+            verdict_html = ""
+        else:
+            heading = f'gate {esc(name)}'
+            if name in ACTIVE_GATES:
+                position = (label_bundle.get("gate_position", "gate_position")
+                            .replace("{n}", str(gate_position(name)))
+                            .replace("{total}", str(len(ACTIVE_GATES))))
+                heading += (f' &middot; {esc(label_bundle.get("gate_" + name, "gate_" + name))}'
+                            f' &middot; {esc(position)}')
+            items = "".join(
+                f'<li><span class="mono">{esc(verb)}</span> '
+                f'{esc(label_bundle.get("verdict_" + verb, "verdict_" + verb))}</li>'
+                for verb in _VERDICTS_BY_GATE.get(name, ("park",))
+            )
+            verdict_html = f"<ul>{items}</ul>"
         gate_html = (
             f'<p>{tpl_table.render_badge(gate.get("status", ""), gate_sem)} '
-            f'gate {esc(gate.get("id", ""))} &middot; token {esc(gate.get("token", ""))}</p>'
+            f'{heading} &middot; token {esc(gate.get("token", ""))}</p>'
+            f'{verdict_html}'
             f'<p class="note">verdict: {esc(decision.get("verdict") or "-")} '
             f'&middot; note: {esc(decision.get("note") or "-")}</p>'
         )

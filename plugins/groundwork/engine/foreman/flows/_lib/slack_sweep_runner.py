@@ -62,7 +62,7 @@ LOG_PATH = _HERE / "slack-sweep-log.ndjson"
 # still wins when set. The empty default here (not in slack_sweep_host, whose
 # constant this runner overrides in main()) is what made every gate prompt
 # fail with channel_not_found whenever the scheduled task's environment lost
-# the env var: the step 6 G3 opened 2026-08-17T21:29Z and never reached Slack,
+# the env var: the step 6 learn gate opened 2026-08-17T21:29Z and never reached Slack,
 # while the sweep logged the same error every 10 minutes for 11 hours.
 GATE_CHANNEL_ID = os.environ.get("ZND_GATE_CHANNEL_ID", "C0BK70BTFQ9")
 

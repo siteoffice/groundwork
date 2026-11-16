@@ -1,6 +1,6 @@
 ## The merge is next
 
-G4 is decided `ship` and the merge has not run yet. The order here is
+The accept gate is decided `ship` and the merge has not run yet. The order here is
 deliberate: the merge and the push happen before the verdict is consumed, so
 the receipts read ship first and advance second, and a crash in between leaves
 a gate that is still decided rather than a flow that thinks it shipped.

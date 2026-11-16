@@ -19,6 +19,7 @@ BOARD_DIR = HERE.parent
 if str(BOARD_DIR) not in sys.path:
     sys.path.insert(0, str(BOARD_DIR))
 import render_board  # noqa: E402
+import kinds.flow as kind_flow  # noqa: E402
 import kinds.sprint as kind_sprint  # noqa: E402
 
 
@@ -118,7 +119,7 @@ class TestFlowsKind(unittest.TestCase):
             )
             self.assertTrue(index_json["flows"][0]["awaiting"])
 
-    def test_per_flow_page_shows_gate_id_and_escapes_html(self):
+    def test_per_flow_page_shows_gate_name_and_escapes_html(self):
         with tempfile.TemporaryDirectory() as tmp:
             root_dir = pathlib.Path(tmp)
             _write_holding_root(root_dir)
@@ -134,7 +135,7 @@ class TestFlowsKind(unittest.TestCase):
             )
             self.assertIn("dsi", page)
             self.assertIn("payoff", page)
-            self.assertIn("G2", page)
+            self.assertIn("gate spec", page)
             self.assertNotIn("<script>x</script>", page)
             self.assertIn("&lt;script&gt;x&lt;/script&gt;", page)
             self.assertTrue(
@@ -522,6 +523,32 @@ class TestNoImportCycle(unittest.TestCase):
         result = subprocess.run([_sys.executable, "-c", script], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("OK", result.stdout)
+
+
+class TestFlowNextCommandGateIds(unittest.TestCase):
+    def _cmd(self, gate):
+        return kind_flow._flow_next_command(
+            {"project": "p", "slug": "s", "status": "waiting", "awaiting": True, "gate": gate}
+        )
+
+    def test_spec_and_accept(self):
+        self.assertIn("approve|reject|park", self._cmd({"id": "spec", "token": "t"}))
+        self.assertIn("ship|hold|park", self._cmd({"id": "accept", "token": "t"}))
+
+    def test_legacy_g_ids(self):
+        self.assertIn("approve|reject|park", self._cmd({"id": "G1", "token": "t"}))
+        self.assertIn("approve|reject|park", self._cmd({"id": "G2", "token": "t"}))
+        g3 = self._cmd({"id": "G3", "token": "t"})
+        self.assertIn("/flow advance p s", g3)
+        self.assertNotIn("proceed", g3)
+        self.assertIn("ship|hold|park", self._cmd({"id": "G4", "token": "t"}))
+
+    def test_unknown_or_missing_id_takes_only_park(self):
+        for gate in ({"id": "zzz", "token": "t"}, {"token": "t"}, {"id": None, "token": "t"}):
+            result = self._cmd(gate)
+            self.assertIn(" park  (token", result)
+            for word in ("approve", "ship", "proceed"):
+                self.assertNotIn(word, result)
 
 
 if __name__ == "__main__":

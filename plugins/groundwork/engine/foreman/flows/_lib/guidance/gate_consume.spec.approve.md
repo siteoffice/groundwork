@@ -1,8 +1,8 @@
-## G1 approved: it still has to be consumed
+## spec approved: it still has to be consumed
 
-G1 is decided `approve`. Nothing else has happened yet: the verdict sits on the gate until the
-next advance reads it and moves the flow into breakdown proper. The command printed on the DO
-line, `/flow advance <ref>`, is what consumes it.
+The spec gate is decided `approve`. Nothing else has happened yet: the verdict sits on the gate
+until the next advance reads it and moves the flow on. The command printed on the DO line,
+`/flow advance <ref>`, is what consumes it.
 
 Before running that line, check whether this flow has more than one step. On a multi-step flow,
 the advance call needs its own `spec_path` argument naming this step's spec, because the printed

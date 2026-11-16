@@ -22,12 +22,7 @@ from __future__ import annotations
 
 from typing import List
 
-# The gate ids this scan routes on. Identical to
-# foreman_plan._RECOGNISED_GATE_IDS, which carries G4 ahead of flow_state.
-# Redeclared rather than imported so this module stays out of foreman_plan's
-# import chain; test_gate_watch asserts the two agree, so drift is caught.
-RECOGNISED_GATE_IDS = ("G1", "G2", "G3", "G4")
-
+import flow_state as fs
 
 def _verdict_of(gate: dict) -> str:
     return ((gate or {}).get("decision") or {}).get("verdict") or ""
@@ -57,7 +52,7 @@ def find_unconsumed_gates(flows: List[dict]) -> List[dict]:
             continue
         if gate.get("status") != "decided":
             continue
-        if gate.get("id") not in RECOGNISED_GATE_IDS:
+        if fs.canonical_gate(gate.get("id")) not in fs.ACTIVE_GATES:
             continue
         verdict = _verdict_of(gate)
         if not verdict:
@@ -65,7 +60,7 @@ def find_unconsumed_gates(flows: List[dict]) -> List[dict]:
         out.append({
             "project": flow.get("project", ""),
             "slug": flow.get("slug", ""),
-            "gate_id": gate.get("id"),
+            "gate_id": fs.canonical_gate(gate.get("id")),
             "verdict": verdict,
             "decided_at": (gate.get("decision") or {}).get("decided_at", ""),
         })
@@ -128,11 +123,16 @@ def main(argv=None) -> int:
         print("gate_watch: scan failed: {}".format(exc), file=sys.stderr)
         return 0
     for entry in pending:
-        print("gate_watch: {}/{} {} decided verdict={} unconsumed for {} "
-              "(run: /flow advance {}/{})".format(
-                  entry["project"], entry["slug"], entry["gate_id"],
-                  entry["verdict"], format_age(entry["decided_at"], now),
-                  entry["project"], entry["slug"]))
+        ref = "{}/{}".format(entry["project"], entry["slug"])
+        # /flow advance with no driver refuses a hold and a park (the Foreman
+        # driver owns foreman.json), so those two verdicts get the driver command.
+        if entry["verdict"] in ("hold", "park"):
+            hint = "run: python foreman_run.py run {}".format(ref)
+        else:
+            hint = "run: /flow advance {}".format(ref)
+        print("gate_watch: {} {} decided verdict={} unconsumed for {} "
+              "({})".format(ref, entry["gate_id"], entry["verdict"],
+                            format_age(entry["decided_at"], now), hint))
     print("gate_watch: unconsumed={}".format(len(pending)))
     return 0
 

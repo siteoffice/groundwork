@@ -31,6 +31,9 @@ STATE_NORMAL = "normal"
 # to find it, same bound as the manifest ancestor walk in render_board.py.
 _MAX_ANCESTOR_WALK = 8
 
+# The one gate a card can wait on: the decision to move into the last stage.
+FUNNEL_GATE = "decide"
+
 _STAGE_DIR_RE = re.compile(r"^(\d+)_(.+)$")
 _FILENAME_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})_([^_]+)_(.+)\.md$")
 _HEADING_RE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
@@ -90,12 +93,13 @@ def _card_from_file(path: pathlib.Path, gate):
 
 
 def collect_columns(funnel_dir: pathlib.Path):
-    """[(stage_name, label_key, [card, ...]), ...]. A card's "gate" is the
-    gate between its stage and the next (G1..G{n-1} for n stages); the last
-    stage's cards carry no gate, they are already through kickoff. Loose
-    files render as a leading "inbox" column, gated on G1 when stage folders
-    exist (they are waiting to be shaped into stage 1), gate-less when the
-    holding has no stage folders at all yet."""
+    """[(stage_name, label_key, [card, ...]), ...]. Only the gate into the
+    last stage folder remains, FUNNEL_GATE ("decide"). With n stage folders
+    the cards of stage index n - 2 (the stage directly before the last)
+    carry it; every other stage carries None. Loose files render as a
+    leading "inbox" column and carry it only when exactly one stage folder
+    exists (they are the stage before the last); with zero or two or more
+    stage folders they carry None."""
     stage_dirs = sorted(
         (p for p in funnel_dir.iterdir() if p.is_dir() and _STAGE_DIR_RE.match(p.name)),
         key=lambda p: int(_STAGE_DIR_RE.match(p.name).group(1)),
@@ -107,14 +111,14 @@ def collect_columns(funnel_dir: pathlib.Path):
 
     columns = []
     if loose_files:
-        gate = "G1" if stage_dirs else None
+        gate = FUNNEL_GATE if len(stage_dirs) == 1 else None
         cards = [_card_from_file(p, gate) for p in loose_files]
         columns.append(("inbox", "inbox", cards))
 
     stage_count = len(stage_dirs)
     for i, stage_dir in enumerate(stage_dirs):
         suffix = _STAGE_DIR_RE.match(stage_dir.name).group(2)
-        gate = f"G{i + 1}" if i + 1 < stage_count else None
+        gate = FUNNEL_GATE if i == stage_count - 2 else None
         cards = [_card_from_file(p, gate) for p in sorted(stage_dir.glob("*.md"))]
         columns.append((stage_dir.name, suffix, cards))
     return columns

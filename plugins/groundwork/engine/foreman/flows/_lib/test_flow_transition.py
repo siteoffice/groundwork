@@ -1,3 +1,4 @@
+# Old codes (G1 to G4) below are stored old records kept on purpose (OF30).
 """Tests for flow_transition.py. Plain pytest, stdlib only, hermetic (tmp_path)."""
 import json
 import pathlib
@@ -36,7 +37,7 @@ def test_cmd_new_writes_valid_flow_json_and_logs_flow_created(tmp_path):
 
 
 def _execute_flow_with_step(tmp_path):
-    """A flow parked in execute at step 2, ready for a G2 gate."""
+    """A flow parked in execute at step 2, ready for a spec gate."""
     flow_dir, flow = ft.cmd_new(tmp_path, "dsi", "payoff books",
                                 now="2026-07-18T09:00:00Z", slug="payoff")
     flow["stage"] = "execute"
@@ -49,14 +50,14 @@ def _execute_flow_with_step(tmp_path):
 def test_persist_open_gate_writes_gate_and_logs_before_prompt(tmp_path):
     flow_dir = _execute_flow_with_step(tmp_path)
     flow = ft.load_flow(flow_dir)
-    ft.persist_open_gate(flow_dir, flow, "G2", 2,
+    ft.persist_open_gate(flow_dir, flow, "spec", 2,
                          now="2026-07-18T09:14:03Z", nonce="7QF3")
     on_disk = ft.load_flow(flow_dir)
-    assert on_disk["gate"]["id"] == "G2"
+    assert on_disk["gate"]["id"] == "spec"
     assert on_disk["gate"]["status"] == "awaiting-owner"
     assert on_disk["gate"]["decision"] is None
     assert on_disk["gate"]["notified"] is False
-    assert on_disk["gate"]["token"] == "FLOW-DSI-payoff-G2-S2-20260718T091403Z-7QF3"
+    assert on_disk["gate"]["token"] == "FLOW-DSI-payoff-spec-S2-20260718T091403Z-7QF3"
     assert on_disk["status"] == "awaiting-owner"
     assert fs.validate(on_disk) == []
     log = _read_log(flow_dir)
@@ -66,7 +67,7 @@ def test_persist_open_gate_writes_gate_and_logs_before_prompt(tmp_path):
 def test_gate_decision_first_wins_second_ignored_and_logged(tmp_path):
     flow_dir = _execute_flow_with_step(tmp_path)
     flow = ft.load_flow(flow_dir)
-    ft.persist_open_gate(flow_dir, flow, "G2", 2,
+    ft.persist_open_gate(flow_dir, flow, "spec", 2,
                          now="2026-07-18T09:14:03Z", nonce="7QF3")
 
     ft.cmd_gate(flow_dir, "approve", surface="session",
@@ -88,7 +89,7 @@ def test_gate_decision_first_wins_second_ignored_and_logged(tmp_path):
 def test_cmd_gate_rejects_verdict_invalid_for_gate(tmp_path):
     flow_dir = _execute_flow_with_step(tmp_path)
     flow = ft.load_flow(flow_dir)
-    ft.persist_open_gate(flow_dir, flow, "G2", 2,
+    ft.persist_open_gate(flow_dir, flow, "spec", 2,
                          now="2026-07-18T09:14:03Z", nonce="7QF3")
     # 'proceed' is only valid for G3.
     import pytest
@@ -103,7 +104,7 @@ def test_advance_into_sprint_step_emits_sprint_line_and_does_not_launch(tmp_path
     flow["stage"] = "execute"
     flow["current_step"] = {"index": 1, "of": 3, "phase": "grill"}
     flow["model_hint"] = {"dev": "sonnet"}
-    flow["gate"] = {"id": "G2", "step_index": 1, "status": "decided",
+    flow["gate"] = {"id": "spec", "step_index": 1, "status": "decided",
                     "decision": {"verdict": "approve", "note": "", "surface": "session",
                                  "decided_at": "2026-07-18T09:05:00Z", "message_ref": None},
                     "notified": True}
@@ -134,7 +135,7 @@ def test_advance_lightweight_stage_returns_no_sprint_line(tmp_path):
 def test_advance_raises_when_gate_still_awaiting(tmp_path):
     flow_dir = _execute_flow_with_step(tmp_path)
     flow = ft.load_flow(flow_dir)
-    ft.persist_open_gate(flow_dir, flow, "G2", 2,
+    ft.persist_open_gate(flow_dir, flow, "spec", 2,
                          now="2026-07-18T09:14:03Z", nonce="7QF3")
     import pytest
     with pytest.raises(ValueError):
@@ -185,7 +186,7 @@ def test_cmd_resume_raises_when_flow_not_paused(tmp_path):
 
 
 def _breakdown_flow(tmp_path, slug="fx"):
-    """A fresh flow parked at stage 'breakdown', gate null, ready for G1."""
+    """A fresh flow parked at stage 'breakdown', gate null, ready to cross to execute."""
     flow_dir, flow = ft.cmd_new(tmp_path, "dsi", "payoff books",
                                 now="2026-07-20T09:00:00Z", slug=slug)
     flow["stage"] = "breakdown"
@@ -193,80 +194,102 @@ def _breakdown_flow(tmp_path, slug="fx"):
     return flow_dir
 
 
-def test_advance_at_breakdown_opens_g1_and_refuses_while_awaiting(tmp_path):
-    flow_dir = _breakdown_flow(tmp_path, slug="g1open")
-    updated, sprint_line = ft.cmd_advance(flow_dir, now="2026-07-20T09:05:00Z")
-    assert updated["stage"] == "breakdown"
-    assert sprint_line is None
-    assert updated["gate"]["id"] == "G1"
-    assert updated["gate"]["step_index"] is None
-    assert updated["gate"]["status"] == "awaiting-owner"
-    assert fs.validate(updated) == []
-    log = _read_log(flow_dir)
-    assert log[-1]["action"] == "gate_opened"
-    assert "G1" in log[-1]["detail"]
-
-    with pytest.raises(ValueError):
-        ft.cmd_advance(flow_dir, now="2026-07-20T09:06:00Z")
+NOW = "2026-07-20T09:00:00Z"
+_STAMP = "20260720T090000Z"
 
 
-def test_advance_g1_approve_populates_steps_and_sets_execute(tmp_path):
-    flow_dir = _breakdown_flow(tmp_path, slug="g1approve")
-    ft.cmd_advance(flow_dir, now="2026-07-20T09:05:00Z")  # opens G1
-    ft.cmd_gate(flow_dir, "approve", now="2026-07-20T09:10:00Z")
-
-    updated, sprint_line = ft.cmd_advance(
-        flow_dir, now="2026-07-20T09:15:00Z",
-        steps=["scaffold module", "wire tests", "ship"])
-
-    assert sprint_line is None
-    assert updated["stage"] == "execute"
-    assert updated["gate"] is None
-    assert [s["status"] for s in updated["steps"]] == ["running", "pending", "pending"]
-    assert updated["current_step"] == {"index": 0, "of": 3, "phase": "grill"}
-    assert fs.validate(updated) == []
+def _stored_legacy_g1(flow_dir, verdict):
+    """A flow at breakdown holding a decided old plan gate G1 (stored null step)."""
+    flow = json.loads((flow_dir / "flow.json").read_text(encoding="utf-8"))
+    token = "-".join(["FLOW", "DSI", flow["slug"], "G1", _STAMP, "ABCD"])
+    flow["gate"] = {"id": "G1", "step_index": None, "status": "decided",
+                    "decision": {"verdict": verdict, "note": "",
+                                 "surface": "session",
+                                 "decided_at": "2026-07-20T09:10:00Z"},
+                    "notified": True, "token": token,
+                    "opened_at": NOW}
+    (flow_dir / "flow.json").write_text(json.dumps(flow, indent=2) + chr(10),
+                                        encoding="utf-8")
 
 
-def test_advance_g1_approve_without_steps_raises(tmp_path):
-    flow_dir = _breakdown_flow(tmp_path, slug="g1nosteps")
-    ft.cmd_advance(flow_dir, now="2026-07-20T09:05:00Z")
-    ft.cmd_gate(flow_dir, "approve", now="2026-07-20T09:10:00Z")
-    with pytest.raises(ValueError):
-        ft.cmd_advance(flow_dir, now="2026-07-20T09:15:00Z")
+def test_breakdown_crosses_to_execute_without_a_gate(tmp_path):
+    flow_dir, _ = ft.cmd_new(tmp_path, "dsi", "idea", now=NOW, slug="bd")
+    ft.cmd_advance(flow_dir, now=NOW)
+    ft.cmd_advance(flow_dir, now=NOW)
+    flow, _ = ft.cmd_advance(flow_dir, now=NOW, steps=["a", "b"])
+    assert flow["stage"] == "execute" and flow["gate"] is None
+    assert flow["current_step"] == {"index": 0, "of": 2, "phase": "grill"}
+    assert [s["title"] for s in flow["steps"]] == ["a", "b"]
+    assert [s["status"] for s in flow["steps"]] == ["running", "pending"]
+    assert fs.validate(flow) == []
 
 
-def test_advance_g1_reject_returns_to_design(tmp_path):
-    flow_dir = _breakdown_flow(tmp_path, slug="g1reject")
-    ft.cmd_advance(flow_dir, now="2026-07-20T09:05:00Z")
-    ft.cmd_gate(flow_dir, "reject", now="2026-07-20T09:10:00Z")
-
-    updated, sprint_line = ft.cmd_advance(flow_dir, now="2026-07-20T09:15:00Z")
-    assert updated["stage"] == "design"
-    assert updated["gate"] is None
-    assert updated["steps"] == []
-    assert sprint_line is None
+def test_breakdown_without_steps_uses_the_idea_as_one_step(tmp_path):
+    flow_dir = _breakdown_flow(tmp_path, slug="bdidea")
+    flow, _ = ft.cmd_advance(flow_dir, now=NOW)
+    assert flow["stage"] == "execute" and flow["gate"] is None
+    assert [s["title"] for s in flow["steps"]] == ["payoff books"]
+    assert flow["current_step"] == {"index": 0, "of": 1, "phase": "grill"}
 
 
-def test_advance_g1_park_pauses_and_resume_reopens_fresh_gate(tmp_path):
-    flow_dir = _breakdown_flow(tmp_path, slug="g1park")
-    first_open, _ = ft.cmd_advance(flow_dir, now="2026-07-20T09:05:00Z")
-    first_token = first_open["gate"]["token"]
-    ft.cmd_gate(flow_dir, "park", now="2026-07-20T09:10:00Z")
+def test_grill_opens_spec_and_sprint_opens_accept_by_name(tmp_path):
+    flow_dir = _execute_flow_two_steps(tmp_path, slug="byname")
+    flow, _ = ft.cmd_advance(flow_dir, now=NOW)
+    assert flow["gate"]["id"] == "spec"
+    assert "-spec-S0-" in flow["gate"]["token"]
+    ft.cmd_gate(flow_dir, "approve", now=NOW)
+    flow, line = ft.cmd_advance(flow_dir, now=NOW)
+    assert flow["current_step"]["phase"] == "sprint" and line is not None
+    flow, _ = ft.cmd_advance(flow_dir, now=NOW)
+    assert flow["gate"]["id"] == "accept"
+    assert "-accept-S0-" in flow["gate"]["token"]
 
-    updated, sprint_line = ft.cmd_advance(flow_dir, now="2026-07-20T09:15:00Z")
-    assert updated["status"] == "paused"
-    assert updated["stage"] == "breakdown"
-    assert updated["gate"] is None
-    assert sprint_line is None
 
-    with pytest.raises(ValueError):
-        ft.cmd_advance(flow_dir, now="2026-07-20T09:16:00Z")
+def test_a_stored_g2_gate_is_saved_as_spec_with_its_token_unchanged(tmp_path):
+    flow_dir = _execute_flow_two_steps(tmp_path, slug="g2store")
+    raw = json.loads((flow_dir / "flow.json").read_text(encoding="utf-8"))
+    token = "-".join(["FLOW", "DSI", "g2store", "spec", "S0", _STAMP, "ABCD"])
+    raw["gate"] = {"id": "spec", "step_index": 0, "status": "awaiting-owner",
+                   "decision": None, "notified": False, "token": token,
+                   "opened_at": NOW}
+    raw["status"] = "awaiting-owner"
+    (flow_dir / "flow.json").write_text(json.dumps(raw), encoding="utf-8")
+    assert ft.load_flow(flow_dir)["gate"]["id"] == "spec"
+    ft.cmd_gate(flow_dir, "approve", now=NOW)
+    on_disk = json.loads((flow_dir / "flow.json").read_text(encoding="utf-8"))
+    assert on_disk["gate"]["id"] == "spec"
+    assert on_disk["gate"]["token"] == token
 
-    ft.cmd_resume(flow_dir, now="2026-07-20T09:20:00Z")
-    reopened, _ = ft.cmd_advance(flow_dir, now="2026-07-20T09:25:00Z")
-    assert reopened["status"] == "awaiting-owner"
-    assert reopened["gate"]["id"] == "G1"
-    assert reopened["gate"]["token"] != first_token
+
+def test_a_legacy_decided_g1_approve_at_breakdown_enters_execute(tmp_path):
+    flow_dir = _breakdown_flow(tmp_path, slug="lg1a")
+    _stored_legacy_g1(flow_dir, "approve")
+    flow, _ = ft.cmd_advance(flow_dir, now=NOW, steps=["x", "y", "z"])
+    assert flow["stage"] == "execute" and flow["gate"] is None
+    assert flow["current_step"] == {"index": 0, "of": 3, "phase": "grill"}
+
+
+def test_a_legacy_decided_g1_reject_returns_to_design(tmp_path):
+    flow_dir = _breakdown_flow(tmp_path, slug="lg1r")
+    _stored_legacy_g1(flow_dir, "reject")
+    flow, _ = ft.cmd_advance(flow_dir, now=NOW)
+    assert flow["stage"] == "design" and flow["gate"] is None
+    assert flow["steps"] == []
+
+
+def test_a_legacy_decided_g1_park_pauses(tmp_path):
+    flow_dir = _breakdown_flow(tmp_path, slug="lg1p")
+    _stored_legacy_g1(flow_dir, "park")
+    flow, _ = ft.cmd_advance(flow_dir, now=NOW)
+    assert flow["status"] == "paused" and flow["stage"] == "breakdown"
+    assert flow["gate"] is None
+
+
+def test_open_gate_stores_the_canonical_name(tmp_path):
+    flow = ft.new_flow("dsi", "s", "idea", NOW)
+    ft.open_gate(flow, "spec", 0, NOW, nonce="ABCD")
+    assert flow["gate"]["id"] == "spec"
+    assert "-spec-S0-" in flow["gate"]["token"]
 
 
 def _execute_flow_two_steps(tmp_path, slug="two"):
@@ -299,7 +322,7 @@ def test_advance_at_grill_opens_g2_and_refuses_while_awaiting(tmp_path):
     updated, sprint_line = ft.cmd_advance(flow_dir, now="2026-07-20T09:05:00Z")
     assert updated["current_step"]["phase"] == "grill"
     assert sprint_line is None
-    assert updated["gate"]["id"] == "G2"
+    assert updated["gate"]["id"] == "spec"
     assert updated["gate"]["step_index"] == 0
     log = _read_log(flow_dir)
     assert log[-1]["action"] == "gate_opened"
@@ -333,7 +356,7 @@ def test_advance_g2_reject_stays_in_grill_then_opens_fresh_g2(tmp_path):
     assert sprint_line is None
 
     reopened, _ = ft.cmd_advance(flow_dir, now="2026-07-20T09:20:00Z")
-    assert reopened["gate"]["id"] == "G2"
+    assert reopened["gate"]["id"] == "spec"
     assert reopened["gate"]["token"] != first_token
 
 
@@ -351,7 +374,7 @@ def test_advance_g2_park_pauses_and_resume_reopens_g2(tmp_path):
 
     ft.cmd_resume(flow_dir, now="2026-07-20T09:20:00Z")
     reopened, _ = ft.cmd_advance(flow_dir, now="2026-07-20T09:25:00Z")
-    assert reopened["gate"]["id"] == "G2"
+    assert reopened["gate"]["id"] == "spec"
 
 
 def test_advance_at_phase_sprint_opens_g4_rather_than_moving_straight_to_learn(tmp_path):
@@ -367,7 +390,7 @@ def test_advance_at_phase_sprint_opens_g4_rather_than_moving_straight_to_learn(t
     ft.write_flow(flow_dir, flow)
 
     updated, sprint_line = ft.cmd_advance(flow_dir, now="2026-07-20T09:05:00Z")
-    assert updated["gate"]["id"] == "G4"
+    assert updated["gate"]["id"] == "accept"
     assert updated["gate"]["status"] == "awaiting-owner"
     assert updated["gate"]["step_index"] == 0
     assert updated["status"] == "awaiting-owner"
@@ -392,12 +415,11 @@ def test_advance_consumes_a_decided_g4_ship_into_phase_learn(tmp_path):
     assert sprint_line is None
 
 
-def test_advance_g3_proceed_mid_flow_advances_to_next_step_grill(tmp_path):
+def test_advance_at_learn_mid_flow_advances_to_next_step_grill(tmp_path):
     flow_dir = _execute_flow_at_learn(tmp_path, "g3proceed", index=0, of=2)
-    ft.cmd_advance(flow_dir, now="2026-07-20T09:05:00Z")  # opens G3
-    ft.cmd_gate(flow_dir, "proceed", now="2026-07-20T09:10:00Z")
 
     updated, sprint_line = ft.cmd_advance(flow_dir, now="2026-07-20T09:15:00Z")
+    assert updated["gate"] is None
     assert updated["stage"] == "execute"
     assert updated["current_step"] == {"index": 1, "of": 2, "phase": "grill"}
     assert updated["steps"][0]["status"] == "done"
@@ -405,54 +427,14 @@ def test_advance_g3_proceed_mid_flow_advances_to_next_step_grill(tmp_path):
     assert sprint_line is None
 
 
-def test_advance_g3_proceed_on_last_step_closes_flow(tmp_path):
+def test_advance_at_learn_on_last_step_closes_flow(tmp_path):
     flow_dir = _execute_flow_at_learn(tmp_path, "g3lastclose", index=1, of=2)
-    ft.cmd_advance(flow_dir, now="2026-07-20T09:05:00Z")
-    ft.cmd_gate(flow_dir, "proceed", now="2026-07-20T09:10:00Z")
 
     updated, _ = ft.cmd_advance(flow_dir, now="2026-07-20T09:15:00Z")
     assert updated["stage"] == "closed"
     assert updated["status"] == "closed"
     assert updated["steps"][1]["status"] == "done"
     assert fs.validate(updated) == []
-
-
-def test_advance_g3_adapt_reenters_grill_same_step(tmp_path):
-    flow_dir = _execute_flow_at_learn(tmp_path, "g3adapt", index=0, of=2)
-    ft.cmd_advance(flow_dir, now="2026-07-20T09:05:00Z")
-    ft.cmd_gate(flow_dir, "adapt", now="2026-07-20T09:10:00Z")
-
-    updated, _ = ft.cmd_advance(flow_dir, now="2026-07-20T09:15:00Z")
-    assert updated["current_step"] == {"index": 0, "of": 2, "phase": "grill"}
-    assert updated["steps"][0]["status"] == "running"
-
-
-def test_advance_g3_close_closes_flow_regardless_of_index(tmp_path):
-    flow_dir = _execute_flow_at_learn(tmp_path, "g3directclose", index=0, of=2)
-    ft.cmd_advance(flow_dir, now="2026-07-20T09:05:00Z")
-    ft.cmd_gate(flow_dir, "close", now="2026-07-20T09:10:00Z")
-
-    updated, _ = ft.cmd_advance(flow_dir, now="2026-07-20T09:15:00Z")
-    assert updated["stage"] == "closed"
-    assert updated["status"] == "closed"
-
-
-def test_advance_g3_park_pauses_and_resume_reopens_g3_same_step(tmp_path):
-    flow_dir = _execute_flow_at_learn(tmp_path, "g3park", index=0, of=2)
-    ft.cmd_advance(flow_dir, now="2026-07-20T09:05:00Z")
-    ft.cmd_gate(flow_dir, "park", now="2026-07-20T09:10:00Z")
-
-    updated, _ = ft.cmd_advance(flow_dir, now="2026-07-20T09:15:00Z")
-    assert updated["status"] == "paused"
-    assert updated["current_step"]["phase"] == "learn"
-
-    with pytest.raises(ValueError):
-        ft.cmd_advance(flow_dir, now="2026-07-20T09:16:00Z")
-
-    ft.cmd_resume(flow_dir, now="2026-07-20T09:20:00Z")
-    reopened, _ = ft.cmd_advance(flow_dir, now="2026-07-20T09:25:00Z")
-    assert reopened["gate"]["id"] == "G3"
-    assert reopened["current_step"]["index"] == 0
 
 
 def test_full_happy_path_idea_to_closed_two_step_flow(tmp_path):
@@ -465,27 +447,23 @@ def test_full_happy_path_idea_to_closed_two_step_flow(tmp_path):
     updated, _ = ft.cmd_advance(flow_dir, now=now)          # design -> breakdown
     assert updated["stage"] == "breakdown"
 
-    ft.cmd_advance(flow_dir, now=now)                       # opens G1
-    ft.cmd_gate(flow_dir, "approve", now=now)
-    updated, _ = ft.cmd_advance(flow_dir, now=now, steps=["alpha", "beta"])
+    updated, _ = ft.cmd_advance(flow_dir, now=now, steps=["alpha", "beta"])  # no gate
     assert updated["stage"] == "execute"
     assert updated["current_step"] == {"index": 0, "of": 2, "phase": "grill"}
 
     for _ in (0, 1):
-        ft.cmd_advance(flow_dir, now=now)                   # opens G2
+        ft.cmd_advance(flow_dir, now=now)                   # opens spec
         ft.cmd_gate(flow_dir, "approve", now=now)
         updated, sprint_line = ft.cmd_advance(flow_dir, now=now)  # grill -> sprint
         assert updated["current_step"]["phase"] == "sprint"
         assert sprint_line is not None
 
-        ft.cmd_advance(flow_dir, now=now)                   # opens G4 (spec item 6)
+        ft.cmd_advance(flow_dir, now=now)                   # opens accept
         ft.cmd_gate(flow_dir, "ship", now=now)
         updated, _ = ft.cmd_advance(flow_dir, now=now)      # sprint -> learn
         assert updated["current_step"]["phase"] == "learn"
 
-        ft.cmd_advance(flow_dir, now=now)                   # opens G3
-        ft.cmd_gate(flow_dir, "proceed", now=now)
-        updated, _ = ft.cmd_advance(flow_dir, now=now)      # consume G3
+        updated, _ = ft.cmd_advance(flow_dir, now=now)      # learn, no gate
 
     assert updated["stage"] == "closed"
     assert updated["status"] == "closed"
@@ -493,7 +471,7 @@ def test_full_happy_path_idea_to_closed_two_step_flow(tmp_path):
 
     log = _read_log(flow_dir)
     gate_sequence = [e["detail"].split()[0] for e in log if e["action"] == "gate_opened"]
-    assert gate_sequence == ["G1", "G2", "G4", "G3", "G2", "G4", "G3"]
+    assert gate_sequence == ["spec", "accept", "spec", "accept"]
     assert fs.validate(updated) == []
 
 
@@ -700,7 +678,7 @@ def _live_flow_ready_to_emit(tmp_path, slug, spec_exists=True):
     flow["spec_path"] = str(spec)
     flow["current_step"] = {"index": 0, "of": 1, "phase": "grill"}
     flow["steps"] = [{"index": 0, "title": "build it", "status": "running"}]
-    flow["gate"] = {"id": "G2", "step_index": 0, "status": "decided",
+    flow["gate"] = {"id": "spec", "step_index": 0, "status": "decided",
                     "decision": {"verdict": "approve", "note": "",
                                  "surface": "session",
                                  "decided_at": "2026-08-01T09:05:00Z",
@@ -764,9 +742,9 @@ def _gate_bypass_sprint_phase_flow(tmp_path, slug, sprints_root,
     assert flow["gate"] is None  # sanity: _flow_at_sprint_phase's own contract
     # verdict is "ship", not "approve": since the G4 ship gate landed,
     # advance()'s phase=="sprint" branch with a decided gate calls
-    # _consume_g4, which only flips cs["phase"] to "learn" for a "ship" or
+    # _consume_accept, which only flips cs["phase"] to "learn" for a "ship" or
     # "hold" verdict. "approve" (the pre-G4 shape of this fixture) matches no
-    # branch in _consume_g4 and leaves the crossing this test depends on from
+    # branch in _consume_accept and leaves the crossing this test depends on from
     # ever happening.
     flow["gate"] = {
         "id": "G_STALE", "step_index": 0, "status": "decided",
@@ -780,7 +758,11 @@ def _gate_bypass_sprint_phase_flow(tmp_path, slug, sprints_root,
 def test_cmd_advance_guarded_passthrough_when_no_sprint_line_emitted(tmp_path, monkeypatch):
     """Gate-opening transition (no sprint line): must return exactly what
     cmd_advance would, and must never even consult terminal_sweep."""
-    flow_dir = _breakdown_flow(tmp_path, slug="guard-noemit")
+    flow_dir = _execute_flow_two_steps(tmp_path, slug="guard-noemit")
+    # Spec precondition (OF30 part 2) is covered in test_spec_precondition.py;
+    # this test is about another guard, so let the precondition pass.
+    monkeypatch.setattr(ft, "first_spec_precondition",
+                        lambda _flow: (True, "spec_lint PASS"))
 
     def _boom(*_a, **_k):
         raise AssertionError("terminal_sweep must not be consulted when no "
@@ -788,7 +770,7 @@ def test_cmd_advance_guarded_passthrough_when_no_sprint_line_emitted(tmp_path, m
     monkeypatch.setattr(ts, "discover_sprints", _boom)
     monkeypatch.setattr(ts, "has_terminal_sprint", _boom)
 
-    plain_flow_dir = _breakdown_flow(tmp_path, slug="plain-noemit")
+    plain_flow_dir = _execute_flow_two_steps(tmp_path, slug="plain-noemit")
     expected, expected_line = ft.cmd_advance(plain_flow_dir,
                                              now="2026-08-01T09:05:00Z")
 
@@ -799,10 +781,10 @@ def test_cmd_advance_guarded_passthrough_when_no_sprint_line_emitted(tmp_path, m
     assert sprint_line == expected_line
     # Compare everything but the token (it embeds the slug, which differs
     # between the two flow dirs by construction).
-    assert updated["gate"]["id"] == expected["gate"]["id"] == "G1"
+    assert updated["gate"]["id"] == expected["gate"]["id"] == "spec"
     assert updated["gate"]["status"] == expected["gate"]["status"] == "awaiting-owner"
     assert updated["gate"]["step_index"] == expected["gate"]["step_index"]
-    assert updated["stage"] == expected["stage"] == "breakdown"
+    assert updated["stage"] == expected["stage"] == "execute"
 
 
 def test_cmd_advance_guarded_passthrough_when_no_terminal_sprint_matches(tmp_path):
@@ -921,7 +903,7 @@ def test_cmd_advance_guarded_crosses_sprint_to_learn_with_genuine_terminal_sprin
         flow_dir, sprints_root=str(sprints_root), now="2026-08-02T09:40:00Z")
 
     assert updated["current_step"]["phase"] == "sprint"
-    assert updated["gate"]["id"] == "G4"
+    assert updated["gate"]["id"] == "accept"
     assert updated["gate"]["status"] == "awaiting-owner"
     assert sprint_line is None
 
@@ -976,10 +958,14 @@ def test_cmd_advance_guarded_refuses_when_terminal_sprint_already_swept(tmp_path
 
 
 def test_cmd_advance_guarded_precheck_never_runs_when_not_sweep_eligible(tmp_path, monkeypatch):
-    """A flow at stage='breakdown' (G1 boundary, not phase='sprint'): the new
+    """A flow at phase=grill (spec boundary, not phase="sprint"): the new
     pre-check must add zero terminal_sweep calls, proven by monkeypatching
     match_terminal_sprints and diagnose_unmatched to raise if called."""
-    flow_dir = _breakdown_flow(tmp_path, slug="guard-notsweep")
+    flow_dir = _execute_flow_two_steps(tmp_path, slug="guard-notsweep")
+    # Spec precondition (OF30 part 2) is covered in test_spec_precondition.py;
+    # this test is about another guard, so let the precondition pass.
+    monkeypatch.setattr(ft, "first_spec_precondition",
+                        lambda _flow: (True, "spec_lint PASS"))
 
     def _boom(*_a, **_k):
         raise AssertionError("pre-check must not run when is_sweep_eligible "
@@ -987,15 +973,15 @@ def test_cmd_advance_guarded_precheck_never_runs_when_not_sweep_eligible(tmp_pat
     monkeypatch.setattr(ts, "match_terminal_sprints", _boom)
     monkeypatch.setattr(ts, "diagnose_unmatched", _boom)
 
-    plain_flow_dir = _breakdown_flow(tmp_path, slug="plain-notsweep")
+    plain_flow_dir = _execute_flow_two_steps(tmp_path, slug="plain-notsweep")
     expected, expected_line = ft.cmd_advance(plain_flow_dir,
                                              now="2026-08-02T09:05:00Z")
     updated, sprint_line = ft.cmd_advance_guarded(
         flow_dir, now="2026-08-02T09:05:00Z")
 
     assert sprint_line == expected_line
-    assert updated["gate"]["id"] == expected["gate"]["id"] == "G1"
-    assert updated["stage"] == expected["stage"] == "breakdown"
+    assert updated["gate"]["id"] == expected["gate"]["id"] == "spec"
+    assert updated["stage"] == expected["stage"] == "execute"
 
 
 def test_cmd_advance_guarded_mutation_proof_new_guard_actually_fires(tmp_path, monkeypatch):
@@ -1016,7 +1002,7 @@ def test_cmd_advance_guarded_mutation_proof_new_guard_actually_fires(tmp_path, m
     # behaviour the real (unpatched) test 1 proves does NOT happen. G4 opens
     # (not a direct crossing to learn) since that gate now sits in between.
     assert updated["current_step"]["phase"] == "sprint"
-    assert updated["gate"]["id"] == "G4"
+    assert updated["gate"]["id"] == "accept"
     assert sprint_line is None
 
 
@@ -1134,7 +1120,7 @@ def test_cmd_advance_guarded_crosses_sprint_to_learn_when_a_new_terminal_sprint_
         flow_dir, sprints_root=str(sprints_root), now="2026-08-01T10:00:00Z")
     assert sprint_line is None
     assert updated["current_step"]["phase"] == "sprint"
-    assert updated["gate"]["id"] == "G4"
+    assert updated["gate"]["id"] == "accept"
     assert updated["gate"]["status"] == "awaiting-owner"
 
 
@@ -1202,14 +1188,14 @@ def test_cmd_advance_guarded_sprint_not_terminal_writes_nothing_beyond_plain_cmd
 # raised SprintNotTerminalError on this path, even for a genuinely terminal
 # sprint the sweep had already matched once (when it opened G4 in the first
 # place). Fixed by skipping the re-check specifically when the pre-crossing
-# gate is a decided dict with id "G4".
+# gate is a decided dict with id "accept".
 
 def test_cmd_advance_guarded_consumes_decided_g4_ship_without_raising_when_sprint_was_genuinely_terminal(tmp_path):
     """Full genuine sequence: G2 approve, sprint reaches terminal status, G4
     opens via the sweep, G4 decided ship, then cmd_advance_guarded consumes
     it. Must succeed (crossing to phase=learn) instead of raising
     SprintNotTerminalError, and the flow must be able to continue normally
-    afterward (the next call opens G3)."""
+    afterward (the next call crosses learn)."""
     sprints_root = tmp_path / "sprints"
     flow_dir = _flow_at_sprint_phase(tmp_path, "g4-fix-happy", sprints_root)
     assert ft.load_flow(flow_dir)["current_step"]["phase"] == "sprint"
@@ -1221,7 +1207,7 @@ def test_cmd_advance_guarded_consumes_decided_g4_ship_without_raising_when_sprin
 
     opened_g4, _ = ft.cmd_advance_guarded(
         flow_dir, sprints_root=str(sprints_root), now="2026-08-01T09:20:00Z")
-    assert opened_g4["gate"]["id"] == "G4"
+    assert opened_g4["gate"]["id"] == "accept"
     assert opened_g4["gate"]["status"] == "awaiting-owner"
 
     ft.cmd_gate(flow_dir, "ship", now="2026-08-01T09:25:00Z")
@@ -1234,11 +1220,11 @@ def test_cmd_advance_guarded_consumes_decided_g4_ship_without_raising_when_sprin
     assert consumed["gate"] is None
     assert sprint_line is None
 
-    # The flow is not left stuck: the next call opens G3 normally.
-    opened_g3, _ = ft.cmd_advance_guarded(
+    # The flow is not left stuck: the next call crosses learn with no gate.
+    crossed, _ = ft.cmd_advance_guarded(
         flow_dir, sprints_root=str(sprints_root), now="2026-08-01T09:35:00Z")
-    assert opened_g3["gate"]["id"] == "G3"
-    assert opened_g3["gate"]["status"] == "awaiting-owner"
+    assert crossed["gate"] is None
+    assert crossed["stage"] == "closed"
 
 
 def test_cmd_advance_guarded_still_raises_on_a_hand_typed_advance_past_an_unfinished_sprint(tmp_path):
@@ -1340,7 +1326,7 @@ def _g2_decided_flow(tmp_path, slug="payoff"):
     flow["stage"] = "execute"
     flow["current_step"] = {"index": 0, "of": 1, "phase": "grill"}
     flow["steps"] = [{"index": 0, "title": "only step", "status": "running"}]
-    flow["gate"] = {"id": "G2", "step_index": 0, "status": "decided",
+    flow["gate"] = {"id": "spec", "step_index": 0, "status": "decided",
                     "decision": {"verdict": "approve", "note": "",
                                  "surface": "session",
                                  "decided_at": "2026-07-18T09:05:00Z",
@@ -1462,17 +1448,21 @@ def test_cmd_advance_guarded_does_not_raise_when_the_spec_does_exist(tmp_path):
     assert updated["current_step"]["phase"] == "sprint"
 
 
-def test_cmd_advance_guarded_spec_guard_silent_when_no_sprint_line_emitted(tmp_path):
+def test_cmd_advance_guarded_spec_guard_silent_when_no_sprint_line_emitted(tmp_path, monkeypatch):
     """A gate-opening transition emits no line, so neither guard may fire even
     though this flow has no spec on disk at all."""
-    flow_dir = _breakdown_flow(tmp_path, slug="guard-nospec-noemit")
+    flow_dir = _execute_flow_two_steps(tmp_path, slug="guard-nospec-noemit")
+    # Spec precondition (OF30 part 2) is covered in test_spec_precondition.py;
+    # this test is about another guard, so let the precondition pass.
+    monkeypatch.setattr(ft, "first_spec_precondition",
+                        lambda _flow: (True, "spec_lint PASS"))
 
     updated, sprint_line = ft.cmd_advance_guarded(
         flow_dir, sprints_root=str(tmp_path / "sprints"),
         now="2026-08-01T09:05:00Z")
 
     assert sprint_line is None
-    assert updated["gate"]["id"] == "G1"
+    assert updated["gate"]["id"] == "spec"
 
 
 # --- cross-step staleness: a new grill must not inherit the old spec --------
@@ -1546,7 +1536,7 @@ def test_step_one_does_not_emit_step_zeros_spec(tmp_path):
     ft.cmd_advance(flow_dir, now="2026-08-01T09:10:00Z")   # G3 -> step 1 grill
 
     flow = ft.load_flow(flow_dir)
-    flow["gate"] = {"id": "G2", "step_index": 1, "status": "decided",
+    flow["gate"] = {"id": "spec", "step_index": 1, "status": "decided",
                     "decision": {"verdict": "approve", "note": "",
                                  "surface": "session",
                                  "decided_at": "2026-08-01T09:15:00Z",
@@ -1562,21 +1552,6 @@ def test_step_one_does_not_emit_step_zeros_spec(tmp_path):
     # And the host guard refuses that fallback, because it is not on disk.
     with pytest.raises(ft.SpecMissingError):
         ft.emit_sprint_line(ft.load_flow(flow_dir), spec_missing=True)
-
-
-def test_g3_close_and_park_keep_spec_path_as_a_record(tmp_path):
-    """Only a re-entry to grill clears it. A closed or parked flow keeps its
-    last spec_path, and the terminal sweep still needs it through learn."""
-    for verdict in ("close", "park"):
-        spec = tmp_path / (verdict + ".md")
-        spec.write_text("# spec\n", encoding="utf-8")
-        flow_dir = _two_step_flow_at_learn_with_decided_g3(
-            tmp_path, "keeps-" + verdict, str(spec), verdict=verdict)
-
-        flow, _line = ft.cmd_advance(flow_dir, now="2026-08-01T09:10:00Z")
-
-        assert flow["current_step"]["phase"] == "learn", verdict
-        assert flow["spec_path"] == str(spec), verdict
 
 
 # --- spec_missing: refuse to name a spec that is not on disk (scope B) ------
@@ -1733,7 +1708,7 @@ def _win_spec_flow_ready_to_emit(tmp_path, slug, spec_path):
     flow["spec_path"] = spec_path
     flow["current_step"] = {"index": 0, "of": 1, "phase": "grill"}
     flow["steps"] = [{"index": 0, "title": "build it", "status": "running"}]
-    flow["gate"] = {"id": "G2", "step_index": 0, "status": "decided",
+    flow["gate"] = {"id": "spec", "step_index": 0, "status": "decided",
                     "decision": {"verdict": "approve", "note": "",
                                  "surface": "session",
                                  "decided_at": "2026-08-01T09:05:00Z",
@@ -1820,12 +1795,12 @@ def test_is_windows_is_the_seam_the_guard_reads():
         WIN_FALLBACK_SPEC)
 
 
-# --- slice c: _consume_g4 ----------------------------------------------------
+# --- slice c: _consume_accept ----------------------------------------------------
 
 def _g4_gate(verdict, note="", decided_at="2026-08-17T10:00:00Z"):
     return {
-        "id": "G4", "step_index": 0, "status": "decided", "notified": True,
-        "token": "FLOW-DSI-demo-G4-S0-20260817T095900Z-7QF3",
+        "id": "accept", "step_index": 0, "status": "decided", "notified": True,
+        "token": "gate-tok",
         "opened_at": "2026-08-17T09:59:00Z",
         "decision": {"verdict": verdict, "note": note, "surface": "session",
                      "decided_at": decided_at, "message_ref": None},
@@ -1846,22 +1821,22 @@ def _sprint_phase_flow():
     }
 
 
-def test_consume_g4_ship_clears_the_gate_and_moves_the_step_to_learn():
+def test_consume_accept_ship_clears_the_gate_and_moves_the_step_to_learn():
     flow = _sprint_phase_flow()
     gate = _g4_gate("ship")
     cs = dict(flow["current_step"])
-    flow, driver = ft._consume_g4(flow, gate, cs, {})
+    flow, driver = ft._consume_accept(flow, gate, cs, {})
     assert flow["current_step"]["phase"] == "learn"
     assert flow["status"] == "running"
     assert flow["gate"] is None
     assert "held" not in driver
 
 
-def test_consume_g4_hold_transitions_exactly_like_ship_and_marks_the_driver():
+def test_consume_accept_hold_transitions_exactly_like_ship_and_marks_the_driver():
     flow = _sprint_phase_flow()
     gate = _g4_gate("hold", note="tests are flaky, look again tomorrow")
     cs = dict(flow["current_step"])
-    flow, driver = ft._consume_g4(flow, gate, cs, {})
+    flow, driver = ft._consume_accept(flow, gate, cs, {})
     assert flow["current_step"]["phase"] == "learn"
     assert flow["status"] == "running"
     assert flow["gate"] is None
@@ -1869,9 +1844,9 @@ def test_consume_g4_hold_transitions_exactly_like_ship_and_marks_the_driver():
     assert driver["held"]["ts"] == "2026-08-17T10:00:00Z"
 
 
-def test_consume_g4_park_pauses_the_flow_and_leaves_the_phase_alone():
+def test_consume_accept_park_pauses_the_flow_and_leaves_the_phase_alone():
     flow = _sprint_phase_flow()
-    flow, driver = ft._consume_g4(flow, _g4_gate("park"),
+    flow, driver = ft._consume_accept(flow, _g4_gate("park"),
                                   dict(flow["current_step"]), {})
     assert flow["status"] == "paused"
     assert flow["current_step"]["phase"] == "sprint"
@@ -1879,30 +1854,37 @@ def test_consume_g4_park_pauses_the_flow_and_leaves_the_phase_alone():
     assert "held" not in driver
 
 
-def test_consume_g4_tolerates_a_driver_of_none():
+def test_consume_accept_tolerates_a_driver_of_none_for_ship():
     flow = _sprint_phase_flow()
-    flow, driver = ft._consume_g4(flow, _g4_gate("hold"),
+    flow, driver = ft._consume_accept(flow, _g4_gate("ship"),
                                   dict(flow["current_step"]), None)
     assert isinstance(driver, dict)
-    assert "held" in driver
+    assert "held" not in driver
 
 
-def test_consume_g4_ship_clears_preflight_and_shipped_and_ship_from_the_driver():
+def test_consume_accept_refuses_a_hold_when_no_driver_is_passed():
+    flow = _sprint_phase_flow()
+    with pytest.raises(ValueError, match="foreman_run.py"):
+        ft._consume_accept(flow, _g4_gate("hold"),
+                           dict(flow["current_step"]), None)
+
+
+def test_consume_accept_ship_clears_preflight_and_shipped_and_ship_from_the_driver():
     flow = _sprint_phase_flow()
     driver = {"preflight": {"clean_tree": True}, "shipped": True,
               "ship": {"merge_sha": "abc123"}}
-    flow, driver = ft._consume_g4(flow, _g4_gate("ship"),
+    flow, driver = ft._consume_accept(flow, _g4_gate("ship"),
                                   dict(flow["current_step"]), driver)
     assert "preflight" not in driver
     assert "shipped" not in driver
     assert "ship" not in driver
 
 
-def test_consume_g4_hold_also_clears_preflight_and_shipped_and_ship_from_the_driver():
+def test_consume_accept_hold_also_clears_preflight_and_shipped_and_ship_from_the_driver():
     flow = _sprint_phase_flow()
     driver = {"preflight": {"clean_tree": True}, "shipped": True,
               "ship": {"merge_sha": "abc123"}}
-    flow, driver = ft._consume_g4(flow, _g4_gate("hold", note="not yet"),
+    flow, driver = ft._consume_accept(flow, _g4_gate("hold", note="not yet"),
                                   dict(flow["current_step"]), driver)
     assert "preflight" not in driver
     assert "shipped" not in driver
@@ -1910,21 +1892,21 @@ def test_consume_g4_hold_also_clears_preflight_and_shipped_and_ship_from_the_dri
     assert driver["held"]["reason"] == "not yet"
 
 
-def test_consume_g4_park_leaves_preflight_and_shipped_and_ship_untouched():
+def test_consume_accept_park_leaves_preflight_and_shipped_and_ship_untouched():
     flow = _sprint_phase_flow()
     driver = {"preflight": {"clean_tree": True}, "shipped": True,
               "ship": {"merge_sha": "abc123"}}
-    flow, driver = ft._consume_g4(flow, _g4_gate("park"),
+    flow, driver = ft._consume_accept(flow, _g4_gate("park"),
                                   dict(flow["current_step"]), driver)
     assert driver["preflight"] == {"clean_tree": True}
     assert driver["shipped"] is True
     assert driver["ship"] == {"merge_sha": "abc123"}
 
 
-def test_consume_g4_ship_with_no_preexisting_driver_state_still_works():
+def test_consume_accept_ship_with_no_preexisting_driver_state_still_works():
     flow = _sprint_phase_flow()
     driver = {}
-    flow, driver = ft._consume_g4(flow, _g4_gate("ship"),
+    flow, driver = ft._consume_accept(flow, _g4_gate("ship"),
                                   dict(flow["current_step"]), driver)
     assert isinstance(driver, dict)
     assert "preflight" not in driver
@@ -1976,7 +1958,7 @@ def test_cmd_gate_rejects_a_g3_verdict_while_g4_is_open(tmp_path):
         ft.cmd_gate(flow_dir, "proceed", now="2026-08-17T09:10:00Z")
 
 
-def test_after_a_g4_ship_the_next_advance_opens_g3_as_normal(tmp_path):
+def test_after_a_g4_ship_the_next_advance_crosses_learn_without_a_gate(tmp_path):
     flow_dir, flow = ft.cmd_new(tmp_path, "dsi", "payoff books",
                                 now="2026-08-17T09:00:00Z", slug="g4theng3")
     flow["stage"] = "execute"
@@ -1988,7 +1970,8 @@ def test_after_a_g4_ship_the_next_advance_opens_g3_as_normal(tmp_path):
     ft.cmd_advance(flow_dir, now="2026-08-17T09:15:00Z")           # -> learn
 
     updated, _line = ft.cmd_advance(flow_dir, now="2026-08-17T09:20:00Z")
-    assert updated["gate"]["id"] == "G3"
+    assert updated["gate"] is None
+    assert updated["stage"] == "closed"
 
 
 def test_a_g4_park_pauses_the_flow_end_to_end(tmp_path):

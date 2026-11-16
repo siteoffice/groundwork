@@ -73,7 +73,17 @@
     "approve_action": "Hyväksy",
     "save_layout": "Tallenna asettelu",
     "layout_saved": "Asettelu tallennettu",
-    "sync_helper_offline": "Sync helper ei yhteyttä"
+    "sync_helper_offline": "Sync helper ei yhteyttä",
+    "gate_decide": "Päätä",
+    "gate_spec": "Hyväksy määrittely",
+    "gate_accept": "Hyväksy valmis työ",
+    "gate_retired": "poistettu (opit ajetaan ilman porttia)",
+    "gate_position": "portti {n} / {total}",
+    "verdict_approve": "Hyväksy",
+    "verdict_reject": "Hylkää (älä rakenna tätä vaihetta)",
+    "verdict_park": "Pysäytä (tauko, vastaa myöhemmin)",
+    "verdict_ship": "Toimita (hyväksy ja yhdistä)",
+    "verdict_hold": "Pidätä (palauta)"
   },
   "_verify": {
     "hours_criterion": "Tuntikriteeri (1 225 h, urencriterium) ja startersaftrekin tila vuoden 2026 jälkeen ovat RELAYED, VERIFY belastingdienst.nl-sivustoa vasten; katso 04_assets/_grill_state.md",

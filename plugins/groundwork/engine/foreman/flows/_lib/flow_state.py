@@ -11,6 +11,7 @@ Stdlib only. Python 3.9+.
 from __future__ import annotations
 
 import datetime as _dt
+import logging
 import pathlib
 import re
 import sys
@@ -32,22 +33,57 @@ STAGES = ("idea", "design", "breakdown", "execute", "closed")
 STATUSES = ("running", "awaiting-owner", "escalated", "closed", "paused")
 PHASES = ("grill", "sprint", "learn")             # the execute step cycle
 STEP_STATUSES = ("pending", "running", "done")    # per-step lifecycle (plan-defined)
-GATE_IDS = ("G1", "G2", "G3", "G4")
+# Gate vocabulary (gate rename OF30). Gates carry names, never numbers: the
+# position ("gate 1 of 2") is computed at display from ACTIVE_GATES.
+# `decide` is part of the order but the engine does not open it in this release.
+GATE_ORDER = ("decide", "spec", "accept")
+ACTIVE_GATES = ("spec", "accept")
+LEARNINGS = "learnings"
+
+# The only place old gate codes appear. Old records stay readable through this
+# table; nothing here is ever written back by new code. The plan gate folds
+# into spec, the old spec gate is spec, the ship gate and H3 are accept; the
+# learnings gate and H4 are retired.
+GATE_ALIASES = {"G1": "spec", "G2": "spec", "G4": "accept", "H3": "accept"}
+RETIRED_GATES = ("G3", "H4")
+NULL_STEP_ALIASES = ("G1",)  # legacy plan gate stored with step_index null
 GATE_STATUSES = ("awaiting-owner", "decided")
 MODEL_CLASSES = ("opus", "sonnet", "haiku", "fable")
 
-# Verdicts allowed per gate; `park` is valid at any gate (spec line 79).
-# G4 is the ship gate (slice c, spec 2026-08-17): additive only, no existing
-# tuple changes. foreman_plan.SHIP_VERDICTS is the same tuple and
-# test_foreman_plan asserts the two agree.
+# Verdicts allowed per gate, keyed by name; `park` is valid at any gate. `decide`
+# has no entry until it is defined (valid_verdicts falls back to park only).
+# foreman_plan.SHIP_VERDICTS is the same tuple as "accept"; test_foreman_plan
+# asserts the two agree.
 VERDICTS_BY_GATE = {
-    "G1": ("approve", "reject", "park"),
-    "G2": ("approve", "reject", "park"),
-    "G3": ("proceed", "adapt", "close", "park"),
-    "G4": ("ship", "hold", "park"),
+    "spec": ("approve", "reject", "park"),
+    "accept": ("ship", "hold", "park"),
+}
+
+# Display text for each verdict (display only, never parsed).
+VERDICT_MEANINGS = {
+    "approve": "Approve",
+    "reject": "Reject (do not build this step)",
+    "park": "Park (pause, answer later)",
+    "ship": "Ship (accept and merge)",
+    "hold": "Hold (send back)",
 }
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
+
+OPT_IN_IGNORED_LINE = "opt_in_gates ignored: G1 and G3 retired"
+_LOG = logging.getLogger("flow_state")
+
+
+def read_opt_in_gates(source) -> tuple:
+    """Read and ignore `opt_in_gates` (the plan and learnings gates are retired).
+
+    Accepts a dict with or without the key. A non-empty value logs
+    OPT_IN_IGNORED_LINE once for this call. Always returns (); never raises
+    and never aliases the values.
+    """
+    if isinstance(source, dict) and source.get("opt_in_gates"):
+        _LOG.warning(OPT_IN_IGNORED_LINE)
+    return ()
 
 
 def iso_utc_now() -> str:
@@ -72,9 +108,64 @@ def slugify(text: str) -> str:
     return "-".join(tokens[:5]) or "flow"
 
 
+def canonical_gate(gate_id):
+    """Gate name for any stored id. A name returns itself, an alias its name,
+    a retired id `learnings`; anything else (None included) comes back as given.
+    Codes match case-insensitively. Pure."""
+    if not isinstance(gate_id, str):
+        return gate_id
+    if gate_id in GATE_ORDER:
+        return gate_id
+    code = gate_id.strip().upper()
+    if code in GATE_ALIASES:
+        return GATE_ALIASES[code]
+    if code in RETIRED_GATES:
+        return LEARNINGS
+    return gate_id
+
+
+def is_retired_gate(gate_id) -> bool:
+    return canonical_gate(gate_id) == LEARNINGS
+
+
+def normalize_gate(gate):
+    """In place: an alias id becomes its name; a stored null-step legacy gate
+    gets step_index 0. Retired and unknown ids, token and other keys untouched."""
+    if not isinstance(gate, dict):
+        return gate
+    gid = gate.get("id")
+    if isinstance(gid, str) and gid.strip().upper() in GATE_ALIASES:
+        if gid.strip().upper() in NULL_STEP_ALIASES and gate.get("step_index") is None:
+            gate["step_index"] = 0
+        gate["id"] = canonical_gate(gid)
+    return gate
+
+
+def normalize_flow(flow):
+    """Apply normalize_gate to flow["gate"] in place and return the flow."""
+    if isinstance(flow, dict):
+        normalize_gate(flow.get("gate"))
+    return flow
+
+
+def gate_position(gate_id):
+    """1-based position in ACTIVE_GATES, or None (decide, retired, unknown)."""
+    name = canonical_gate(gate_id)
+    if name in ACTIVE_GATES:
+        return ACTIVE_GATES.index(name) + 1
+    return None
+
+
+def gate_label(gate_id) -> str:
+    """`gate 1 of 2`, computed at display, never stored; "" when no position."""
+    pos = gate_position(gate_id)
+    return f"gate {pos} of {len(ACTIVE_GATES)}" if pos else ""
+
+
 def valid_verdicts(gate_id: str) -> tuple:
-    """Verdicts allowed for a gate id; unknown ids allow only 'park'."""
-    return VERDICTS_BY_GATE.get(gate_id, ("park",))
+    """Verdicts allowed for a gate id (old codes read through the alias table);
+    unknown and retired ids allow only 'park'."""
+    return VERDICTS_BY_GATE.get(canonical_gate(gate_id), ("park",))
 
 
 def gate_token(project: str, slug: str, gate_id: str, step_index,
@@ -82,11 +173,13 @@ def gate_token(project: str, slug: str, gate_id: str, step_index,
     """Self-describing gate token, generated once at gate-open (spec lines 56-63).
 
     FLOW-<PROJECT>-<SLUG>-<GATE>[-S<step>]-<opened_at compact>-<nonce4>.
-    The -S<step> part is omitted for G1 (step_index is None).
+    <GATE> is the canonical gate name (spec, accept), never an old code.
+    step_index is required: every gate belongs to a step.
     """
-    parts = ["FLOW", project.upper(), slug, gate_id]
-    if step_index is not None:
-        parts.append(f"S{step_index}")
+    if step_index is None:
+        raise ValueError("gate_token: step_index is required")
+    parts = ["FLOW", project.upper(), slug, canonical_gate(gate_id)]
+    parts.append(f"S{step_index}")
     parts.append(compact_stamp(gate_opened_at))
     parts.append(nonce)
     return "-".join(parts)
@@ -99,19 +192,19 @@ def _validate_gate(gate) -> List[str]:
         return ["gate must be an object or null"]
     errors: List[str] = []
     gid = gate.get("id")
-    if gid not in GATE_IDS:
-        errors.append(f"gate.id {gid!r} not in {GATE_IDS}")
+    canon = canonical_gate(gid)
+    if canon == LEARNINGS:
+        errors.append(f"gate.id {gid!r} is retired (learnings run without a gate)")
+    elif canon not in ACTIVE_GATES:
+        errors.append(f"gate.id {gid!r} not in {ACTIVE_GATES}")
     if gate.get("status") not in GATE_STATUSES:
         errors.append(f"gate.status {gate.get('status')!r} not in {GATE_STATUSES}")
     if not isinstance(gate.get("notified"), bool):
         errors.append("gate.notified must be a bool")
     si = gate.get("step_index")
-    if gid == "G1":
-        if si is not None:
-            errors.append("gate.step_index must be null for G1")
-    else:
-        if not isinstance(si, int):
-            errors.append("gate.step_index must be an int for G2/G3")
+    if not (isinstance(si, int) and not isinstance(si, bool)) and not (
+            si is None and gid in NULL_STEP_ALIASES):
+        errors.append("gate.step_index must be an int")
     decision = gate.get("decision")
     if decision is not None:
         if not isinstance(decision, dict):
@@ -197,6 +290,11 @@ def validate(flow) -> List[str]:
     # covers it); anything else must be a string naming a .md file. Pure: the
     # path is never stat'd here, so a spec that does not exist yet is a
     # host-side concern (flow_transition.SpecMissingError), not a schema error.
+    rc = flow.get("regrill_cleared")
+    if rc is not None and not (isinstance(rc, list)
+                               and all(isinstance(x, str) for x in rc)):
+        errors.append("regrill_cleared must be a list of sprint id strings")
+
     spec_path = flow.get("spec_path")
     if spec_path is not None:
         if not isinstance(spec_path, str):

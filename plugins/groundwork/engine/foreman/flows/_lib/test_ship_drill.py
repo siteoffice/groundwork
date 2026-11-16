@@ -1,4 +1,4 @@
-"""The ship drill: G4 end to end against a real throwaway git repository.
+"""The ship drill: the accept gate end to end against a real throwaway git repository.
 
 Integration-style, matching the parent spec's verification item 5. Real git,
 real flow.json, real foreman.json, real receipts. NO monkeypatching of git and
@@ -70,8 +70,8 @@ def _preflight_action():
 
 def _ship_action():
     return fp.NextAction(
-        kind="ship_execute", why="G4 is decided ship, so the branch merges",
-        blocking="", command="", gate_id="G4", step_index=0, role="none",
+        kind="ship_execute", why="accept is decided ship, so the branch merges",
+        blocking="", command="", gate_id="accept", step_index=0, role="none",
         guidance_key="ship_execute")
 
 
@@ -113,7 +113,7 @@ def test_ship_drill_merges_with_no_ff_and_records_a_revertible_sha(
     assert preflight["revert_point"] == pre_merge
 
     flow = ft.load_flow(flow_dir)
-    ft.persist_open_gate(flow_dir, flow, "G4", 0, NOW)
+    ft.persist_open_gate(flow_dir, flow, "accept", 0, NOW)
     ft.cmd_gate(flow_dir, "ship", note="looks right", now=NOW)
 
     decision = fr.execute_once(flow_dir, _ship_action(), "drill", now=NOW,
@@ -149,7 +149,7 @@ def test_ship_drill_hold_leaves_the_branch_unmerged(tmp_path, monkeypatch):
 
     _drive_preflight(flow_dir, root, worktree, slug, monkeypatch)
     flow = ft.load_flow(flow_dir)
-    ft.persist_open_gate(flow_dir, flow, "G4", 0, NOW)
+    ft.persist_open_gate(flow_dir, flow, "accept", 0, NOW)
     ft.cmd_gate(flow_dir, "hold", note="wait for the partner call", now=NOW)
 
     driver = fr.load_driver(flow_dir, halt=False)
@@ -172,14 +172,14 @@ def test_ship_drill_ship_after_a_hold_reopens_g4_and_then_merges(
 
     _drive_preflight(flow_dir, root, worktree, slug, monkeypatch)
     flow = ft.load_flow(flow_dir)
-    ft.persist_open_gate(flow_dir, flow, "G4", 0, NOW)
+    ft.persist_open_gate(flow_dir, flow, "accept", 0, NOW)
     ft.cmd_gate(flow_dir, "hold", note="not yet", now=NOW)
     driver = fr.load_driver(flow_dir, halt=False)
     ft.cmd_advance(flow_dir, now=NOW, driver=driver)
     fr.write_driver(flow_dir, driver)
 
     reopened = fr.cmd_ship(flow_dir, now=NOW)
-    assert reopened["gate"]["id"] == "G4"
+    assert reopened["gate"]["id"] == "accept"
     assert not fr.load_driver(flow_dir, halt=False).get("held")
 
     ft.cmd_gate(flow_dir, "ship", now=NOW)

@@ -1,4 +1,4 @@
-"""ship_preflight.py - the nine deterministic pre-flight checks behind G4.
+"""ship_preflight.py - the nine deterministic pre-flight checks behind the accept gate.
 
 Slice c of the Foreman build order. Design:
 (design spec, not shipped)

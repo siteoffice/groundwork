@@ -72,7 +72,17 @@
     "approve_action": "Goedkeuren",
     "save_layout": "Indeling opslaan",
     "layout_saved": "Indeling opgeslagen",
-    "sync_helper_offline": "Sync-helper offline"
+    "sync_helper_offline": "Sync-helper offline",
+    "gate_decide": "Besluiten",
+    "gate_spec": "Spec goedkeuren",
+    "gate_accept": "Accepteren",
+    "gate_retired": "vervallen (lessen lopen zonder poort)",
+    "gate_position": "poort {n} van {total}",
+    "verdict_approve": "Goedkeuren",
+    "verdict_reject": "Afwijzen (bouw deze stap niet)",
+    "verdict_park": "Parkeren (pauzeren, later antwoorden)",
+    "verdict_ship": "Opleveren (accepteren en mergen)",
+    "verdict_hold": "Vasthouden (terugsturen)"
   },
   "_verify": {
     "hours_criterion": "Urencriterium 1.225 uur en de status van de startersaftrek na 2026 zijn RELAYED, VERIFY tegen belastingdienst.nl; zie 04_assets/_grill_state.md",

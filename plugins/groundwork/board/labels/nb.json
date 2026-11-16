@@ -73,7 +73,17 @@
     "approve_action": "Godkjenn",
     "save_layout": "Lagre utforming",
     "layout_saved": "Utforming lagret",
-    "sync_helper_offline": "Sync-hjelper frakoblet"
+    "sync_helper_offline": "Sync-hjelper frakoblet",
+    "gate_decide": "Beslutte",
+    "gate_spec": "Godkjenn spesifikasjon",
+    "gate_accept": "Godta",
+    "gate_retired": "avviklet (læringer kjøres uten port)",
+    "gate_position": "port {n} av {total}",
+    "verdict_approve": "Godkjenn",
+    "verdict_reject": "Avvis (ikke bygg dette steget)",
+    "verdict_park": "Parker (pause, svar senere)",
+    "verdict_ship": "Lever (godta og flett)",
+    "verdict_hold": "Hold tilbake (send tilbake)"
   },
   "_verify": {
     "hours_criterion": "Timekriteriet (1 225 t, urencriterium) og status for startersaftrek etter 2026 er RELAYED, VERIFY mot belastingdienst.nl; se 04_assets/_grill_state.md",

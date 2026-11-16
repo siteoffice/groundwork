@@ -1,3 +1,4 @@
+# Old codes (G1 to G4) below are stored old records kept on purpose (OF30).
 """Tests for foreman_run.py. Plain pytest, stdlib only, hermetic.
 
 The pure section is tested with literal fixtures and injected facts; the host
@@ -182,15 +183,6 @@ def test_gate_consume_executes():
     assert d.execute is True
 
 
-def test_gate_consume_of_g1_approve_stops_because_it_needs_a_step_list():
-    """flow_transition._consume_g1 raises ValueError without `steps`, and the
-    step list is the breakdown judgment, not something the driver can derive."""
-    d = fr.decide(_action("gate_consume", gate_id="G1"), fr.HostFacts(),
-                  verdict="approve")
-    assert d.execute is False
-    assert d.reason == "needs_steps"
-
-
 def test_gate_consume_of_g1_reject_still_executes():
     d = fr.decide(_action("gate_consume", gate_id="G1"), fr.HostFacts(),
                   verdict="reject")
@@ -347,7 +339,7 @@ def test_guidance_key_is_the_seam_key_when_executing_and_a_stop_key_otherwise():
 
 def test_every_stop_reason_a_decision_can_produce_is_in_stop_reasons():
     for reason in ("complete", "blocking", "budget", "cowork", "wip_limit",
-                   "needs_steps", "not_executable", "needs_judgment"):
+                   "spec_precondition", "not_executable", "needs_judgment"):
         assert reason in fr.STOP_REASONS
 
 
@@ -491,7 +483,7 @@ def test_execute_once_maps_relaunch_guard_to_a_stop_decision_and_releases_the_lo
     flow["stage"] = "execute"
     flow["current_step"] = {"index": 0, "of": 1, "phase": "grill"}
     flow["steps"] = [{"index": 0, "title": "build it", "status": "running"}]
-    flow["gate"] = {"id": "G2", "step_index": 0, "status": "decided",
+    flow["gate"] = {"id": "spec", "step_index": 0, "status": "decided",
                     "decision": {"verdict": "approve", "note": "",
                                  "surface": "session", "decided_at": NOW,
                                  "message_ref": None},
@@ -512,7 +504,7 @@ def test_execute_once_maps_relaunch_guard_to_a_stop_decision_and_releases_the_lo
         "status": "passing", "created_at": "2026-08-01T09:00:00Z",
         "updated_at": "2026-08-01T09:00:00Z"}), encoding="utf-8")
 
-    action = _action("gate_consume", gate_id="G2", command="/flow advance dsi/payoff-books")
+    action = _action("gate_consume", gate_id="spec", command="/flow advance dsi/payoff-books")
     decision = fr.execute_once(flow_dir, action, "sess-1",
                               sprints_root=str(sprints_root), now=NOW)
 
@@ -560,7 +552,7 @@ def _isolate_brief_write_dev_root(tmp_path, monkeypatch):
     monkeypatch.setattr(fr.roots, "dev_root", lambda *a, **k: tmp_path)
 
 
-def _decided_gate_tree(tmp_path, gate_id="G3", verdict="proceed"):
+def _decided_gate_tree(tmp_path, gate_id="accept", verdict="hold"):
     """A flow parked at `gate_id`, decided `verdict`, gate not yet consumed.
     This is the exact live defect the driver exists to close."""
     flows_root, flow_dir = _tree(tmp_path, slug="decided-gate")
@@ -568,7 +560,7 @@ def _decided_gate_tree(tmp_path, gate_id="G3", verdict="proceed"):
     flow["stage"] = "execute"
     flow["steps"] = [{"index": 0, "title": "only step", "status": "running"}]
     flow["current_step"] = {"index": 0, "of": 1,
-                            "phase": "learn" if gate_id == "G3" else "grill"}
+                            "phase": "sprint" if gate_id == "accept" else "grill"}
     ft.write_flow(flow_dir, flow)
     ft.persist_open_gate(flow_dir, ft.load_flow(flow_dir), gate_id, 0,
                          now="2026-08-02T10:00:00Z", nonce="7QF3")
@@ -583,22 +575,21 @@ def test_the_chain_consumes_a_decided_gate_and_then_stops_at_the_next_gate(
     result = fr.run_chain(flow_dir, sprints_root=tmp_path / "sprints",
                           session_id="s1", now=NOW, render=False,
                           operator_path=tmp_path / "operator.json")
-    # Task 3/4/5: brief_write, hub_ingest and hub_refresh are all executable
-    # now, so a one-step flow that closes inside this same chain run runs its
-    # whole tail to completion instead of stopping partway through it.
-    # run_refresh_script is monkeypatched so the chain never shells into the
-    # real command_center scripts.
-    assert result.executed == ("gate_consume", "brief_write", "hub_ingest",
-                               "hub_refresh")
-    assert ft.load_flow(flow_dir)["stage"] == "closed"   # one-step flow, proceed closes it
+    # An accept hold is consumed, the flow goes to phase learn and the driver
+    # records the hold, which the plan then halts on until `ship` reopens it.
+    assert result.executed == ("gate_consume",)
+    flow = ft.load_flow(flow_dir)
+    assert flow["gate"] is None
+    assert flow["current_step"]["phase"] == "learn"
     assert result.stopped.execute is False
-    assert result.stopped.reason == "complete"
+    assert result.stopped.reason == "blocking"
+    assert result.stopped.action.guidance_key == "halt.held"
 
 
 def test_the_chain_stops_on_a_gate_awaiting_a_human(tmp_path):
     """The first of the three blocking kinds. sprint_await (agent) is the next
     test and halt (fence) is covered by the halt-file and chain-cap tests."""
-    for gate_id, phase in (("G3", "learn"), ("G2", "grill")):
+    for gate_id, phase in (("accept", "sprint"), ("spec", "grill")):
         flows_root, flow_dir = _tree(tmp_path, slug="await-" + gate_id)
         flow = ft.load_flow(flow_dir)
         flow["stage"] = "execute"
@@ -653,15 +644,14 @@ def test_the_chain_cap_trips_at_exactly_the_cap(tmp_path):
 
 
 def test_the_chain_runs_the_gate_free_advances_back_to_back(tmp_path):
-    """With the default cap, idea -> design -> breakdown both cross, then the
-    chain stops at gate_open G1 (needs_judgment), not at the cap."""
+    """With the default cap, the gate-free stages all cross, then the chain
+    stops at the spec gate_open (spec_precondition), not at the cap."""
     flows_root, flow_dir = _tree(tmp_path, slug="two-advances")
     result = fr.run_chain(flow_dir, sprints_root=tmp_path / "sprints",
                           session_id="s1", now=NOW, render=False)
-    assert result.executed == ("flow_advance", "flow_advance")
-    assert ft.load_flow(flow_dir)["stage"] == "breakdown"
-    assert result.stopped.reason == "needs_judgment"
-    assert result.stopped.action.gate_id == "G1"
+    assert result.executed == ("flow_advance", "flow_advance", "flow_advance")
+    assert result.stopped.reason == "spec_precondition"
+    assert result.stopped.action.gate_id == "spec"
 
 
 def test_foreman_halt_stops_before_any_execute(tmp_path, monkeypatch):
@@ -706,7 +696,7 @@ def test_a_per_flow_pause_is_honoured_before_any_execute(tmp_path):
 
 
 def test_park_at_a_gate_pauses_the_flow_and_the_chain_honours_it(tmp_path):
-    flows_root, flow_dir = _decided_gate_tree(tmp_path, "G3", "park")
+    flows_root, flow_dir = _decided_gate_tree(tmp_path, "spec", "park")
     fr.run_chain(flow_dir, sprints_root=tmp_path / "sprints", session_id="s1",
                  now=NOW, render=False)
     result = fr.run_chain(flow_dir, sprints_root=tmp_path / "sprints",
@@ -756,6 +746,8 @@ def test_a_receipt_is_written_for_every_executed_action(tmp_path):
                           session_id="s1", now=NOW, render=False)
     driver_receipts = [e for e in _log(flow_dir)
                        if e["actor"] == "foreman" and e["action"].startswith("driver_")]
+    # the spec_precondition stop writes one blocked fence receipt, not an action
+    driver_receipts = [e for e in driver_receipts if e["outcome"] != "blocked"]
     assert len(driver_receipts) == len(result.executed) == result.receipts
     assert all(e["detail"] for e in driver_receipts)
 
@@ -816,7 +808,7 @@ def test_a_render_failure_never_loses_a_chain(tmp_path, monkeypatch):
     monkeypatch.setattr(fr, "render_after", _boom)
     result = fr.run_chain(flow_dir, sprints_root=tmp_path / "sprints",
                           session_id="s1", now=NOW, render=True)
-    assert result.executed == ("flow_advance", "flow_advance")
+    assert result.executed == ("flow_advance", "flow_advance", "flow_advance")
 
 
 # --- Task 5: the budget fence wired -----------------------------------------
@@ -852,7 +844,7 @@ def test_an_unreadable_burnrate_store_never_wedges_the_chain(tmp_path):
     result = fr.run_chain(flow_dir, sprints_root=tmp_path / "sprints",
                           session_id="s1", now=NOW, render=False,
                           burnrate_db=tmp_path / "no-such-db")
-    assert result.executed == ("flow_advance", "flow_advance")
+    assert result.executed == ("flow_advance", "flow_advance", "flow_advance")
 
 
 # --- Task 6: presentation and CLI -------------------------------------------
@@ -864,7 +856,7 @@ def test_render_stop_names_the_flow_the_reason_and_the_next_kind(tmp_path):
     text = fr.render_stop(result, "dsi/presented")
     labels = [line.split()[0] for line in text.splitlines()]
     assert labels[:5] == ["FOREMAN", "CHAIN", "STOPPED", "WHY", "NEXT"]
-    assert "needs_judgment" in text
+    assert "spec_precondition" in text
 
 
 def test_render_stop_prints_the_command_line_for_an_unexecutable_action():
@@ -876,13 +868,13 @@ def test_render_stop_prints_the_command_line_for_an_unexecutable_action():
 
 
 def test_render_stop_lists_the_allowed_verdicts_at_an_open_gate():
-    action = _action("gate_await", blocking="human", gate_id="G3",
+    action = _action("gate_await", blocking="human", gate_id="accept",
                      command="/flow gate dsi/x <verdict>")
     decision = fr.decide(action, fr.HostFacts())
     result = fr.ChainResult(executed=(), stopped=decision, chain_depth=0,
                             receipts=0)
     text = fr.render_stop(result, "dsi/x")
-    assert "proceed" in text and "adapt" in text and "park" in text
+    assert "ship" in text and "hold" in text and "park" in text
 
 
 def test_no_string_the_driver_emits_contains_an_em_dash():
@@ -940,8 +932,8 @@ def test_cli_run_json_emits_parsable_json(tmp_path, capsys):
              "--sprints-root", str(tmp_path / "sprints"), "--json",
              "--no-render"])
     payload = json.loads(capsys.readouterr().out)
-    assert payload["stopped"]["reason"] == "needs_judgment"
-    assert payload["executed"] == ["flow_advance", "flow_advance"]
+    assert payload["stopped"]["reason"] == "spec_precondition"
+    assert payload["executed"] == ["flow_advance", "flow_advance", "flow_advance"]
 
 
 # --- Task 7: every writer takes the lock ------------------------------------
@@ -981,11 +973,11 @@ def test_apply_match_still_sweeps_normally_when_the_lock_is_free(tmp_path):
     res = ts.apply_match(flow_dir, sprint, now=NOW)
     assert res["skipped"] is False
     flow = ft.load_flow(flow_dir)
-    # Spec item 9: apply_match now stops at the G4 ship gate it opens rather
-    # than walking past it to G3 (flow_transition's phase=="sprint" boundary
+    # Spec item 9: apply_match now stops at the accept gate it opens rather
+    # than walking past it (flow_transition's phase=="sprint" boundary
     # is gated by spec item 6).
     assert flow["current_step"]["phase"] == "sprint"
-    assert flow["gate"]["id"] == "G4"
+    assert flow["gate"]["id"] == "accept"
     # sweep_context is attached to the in-memory gate only to feed
     # outbox.compose(); by design (spec 2026-07-21-...-g3-design.md lines
     # 176-181, and test_outbox.py's own guidance-block tests) it is never
@@ -1024,7 +1016,7 @@ def test_the_driver_and_the_sweep_cannot_both_cross_the_same_boundary(tmp_path):
 
 # --- scope E: needs_spec ------------------------------------------------------
 
-def _g2_consume_action(gate_id="G2"):
+def _g2_consume_action(gate_id="spec"):
     """A gate_consume NextAction for `gate_id`, the shape foreman_plan._gate_consume
     produces. One owner for this seed data: every needs_spec case below uses it."""
     return fp.NextAction(
@@ -1059,7 +1051,7 @@ def test_needs_spec_does_not_fire_when_the_conditions_are_not_all_met():
         ("single-step flow", _g2_consume_action(), "approve", 1, ""),
         ("spec_path recorded", _g2_consume_action(), "approve", 3,
          "C:\\work\\10_holding\\05_docs\\superpowers\\specs\\x.md"),
-        ("G3 not G2", _g2_consume_action("G3"), "approve", 3, ""),
+        ("retired G3 not spec", _g2_consume_action("G3"), "approve", 3, ""),
         ("verdict revise", _g2_consume_action(), "revise", 3, ""),
     ]
     for label, action, verdict, of, spec in cases:
@@ -1074,14 +1066,6 @@ def test_needs_spec_does_not_fire_when_step_of_is_absent():
     an unknown `of` is not evidence of a multi-step flow."""
     decision = fr.decide(_g2_consume_action(), fr.HostFacts(), "approve")
     assert decision.execute is True
-
-
-def test_needs_steps_still_wins_for_g1_approve():
-    """The new rule sits next to needs_steps and must not displace it."""
-    action = _g2_consume_action("G1")
-    decision = fr.decide(action, fr.HostFacts(), "approve", step_of=3,
-                         flow_spec_path="")
-    assert decision.reason == "needs_steps"
 
 
 def test_step_of_and_flow_spec_path_read_the_flow_the_way_decide_expects():
@@ -1300,17 +1284,9 @@ def _recover_action():
                          guidance_key="sprint_recover.failed")
 
 
-def test_execute_recover_opens_g3_family_gate_with_sweep_context(tmp_path,
-                                                                  monkeypatch):
-    """Success criterion 2, and the mutation proof: break the apply_match
-    dispatch in execute_recover and this goes red, because nothing else in the
-    driver attaches sweep_context.
-
-    sweep_context lives on the in-memory gate only (terminal_sweep.py's
-    Task-1-era test_apply_match_with_lock_false_crosses_while_the_caller_holds
-    _the_lock documents the same thing), so it is asserted through the queued
-    outbox record's composed body, not flow.json.
-    """
+def test_execute_recover_reopens_spec_marked_regrill(tmp_path, monkeypatch):
+    """D2: a needs-guidance sprint reopens spec marked regrill, and the
+    queued outbox card carries the re-grill line."""
     import outbox
     flow_dir = _recover_flow(tmp_path)
     sprint = {"sprint_id": "dsi__x__1", "status": "failed",
@@ -1319,14 +1295,13 @@ def test_execute_recover_opens_g3_family_gate_with_sweep_context(tmp_path,
     monkeypatch.setattr(fr, "resolve_sprint_for",
                         lambda *a, **k: sprint)
     result = fr.execute_recover(flow_dir, _recover_action(), now=NOW)
-    assert result["skipped"] is False
+    assert result["skipped"] is False and result["regrill"] is True
     gate = ft.load_flow(flow_dir)["gate"]
     assert gate["status"] == "awaiting-owner"
+    assert gate["id"] == "spec" and gate["regrill"]["status"] == "failed"
     records = outbox.read_outbox(flow_dir)
     assert len(records) == 1
-    body = records[0]["body"]
-    assert "Sprint status: failed (needs-guidance)" in body
-    assert "Verify: 3 failed" in body
+    assert "re-grill after failed" in records[0]["body"].lower()
 
 
 def test_execute_recover_works_inside_the_lock_execute_once_holds(tmp_path,
@@ -2046,7 +2021,7 @@ def _ship_action():
     return fp.NextAction(
         kind="ship_execute",
         why="G4 is decided with verdict ship, so branch sprint/shipme merges",
-        blocking="", command="", gate_id="G4", step_index=0, role="none",
+        blocking="", command="", gate_id="accept", step_index=0, role="none",
         guidance_key="ship_execute")
 
 
@@ -2057,7 +2032,7 @@ def _shippable(tmp_path, slug="shipme"):
     flow["steps"] = [{"index": 0, "title": "one", "status": "running"}]
     flow["current_step"] = {"index": 0, "of": 1, "phase": "sprint"}
     ft.write_flow(flow_dir, flow)
-    ft.persist_open_gate(flow_dir, flow, "G4", 0, NOW)
+    ft.persist_open_gate(flow_dir, flow, "accept", 0, NOW)
     ft.cmd_gate(flow_dir, "ship", now=NOW)
     driver = fr.load_driver(flow_dir, halt=False)
     driver["preflight"] = {"worktree_branch": "sprint/" + slug,
@@ -2409,7 +2384,7 @@ def test_cowork_still_refuses_ship_execute(tmp_path):
 # --- slice c: the ship / unship subcommands ---------------------------------
 
 def _held(tmp_path, slug="heldflow"):
-    """A flow whose G4 was answered `hold`: phase learn, driver['held'] set."""
+    """A flow whose accept gate was answered `hold`: phase learn, driver['held'] set."""
     flow_dir = _shippable(tmp_path, slug=slug)
     driver = fr.load_driver(flow_dir, halt=False)
     driver["held"] = {"reason": "not yet", "ts": NOW}
@@ -2422,7 +2397,7 @@ def _held(tmp_path, slug="heldflow"):
     return flow_dir
 
 
-def test_ship_reopens_a_fresh_g4_and_clears_the_held_flag(tmp_path, monkeypatch):
+def test_ship_reopens_a_fresh_accept_gate_and_clears_the_held_flag(tmp_path, monkeypatch):
     flow_dir = _held(tmp_path)
     monkeypatch.setattr(fr.sp, "repo_root_for",
                         lambda flow, sprint=None, dev_root=None: "C:\\work\\znd")
@@ -2434,7 +2409,8 @@ def test_ship_reopens_a_fresh_g4_and_clears_the_held_flag(tmp_path, monkeypatch)
     monkeypatch.setattr(fr.sp, "git", lambda args, cwd: (0, "sprint/heldflow\n"))
 
     flow = fr.cmd_ship(flow_dir, now=NOW)
-    assert flow["gate"]["id"] == "G4"
+    assert flow["gate"]["id"] == "accept"
+    assert "-accept-S" in flow["gate"]["token"]
     assert flow["gate"]["status"] == "awaiting-owner"
     driver = fr.load_driver(flow_dir, halt=False)
     assert not driver.get("held")
@@ -2459,17 +2435,17 @@ def test_ship_refuses_when_the_branch_no_longer_exists(tmp_path, monkeypatch):
 
 
 def test_ship_refuses_while_another_gate_is_open(tmp_path, monkeypatch):
-    """Interpretation decision 7: after a hold the phase is learn, so a G3 gate
-    may be awaiting a decision. Reopening G4 would clobber it and its token."""
+    """Interpretation decision 7: after a hold the phase is learn, so a spec gate
+    may be awaiting a decision. Reopening accept would clobber it and its token."""
     flow_dir = _held(tmp_path, slug="g3open")
     flow = ft.load_flow(flow_dir)
-    ft.persist_open_gate(flow_dir, flow, "G3", 0, NOW)
+    ft.persist_open_gate(flow_dir, flow, "spec", 0, NOW)
     monkeypatch.setattr(fr.sp, "repo_root_for",
                         lambda flow, sprint=None, dev_root=None: "C:\\work\\znd")
     monkeypatch.setattr(fr.sp, "git", lambda args, cwd: (0, "sprint/g3open\n"))
     with pytest.raises(fr.ShipReopenError) as exc:
         fr.cmd_ship(flow_dir, now=NOW)
-    assert "G3" in str(exc.value)
+    assert "spec" in str(exc.value)
 
 
 def test_unship_prints_the_exact_revert_line_for_the_recorded_merge(tmp_path,
@@ -2920,9 +2896,9 @@ def test_a_chain_that_stops_short_of_complete_does_not_increment(tmp_path):
     flow = ft.load_flow(flow_dir)
     flow["stage"] = "execute"
     flow["steps"] = [{"index": 0, "title": "s", "status": "running"}]
-    flow["current_step"] = {"index": 0, "of": 1, "phase": "learn"}
+    flow["current_step"] = {"index": 0, "of": 1, "phase": "sprint"}
     ft.write_flow(flow_dir, flow)
-    ft.persist_open_gate(flow_dir, ft.load_flow(flow_dir), "G3", 0,
+    ft.persist_open_gate(flow_dir, ft.load_flow(flow_dir), "accept", 0,
                          now=NOW, nonce="7QF3")
     op_path = tmp_path / "operator.json"
     result = fr.run_chain(flow_dir, sprints_root=tmp_path / "sprints",
@@ -2965,11 +2941,11 @@ def test_an_unknown_guide_level_is_rejected_by_the_parser():
         raise AssertionError("--guide loud must not parse")
 
 
-def _stopped_result(kind="gate_await", guidance_key="gate_await.g1",
-                    why="G1 is open and undecided"):
+def _stopped_result(kind="gate_await", fragment="gate_await.spec",
+                    why="spec is open and undecided"):
     action = fp.NextAction(kind=kind, why=why, blocking="human", command="",
-                           gate_id="G1", step_index=0, role="none",
-                           guidance_key=guidance_key)
+                           gate_id="spec", step_index=0, role="none",
+                           guidance_key=fragment)
     decision = fr.Decision(action, False, "blocking", "it blocks on human")
     return fr.ChainResult((), decision, 0, 0)
 
@@ -2979,7 +2955,7 @@ def test_guidance_block_renders_against_the_actions_key_not_the_stop_reason():
     is ever filed against. The action's key is the one that gets a fragment."""
     result = _stopped_result()
     block = fr.guidance_block(result, None, {"completions": 0}, "coached")
-    assert "waiting on you" in block   # from the real gate_await.g1 fragment
+    assert "waiting on you" in block   # from the real gate_await.spec fragment
 
 
 def test_guidance_block_is_empty_at_silent():
@@ -3008,3 +2984,39 @@ def test_a_fluent_operator_gets_terse_and_a_new_one_gets_coached():
     assert fluent == result.stopped.action.why
     assert fresh != fluent
     assert "waiting on you" in fresh
+
+
+def test_needs_spec_applies_to_spec_by_name():
+    action = _action("gate_consume", command="/flow advance p/s", gate_id="spec")
+    d = fr.decide(action, fr.HostFacts(), verdict="approve", step_of=2,
+                  flow_spec_path=None)
+    assert d.execute is False and d.reason == "needs_spec"
+    assert "spec is decided approve" in d.detail
+    old = _action("gate_consume", command="/flow advance p/s", gate_id="spec")
+    assert fr.decide(old, fr.HostFacts(), verdict="approve", step_of=2,
+                     flow_spec_path=None).reason == "needs_spec"
+
+
+def test_needs_steps_is_gone():
+    assert "needs_steps" not in fr.STOP_REASONS
+
+
+def test_cmd_ship_reopens_accept_by_name(tmp_path, monkeypatch):
+    flow_dir = _held(tmp_path, slug="byname")
+    monkeypatch.setattr(fr.sp, "repo_root_for",
+                        lambda flow, sprint=None, dev_root=None: "C:\\work\\znd")
+    monkeypatch.setattr(
+        fr.sp, "run_preflight",
+        lambda flow, sprint, repo_root, diff_budget_lines=800, spec_text=None: {
+            "worktree_branch": "sprint/byname", "revert_point": "1" * 40,
+            "clean_tree": True})
+    monkeypatch.setattr(fr.sp, "git", lambda args, cwd: (0, "sprint/byname\n"))
+    flow = fr.cmd_ship(flow_dir, now=NOW)
+    assert flow["gate"]["id"] == "accept"
+    assert "-accept-S" in flow["gate"]["token"]
+
+
+def test_needs_judgment_detail_names_the_canonical_gate():
+    d = fr.decide(_action("gate_open", gate_id="G2"), fr.HostFacts())
+    assert d.reason == "needs_judgment"
+    assert "spec" in d.detail and "G2" not in d.detail

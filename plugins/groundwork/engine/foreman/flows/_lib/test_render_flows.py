@@ -1,3 +1,4 @@
+# Old codes (G1 to G4) below are stored old records kept on purpose (OF30).
 """Tests for render_flows.py. Plain pytest, stdlib only, hermetic (tmp_path)."""
 import flow_transition as ft
 import render_flows as rf
@@ -12,7 +13,7 @@ def _make_flow(tmp_path, project, slug, awaiting):
         flow["current_step"] = {"index": 1, "of": 2, "phase": "sprint"}
         ft.write_flow(flow_dir, flow)
         flow = ft.load_flow(flow_dir)
-        ft.persist_open_gate(flow_dir, flow, "G2", 1,
+        ft.persist_open_gate(flow_dir, flow, "spec", 1,
                              now="2026-07-18T09:14:03Z", nonce="7QF3")
     return flow_dir
 
@@ -67,6 +68,17 @@ def test_render_status_text_reports_project_and_stage(tmp_path):
     text = rf.render_status_text(flow_dir)
     assert "dsi" in text and "payoff" in text
     assert "idea" in text  # stage
+
+
+def test_render_status_text_names_an_old_gate_by_its_name(tmp_path):
+    import json
+    flow_dir = _make_flow(tmp_path, "dsi", "oldgate", awaiting=True)
+    flow = json.loads((flow_dir / "flow.json").read_text(encoding="utf-8"))
+    flow["gate"]["id"] = "G2"
+    (flow_dir / "flow.json").write_text(json.dumps(flow), encoding="utf-8")
+    text = rf.render_status_text(flow_dir)
+    assert "Gate:    spec" in text
+    assert "G2" not in text.replace("-G2-", "")
 
 
 def test_status_text_errors_when_no_flow_json(tmp_path):

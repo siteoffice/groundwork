@@ -4,7 +4,7 @@ item 1.11 (GitHub Projects scan, architecture note section 15) adds three
 patterns: date-range bars with a month/quarter/year zoom (gate dates as
 vertical lines), group headers with sums on the backlog, and a slice-by
 rail that filters the backlog by gate via data- attributes. A priority or
-backlog line opts into a gate by ending with a `[gate:G1]`..`[gate:G4]` tag
+backlog line opts into a gate by ending with a `[gate:name]` tag
 (decision 2026-09-13); untagged text is never read as a gate marker.
 """
 from __future__ import annotations
@@ -19,7 +19,9 @@ BOARD_DIR = HERE.parent
 if str(BOARD_DIR) not in sys.path:
     sys.path.insert(0, str(BOARD_DIR))
 import dateparse  # noqa: E402
-from board_common import esc, is_stale  # noqa: E402
+from board_common import (  # noqa: E402
+    GATE_ORDER, LEARNINGS, canonical_gate, esc, is_stale,
+)
 
 STATE_UNAVAILABLE = "unavailable"
 STATE_STALE = "stale"
@@ -27,21 +29,17 @@ STATE_EMPTY = "empty"
 STATE_NORMAL = "normal"
 
 # A priority or backlog item is read as a gate marker via a structured
-# suffix tag, `[gate:G1]` .. `[gate:G4]` (the same G1..G4 vocabulary the
-# funnel/waiting_on_you panels already use, decision 2026-09-13: formalized
-# from plan item 1.11's own bare-substring heuristic, which false-positived
-# on any incidental "G1"-shaped text). No separate gate-date source exists
-# in roadmap.md today, so this tag is the one point of contact between free
-# text and the two grouped/vertical-line patterns below.
-_GATE_TAG_RE = re.compile(r"\s*\[gate:(G[1-4])\]\s*$", re.IGNORECASE)
+# suffix tag: a gate name (`[gate:decide]`, `[gate:spec]`, `[gate:accept]`) or
+# an old code (G1..G4, H3, H4), which board_common.canonical_gate reads as a
+# name (decision 2026-09-13: a structured tag, never a bare substring). No
+# separate gate-date source exists in roadmap.md today, so this tag is the one
+# point of contact between free text and the two grouped/vertical-line
+# patterns below.
+_GATE_TAG_RE = re.compile(
+    r"\s*\[gate:(G[1-4]|H[34]|decide|spec|accept)\]\s*$", re.IGNORECASE
+)
 
-# Grouping and the slice rail follow this order, not a numeric G1<G2<G3<G4
-# sort: Foreman's own gate sequence is G1 (breakdown) -> G2 (grill) -> G4
-# (ship approval) -> G3 (learn/close), G4 firing before G3 (deliberate,
-# documented in docs\znd_os_flow_operator_guide.html section 06, G4 was
-# added later and kept its number). Sorting numerically would show G3
-# before G4 and read as the wrong order; this constant is the fix.
-_GATE_ORDER = ("G1", "G2", "G4", "G3")
+# Grouping and the slice rail follow board_common.GATE_ORDER, learnings last.
 
 # (zoom key, window in days from today). The roadmap looks forward, so each
 # variant's window starts today rather than centring on it.
@@ -49,22 +47,21 @@ _ZOOM_DAYS = (("month", 31), ("quarter", 92), ("year", 366))
 
 
 def _extract_gate(text: str):
-    """Split off a trailing `[gate:G1]`..`[gate:G4]` tag. Returns
-    (display_text, gate_or_None); display_text has the tag stripped so it
-    never leaks into rendered prose."""
+    """Split off a trailing gate tag (name or old code). Returns
+    (display_text, canonical name, "learnings" or None); display_text has the
+    tag stripped so it never leaks into rendered prose."""
     if not text:
         return text, None
     m = _GATE_TAG_RE.search(text)
     if not m:
         return text, None
-    return text[: m.start()].rstrip(), m.group(1).upper()
+    return text[: m.start()].rstrip(), canonical_gate(m.group(1).lower())
 
 
 def _gate_sort_key(gate: str) -> int:
-    try:
-        return _GATE_ORDER.index(gate)
-    except ValueError:
-        return len(_GATE_ORDER)
+    if gate in GATE_ORDER:
+        return GATE_ORDER.index(gate)
+    return len(GATE_ORDER)
 
 
 def collect(manifest: dict):
@@ -117,7 +114,7 @@ def _render_timeline_variants(priorities, labels, today) -> str:
                 continue
             pct = ((d - start).days / span) * 100
             clean_text, gate = _extract_gate(p["text"])
-            if gate:
+            if gate and gate != LEARNINGS:
                 marks.append(
                     f'<div class="tl-gate" style="left:{pct:.2f}%" '
                     f'title="{esc(gate)}: {esc(clean_text)} ({esc(d.isoformat())})">'
@@ -151,10 +148,10 @@ def _render_backlog(backlog, labels) -> str:
         clean_text, gate = _extract_gate(b)
         key = gate or "none"
         groups.setdefault(key, []).append(clean_text)
-    # Execution order (_GATE_ORDER), not the order gates happened to first
+    # Execution order (GATE_ORDER), not the order gates happened to first
     # appear in the file; "none"/Ungrouped always sorts last.
-    order = sorted(groups, key=lambda g: (g == "none", _gate_sort_key(g)))
-    gate_keys = [g for g in order if g != "none"]
+    order = sorted(groups, key=lambda g: (g == "none", g == LEARNINGS, _gate_sort_key(g)))
+    gate_keys = [g for g in order if g in GATE_ORDER]
 
     rail_html = ""
     if gate_keys:

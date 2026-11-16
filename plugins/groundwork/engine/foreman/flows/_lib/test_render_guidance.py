@@ -11,7 +11,7 @@ import pytest
 
 import render_guidance as rg
 
-WHY = "G1 has no open gate and step 1 of 3 needs a G1 decision"
+WHY = "the spec gate has no open gate and step 1 of 3 needs a decision"
 
 FLOW = {
     "flow_id": "dsi__payoff-books__20260718T091403Z",
@@ -45,18 +45,18 @@ def _root(tmp_path, **fragments):
 # --- the four levels --------------------------------------------------------
 
 def test_silent_renders_nothing(tmp_path):
-    root = _root(tmp_path, **{"gate_open.g1": "FRAGMENT BODY"})
-    assert rg.render("gate_open.g1", "silent", WHY, guidance_root=root) == ""
+    root = _root(tmp_path, **{"gate_open.spec": "FRAGMENT BODY"})
+    assert rg.render("gate_open.spec", "silent", WHY, guidance_root=root) == ""
 
 
 def test_terse_renders_the_why_verbatim(tmp_path):
-    root = _root(tmp_path, **{"gate_open.g1": "FRAGMENT BODY"})
-    assert rg.render("gate_open.g1", "terse", WHY, guidance_root=root) == WHY
+    root = _root(tmp_path, **{"gate_open.spec": "FRAGMENT BODY"})
+    assert rg.render("gate_open.spec", "terse", WHY, guidance_root=root) == WHY
 
 
 def test_coached_renders_the_fragment_on_a_hit(tmp_path):
-    root = _root(tmp_path, **{"gate_open.g1": "FRAGMENT BODY\n"})
-    assert rg.render("gate_open.g1", "coached", WHY,
+    root = _root(tmp_path, **{"gate_open.spec": "FRAGMENT BODY\n"})
+    assert rg.render("gate_open.spec", "coached", WHY,
                      guidance_root=root) == "FRAGMENT BODY"
 
 
@@ -67,8 +67,8 @@ def test_coached_falls_back_to_the_why_on_a_miss(tmp_path):
 
 
 def test_the_four_levels_render_distinctly_for_one_input(tmp_path):
-    root = _root(tmp_path, **{"gate_open.g1": "FRAGMENT BODY"})
-    rendered = [rg.render("gate_open.g1", level, WHY, flow=FLOW,
+    root = _root(tmp_path, **{"gate_open.spec": "FRAGMENT BODY"})
+    rendered = [rg.render("gate_open.spec", level, WHY, flow=FLOW,
                           guidance_root=root)
                 for level in ("silent", "terse", "coached", "teaching")]
     assert len(set(rendered)) == 4, rendered
@@ -80,8 +80,8 @@ def test_the_four_levels_render_distinctly_for_one_input(tmp_path):
 
 
 def test_an_unknown_level_is_treated_as_silent(tmp_path):
-    root = _root(tmp_path, **{"gate_open.g1": "FRAGMENT BODY"})
-    assert rg.render("gate_open.g1", "loud", WHY, guidance_root=root) == ""
+    root = _root(tmp_path, **{"gate_open.spec": "FRAGMENT BODY"})
+    assert rg.render("gate_open.spec", "loud", WHY, guidance_root=root) == ""
 
 
 # --- the miss warning -------------------------------------------------------
@@ -96,14 +96,14 @@ def test_a_miss_logs_exactly_one_warning_line_and_never_raises(tmp_path, capsys)
 
 
 def test_a_hit_logs_no_warning(tmp_path, capsys):
-    root = _root(tmp_path, **{"gate_open.g1": "FRAGMENT BODY"})
-    rg.render("gate_open.g1", "coached", WHY, guidance_root=root)
+    root = _root(tmp_path, **{"gate_open.spec": "FRAGMENT BODY"})
+    rg.render("gate_open.spec", "coached", WHY, guidance_root=root)
     assert capsys.readouterr().err == ""
 
 
 def test_a_missing_guidance_root_directory_is_a_miss_not_a_crash(tmp_path):
     root = tmp_path / "does-not-exist"
-    assert rg.render("gate_open.g1", "coached", WHY, guidance_root=root) == WHY
+    assert rg.render("gate_open.spec", "coached", WHY, guidance_root=root) == WHY
 
 
 def test_a_key_that_would_escape_the_root_is_a_miss_not_a_read(tmp_path, capsys):
@@ -116,19 +116,19 @@ def test_a_key_that_would_escape_the_root_is_a_miss_not_a_read(tmp_path, capsys)
 
 
 def test_an_empty_fragment_file_falls_back_to_the_why(tmp_path):
-    root = _root(tmp_path, **{"gate_open.g1": "   \n\n"})
-    assert rg.render("gate_open.g1", "coached", WHY, guidance_root=root) == WHY
+    root = _root(tmp_path, **{"gate_open.spec": "   \n\n"})
+    assert rg.render("gate_open.spec", "coached", WHY, guidance_root=root) == WHY
 
 
 # --- the teaching road-ahead block ------------------------------------------
 
 def test_teaching_adds_the_road_ahead_block_the_first_time_only(tmp_path):
-    root = _root(tmp_path, **{"gate_open.g1": "FRAGMENT BODY"})
-    first = rg.render("gate_open.g1", "teaching", WHY, flow=FLOW,
+    root = _root(tmp_path, **{"gate_open.spec": "FRAGMENT BODY"})
+    first = rg.render("gate_open.spec", "teaching", WHY, flow=FLOW,
                       guidance_root=root)
-    second = rg.render("gate_open.g1", "teaching", WHY, flow=FLOW,
+    second = rg.render("gate_open.spec", "teaching", WHY, flow=FLOW,
                        guidance_root=root)
-    third = rg.render("gate_await.g1", "teaching", WHY, flow=FLOW,
+    third = rg.render("gate_await.spec", "teaching", WHY, flow=FLOW,
                       guidance_root=root)
     assert "road ahead" in first.lower()
     assert "build the reader" in first
@@ -138,11 +138,11 @@ def test_teaching_adds_the_road_ahead_block_the_first_time_only(tmp_path):
 
 
 def test_a_second_flow_id_gets_its_own_first_time_block(tmp_path):
-    root = _root(tmp_path, **{"gate_open.g1": "FRAGMENT BODY"})
+    root = _root(tmp_path, **{"gate_open.spec": "FRAGMENT BODY"})
     other = dict(FLOW, flow_id="znd__other-flow__20260801T090000Z",
                  steps=[{"index": 0, "title": "only step", "status": "pending"}])
-    rg.render("gate_open.g1", "teaching", WHY, flow=FLOW, guidance_root=root)
-    second_flow = rg.render("gate_open.g1", "teaching", WHY, flow=other,
+    rg.render("gate_open.spec", "teaching", WHY, flow=FLOW, guidance_root=root)
+    second_flow = rg.render("gate_open.spec", "teaching", WHY, flow=other,
                             guidance_root=root)
     assert "road ahead" in second_flow.lower()
     assert "only step" in second_flow
@@ -160,17 +160,17 @@ def test_teaching_on_a_miss_is_the_why_plus_the_block(tmp_path):
 def test_teaching_without_a_flow_is_just_the_fragment(tmp_path):
     """No flow_id means no key to dedupe on, so the block is skipped rather
     than printed on every single call."""
-    root = _root(tmp_path, **{"gate_open.g1": "FRAGMENT BODY"})
-    assert rg.render("gate_open.g1", "teaching", WHY, flow=None,
+    root = _root(tmp_path, **{"gate_open.spec": "FRAGMENT BODY"})
+    assert rg.render("gate_open.spec", "teaching", WHY, flow=None,
                      guidance_root=root) == "FRAGMENT BODY"
-    assert rg.render("gate_open.g1", "teaching", WHY, flow={"steps": []},
+    assert rg.render("gate_open.spec", "teaching", WHY, flow={"steps": []},
                      guidance_root=root) == "FRAGMENT BODY"
 
 
 def test_a_flow_with_no_steps_still_renders_a_block_once(tmp_path):
-    root = _root(tmp_path, **{"gate_open.g1": "FRAGMENT BODY"})
+    root = _root(tmp_path, **{"gate_open.spec": "FRAGMENT BODY"})
     empty = {"flow_id": "znd__no-steps__20260801T090000Z", "steps": []}
-    out = rg.render("gate_open.g1", "teaching", WHY, flow=empty,
+    out = rg.render("gate_open.spec", "teaching", WHY, flow=empty,
                     guidance_root=root)
     assert "road ahead" in out.lower()
     assert "no steps recorded" in out.lower()
@@ -179,9 +179,8 @@ def test_a_flow_with_no_steps_still_renders_a_block_once(tmp_path):
 # --- against the real shipped fragments -------------------------------------
 
 REAL_KEYS = (
-    "gate_open.g1", "gate_open.g2", "gate_open.g3", "gate_open.g4",
-    "gate_await.g1", "gate_await.g2", "gate_await.g3", "gate_await.g4",
-    "sprint_launch", "ship_execute",
+    "gate_open.spec", "gate_await.spec", "gate_open.accept",
+    "gate_await.accept", "sprint_launch", "ship_execute",
 )
 
 

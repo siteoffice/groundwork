@@ -79,7 +79,7 @@ DEFAULT_SPRINTS_ROOT = str(pathlib.Path(DEFAULT_FLOWS_ROOT).parent / "sprints")
 # since 2026-07-22). The empty-string default before 2026-08-18 meant that any
 # environment without ZND_GATE_CHANNEL_ID set posted to channel "" and every
 # gate prompt failed with channel_not_found, silently, for as long as the env
-# var was missing (found via the step 6 G3 that never reached Slack). The env
+# var was missing (found via the step 6 learn gate that never reached Slack). The env
 # var still wins for other deployments of the public harness.
 GATE_CHANNEL_ID = os.environ.get("ZND_GATE_CHANNEL_ID", "C0BK70BTFQ9")
 
@@ -265,10 +265,10 @@ def process_open_gate(flow_dir, flow: dict,
 
     if not entry.get("slack_parent_ts"):
         text = slack_channel.compose_gate_prompt(gate, flow)
-        # One thread per STEP, not per gate: a step's G2, G4 and G3 prompts all
+        # One thread per STEP, not per gate: a step's spec and accept prompts all
         # belong to the same conversation. find_step_parent_ts returns the
-        # earliest thread already opened for this step (None for a G1 gate,
-        # whose step_index is None, and None for the step's first gate).
+        # earliest thread already opened for this step (None for a gate
+        # without a step_index, and None for the step's first gate).
         step_parent = outbox.find_step_parent_ts(flow_dir,
                                                  gate.get("step_index"))
         if step_parent:
