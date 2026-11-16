@@ -86,6 +86,20 @@ def test_receipt_on_old_g4(tmp_path):
     assert "-G4-" in data["gate_token"]
 
 
+def test_receipt_page_names_the_gate(tmp_path):
+    to_accept(tmp_path)
+    run(tmp_path, "gate", FLOW, "ship")
+    receipts = flow_dir(tmp_path) / "receipts"
+    page = (receipts / "step-01.html").read_text(encoding="utf-8")
+    assert "ship at the accept gate" in page and "G4" not in page
+    data = json.loads((receipts / "step-01.json").read_text(encoding="utf-8"))
+    assert set(data) == {
+        "schema", "label", "flow_id", "project", "slug", "idea", "step_index",
+        "step_title", "spec_path", "gate", "gate_token", "verdict", "note",
+        "surface", "decided_at", "flow_log_lines", "flow_log_sha256",
+    }
+
+
 def test_full_loop_names(tmp_path, capsys):
     run(tmp_path, "new", "demo", "add a login page")
     run(tmp_path, "advance", FLOW)
