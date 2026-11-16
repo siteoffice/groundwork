@@ -1,13 +1,13 @@
 ---
 name: one-loop
 description: >-
-  Runs one piece of work from idea to close in a folder you control, with four gates where you decide and a local receipt when you accept. Use on "one loop", "start a flow", "flow status", "advance the flow", "approve the gate", "close the flow". Do NOT use for a quick edit that needs no decision trail.
+  Runs one piece of work from idea to close in a folder you control, with two gates where you decide and a local receipt when you accept. Use on "one loop", "start a flow", "flow status", "advance the flow", "approve the gate", "close the flow". Do NOT use for a quick edit that needs no decision trail.
 ---
 
 # One loop
 
 One idea goes through the same loop every time: idea, design, plan, work, review, close. You
-decide at four gates. The state lives in plain files in your own folder, so you can stop and
+decide at two gates. The state lives in plain files in your own folder, so you can stop and
 pick it up tomorrow. When you accept the work at the last gate, you get a receipt.
 
 ## What this skill is, and is not
@@ -56,23 +56,25 @@ verdicts it accepts. Run the next command only after you have read it.
 2. **Shape the idea.** Write down what the idea is, who it is for and how you will know it
    worked. Keep it in the project, for example `ROOT\docs\<slug>.md`. Then
    `advance <project>/<slug>` twice: idea to design, design to breakdown.
-3. **G1, the plan gate.** `advance` again opens G1. Show the user the plan as a short numbered
-   list of steps and ask: approve or reject. Record it with
-   `gate <project>/<slug> approve` (or `reject`). Then
-   `advance <project>/<slug> --steps "step one;step two"` to start step one.
-4. **G2, the spec gate.** For the current step, write a short spec: what changes, what stays,
-   how you check it. `advance` opens G2. Ask: approve or reject. After `approve`,
+3. **Break it down.** Show the plan as a short numbered list of steps.
+   `advance <project>/<slug> --steps "step one;step two"` starts step one. No gate opens
+   here: the first spec gate shows the whole breakdown and approves it with that step's spec.
+4. **The spec gate (gate 1 of 2).** For the current step, write a short spec: what changes,
+   what stays, how you check it. `advance` opens `spec`. Ask, with the meaning beside each
+   verdict: approve; reject (do not build this step); park (pause, answer later). Record with
+   `gate <project>/<slug> approve`, then
    `advance <project>/<slug> --spec <path to the spec>` records the spec and says the work
    step is ready.
 5. **The work.** Do the step, here, with the user watching. Run the checks the spec names.
-6. **G4, the ship gate.** `advance` opens G4. Show what changed and what the checks said.
-   Ask: ship, hold or park. Only `ship` accepts the change and writes the receipt. `hold`
-   keeps the work but does not accept it. Record with `gate <project>/<slug> ship "<note>"`.
-7. **Learn, then G3.** `advance` moves to learn. Write what held and what broke, in
-   `learnings.md` in the flow folder. `advance` opens G3. Ask: proceed (next step, or close if
-   it was the last), adapt (redo this step, give a note) or close.
-8. **Close.** After the last `proceed`, one more `advance` closes the flow. To drop a flow
-   that will never finish: `close <project>/<slug> "<reason>"`. A reason is required.
+6. **The accept gate (gate 2 of 2).** `advance` opens `accept`. Show what changed and what
+   the checks said. Ask: ship (accept and merge); hold (send back); park (pause, answer
+   later). Only `ship` accepts the change and writes the receipt. Record with
+   `gate <project>/<slug> ship "<note>"`.
+7. **Learn, without a gate.** `advance` moves to learn. Write what held and what broke, in
+   `learnings.md` in the flow folder. `advance` then goes to the next step's spec, or closes
+   the flow after the last step. Adapting happens at the next spec gate.
+8. **Close.** A flow closes after the last step's learn. To drop a flow that will never
+   finish: `close <project>/<slug> "<reason>"`. A reason is required.
 
 ## Hard rules
 
@@ -106,7 +108,8 @@ log up to that point.
 ## When it does not work
 
 - `refused: ...`: the engine rejected the call. Read the reason. Common ones: a verdict that
-  does not fit the open gate, an unfinished gate, a missing step list at G1.
+  does not fit the open gate, an unfinished gate.
+- A gate shown as retired (an old G3) is dropped on the next `advance`.
 - `python` not found: install Python 3.9 or newer, then rerun.
 - Windows only, for the time-window sweep: `python -m pip install tzdata`. The loop above does
   not need it.
