@@ -3,7 +3,7 @@
 
 A thin layer over the vendored Foreman engine (foreman\\flows\\_lib). It never edits state by
 hand: every change goes through the engine's own functions. It adds one thing the engine does
-not do: a local, unsigned receipt when a change is accepted at the G4 ship gate.
+not do: a local, unsigned receipt when a change is accepted at the accept gate.
 
   gw.py --root <folder> new <project> "<idea>"
   gw.py --root <folder> status [<project>/<slug>]
@@ -65,8 +65,8 @@ def _parser():
     p.add_argument("flow", nargs="?")
     p = sub.add_parser("advance")
     p.add_argument("flow")
-    p.add_argument("--steps", help="semicolon-separated step titles, needed when G1 is approved")
-    p.add_argument("--spec", help="path to the approved spec, recorded when G2 is approved")
+    p.add_argument("--steps", help="semicolon-separated step titles, read when the flow crosses from breakdown to execute")
+    p.add_argument("--spec", help="path to the approved spec, recorded when the spec gate is approved")
     p = sub.add_parser("gate")
     p.add_argument("flow")
     p.add_argument("verdict")
@@ -97,14 +97,14 @@ def _gate(root, a):
     after = flow.get("gate")
     fresh = (isinstance(before, dict) and before.get("status") == "awaiting-owner"
              and isinstance(after, dict) and after.get("status") == "decided")
-    if fresh and after.get("id") == "G4" and a.verdict == "ship":
+    if fresh and fs.canonical_gate(after.get("id")) == "accept" and a.verdict == "ship":
         j, h = receipt.write_receipt(flow, after, fdir)
         print("receipt (%s): %s" % (receipt.LABEL, h))
         print("receipt data: %s" % j)
 
 
 def _close(root, a):
-    """Close a flow by hand: it will never reach G3. Not a gate verdict, so no receipt."""
+    """Close a flow by hand: it will never finish its last step. Not a gate verdict, so no receipt."""
     reason = (a.reason or "").strip()
     if not reason:
         raise ValueError("a reason is required to close a flow")
@@ -142,7 +142,7 @@ def main(argv=None):
             if line:
                 # The engine also builds a /sprint line for a sprint runner Groundwork does not
                 # ship. The work step is done in the session, so say that instead.
-                print("work step ready: do it now, then run advance to open the ship gate")
+                print("work step ready: do it now, then run advance to open the accept gate")
         elif a.cmd == "gate":
             _gate(root, a)
         elif a.cmd == "close":
