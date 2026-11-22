@@ -5,6 +5,15 @@ All notable changes. The version is one clock for the whole repository: `groundw
 
 ## Unreleased
 
+- **New skill: `sprint`.** Builds one approved step with you present: a task list, its own
+  branch (never `main`), the spec's tests, then a blind check by a fresh agent that sees the spec,
+  the diff and the success criteria but no summary from the builder. Five rounds at most. It ends
+  with a report whose Close-out block names every leftover as DO, ASK, HAND or DROP. Attended
+  only. No engine change: it drives `sprint_step.py` and `render_dashboard.py`, which already ship.
+- **README correction.** The README said the engine ships no sprint runner. The engine folder
+  holds `sprint_runner.py`, a headless launcher that no skill calls and that this release does not
+  support. Section 7 now names what comes next.
+
 ## 0.5.2
 
 - **The engine tests run on Python 3.9 again.** One vendored fixture called
