@@ -3,7 +3,7 @@
 All notable changes. The version is one clock for the whole repository: `groundwork`,
 `groundwork-mods` and the marketplace move together.
 
-## Unreleased
+## 0.7.0
 
 - **Snippet generator and snippet lint, off by default.** `engine\snip\snip.py` prints every
   command block and every git block in one fixed form for Windows (PowerShell) and the Mac (sh):
