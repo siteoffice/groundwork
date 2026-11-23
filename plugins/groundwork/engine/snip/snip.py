@@ -31,6 +31,14 @@ DEFAULT_RUNS_IN = {
     "mac": "Terminal on the Mac (zsh)",
 }
 DEFAULT_NEEDS = "nothing"
+ENGINE_PATH = pathlib.Path(__file__).resolve().parent.parent / "sync" / "git_flow.py"
+DEFAULT_EXPECT = {
+    "save": "one new commit, and git status --short no longer lists the saved files",
+    "share": "the branch is on origin and git status -sb shows no ahead count",
+    "land": "the engine reports the pull request merged and the work branch removed",
+    "tag": "git ls-remote prints one line ending in refs/tags/%s",
+    "sync": "git status -sb shows the branch level with its upstream",
+}
 
 _TICKS = "`" * 3
 
@@ -182,11 +190,98 @@ def _build_paste(args):
     return "\n".join([fence + "text", PASTE_PREFIX + into] + body + [fence]) + "\n"
 
 
+def _abs_in(target, name, value):
+    one_line(name, value)
+    if target == "win":
+        return re.match(r"^[A-Za-z]:\\", value) is not None
+    return value.startswith("/")
+
+
+def _build_save(target, args):
+    files = args.get("files") or []
+    if not files:
+        raise Refusal("--files is required")
+    for f in files:
+        one_line("--files", f)
+        if f in (".", "*", "-A", "--all"):
+            raise Refusal("--files names %s: list each file" % f)
+        if f.startswith("/") or f.startswith("~/") or re.match(r"^[A-Za-z]:\\", f):
+            raise Refusal("--files must be relative to the cwd: %s" % f)
+    message = one_line("--message", args.get("message"))
+    if len(message) > 72:
+        raise Refusal("--message is longer than 72 characters")
+    if message.endswith("."):
+        raise Refusal("--message ends with a period")
+    commit = "git commit -m " + quote(target, message)
+    if args.get("body") is not None:
+        commit += " -m " + quote(target, one_line("--body", args["body"]))
+    co = args.get("co_author")
+    if co is not None:
+        one_line("--co-author", co)
+        if not re.match(r"^[^<>]+ <[^<>\s]+@[^<>\s]+>$", co):
+            raise Refusal("--co-author must look like: Name <email>")
+        commit += " -m " + quote(target, "Co-Authored-By: " + co)
+    body = ["git add -- " + " ".join(quote(target, f) for f in files), commit,
+            "git status --short"]
+    expect = args.get("expect") or DEFAULT_EXPECT["save"]
+    return _command_block(target, args, "save", body, expect)
+
+
+def _build_land(target, args):
+    if target == HOST_OS:
+        engine = str(ENGINE_PATH)
+    else:
+        engine = args.get("engine")
+        if engine is None:
+            raise Refusal("--engine is required when --os is not this system")
+        if not _abs_in(target, "--engine", engine):
+            raise Refusal("--engine must be an absolute path for --os %s" % target)
+    cwd = args.get("cwd")
+    check_cwd(target, cwd)
+    if cwd.startswith("~/"):
+        repo = '"$HOME/' + cwd[2:] + '"'
+    else:
+        repo = quote(target, cwd)
+    line = ("py -3 " if target == "win" else "python3 ") + quote(target, engine)
+    line += " land --apply --repo " + repo
+    if args.get("subject") is not None:
+        line += " --subject " + quote(target, one_line("--subject", args["subject"]))
+    expect = args.get("expect") or DEFAULT_EXPECT["land"]
+    return _command_block(target, args, "land", [line], expect)
+
+
+def _build_git(kind, args):
+    target = _target(args)
+    name = kind[4:]
+    q = lambda v: quote(target, v)  # noqa: E731
+    if name == "save":
+        return _build_save(target, args)
+    if name == "land":
+        return _build_land(target, args)
+    expect = args.get("expect") or DEFAULT_EXPECT.get(name)
+    if name == "share":
+        body = ["git push -u origin HEAD", "git status -sb"]
+    elif name == "tag":
+        tag = one_line("--tag", args.get("tag"))
+        one_line("--message", args.get("message"))
+        body = ["git tag -a " + q(tag) + " -m " + q(args["message"]),
+                "git push origin " + q(tag),
+                "git ls-remote --tags origin " + q(tag)]
+        if not args.get("expect"):
+            expect = DEFAULT_EXPECT["tag"] % tag
+    else:
+        body = ["git fetch --prune origin", "git merge --ff-only " + q("@{u}"),
+                "git status -sb"]
+    return _command_block(target, args, name, body, expect)
+
+
 def build(kind, **args) -> str:
     if kind == "run":
         return _build_run(_target(args), args)
     if kind == "paste":
         return _build_paste(args)
+    if kind in ("git " + r for r in RECIPES):
+        return _build_git(kind, args)
     raise Refusal("unknown kind: %s" % kind)
 
 
@@ -214,6 +309,22 @@ def _make_parser():
     paste.add_argument("--into")
     paste.add_argument("--text")
     paste.add_argument("--file")
+    git = sub.add_parser("git")
+    gsub = git.add_subparsers(dest="recipe", required=True, parser_class=_Parser)
+    for name in RECIPES:
+        sp = gsub.add_parser(name)
+        _shared(sp)
+        if name == "save":
+            sp.add_argument("--files", nargs="+")
+            sp.add_argument("--message")
+            sp.add_argument("--body")
+            sp.add_argument("--co-author", dest="co_author")
+        elif name == "land":
+            sp.add_argument("--subject")
+            sp.add_argument("--engine")
+        elif name == "tag":
+            sp.add_argument("--tag")
+            sp.add_argument("--message")
     return parser
 
 
@@ -222,11 +333,14 @@ def main(argv=None) -> int:
         ns = _make_parser().parse_args(argv)
     except SystemExit as exc:
         return exc.code if isinstance(exc.code, int) else 2
-    args = {k: v for k, v in vars(ns).items() if k != "kind"}
+    kind = ns.kind
+    if kind == "git":
+        kind = "git " + ns.recipe
+    args = {k: v for k, v in vars(ns).items() if k not in ("kind", "recipe")}
     try:
-        block = build(ns.kind, **args)
+        block = build(kind, **args)
         target = args.get("os") or HOST_OS
-        if ns.kind == "run" and target == HOST_OS:
+        if kind != "paste" and target == HOST_OS:
             where = args["cwd"]
         else:
             where = os.getcwd()

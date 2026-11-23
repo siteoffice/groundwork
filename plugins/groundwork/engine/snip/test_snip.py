@@ -39,10 +39,19 @@ def ps_unquote(token):
 
 
 def kind_args(target):
-    """One sample per command kind for the target system (Task 4 adds the git recipes)."""
+    """One sample per command kind for the target system."""
     cmd = "py -3 -m pytest -q" if target == "win" else "python3 -m pytest -q"
+    engine = ("D:\\demo\\groundwork\\plugins\\groundwork\\engine\\sync\\git_flow.py" if target == "win"
+              else "/Users/demo/groundwork/plugins/groundwork/engine/sync/git_flow.py")
     return [
         ("run", {"cmd": [cmd], "expect": "all tests pass"}),
+        ("git save", {"files": ["a.txt", "docs/it's.md"], "message": "fix the user's page",
+                      "body": "Why: the page broke on save.",
+                      "co_author": "Demo Person <demo@example.com>"}),
+        ("git share", {}),
+        ("git land", {"subject": "Merge the user's page", "engine": engine}),
+        ("git tag", {"tag": "v1.2.0", "message": "Release 1.2.0"}),
+        ("git sync", {}),
     ]
 
 
@@ -96,6 +105,16 @@ def test_quoting():
     home = snip.build("run", os="mac", cwd="~/demo/repo", cmd=["ls"], expect="a listing")
     assert block_lines(home)[1] == "# cwd: ~/demo/repo"
     assert block_lines(home)[3] == 'cd -- "$HOME/demo/repo"'
+    for target in ("win", "mac"):
+        save = dict(kind_args(target))["git save"]
+        lines = block_lines(snip.build("git save", os=target, cwd=root_for(target), **save))
+        add, commit = lines[5], lines[6]
+        if target == "mac":
+            assert shlex.split(add) == ["git", "add", "--", "a.txt", "docs/it's.md"]
+            assert shlex.split(commit)[3] == "fix the user's page"
+        else:
+            assert add == "git add -- 'a.txt' 'docs/it''s.md'"
+            assert commit.startswith("git commit -m 'fix the user''s page' -m ")
 
 
 def test_paste_block():
@@ -137,6 +156,10 @@ def test_refusals(capsys, tmp_path, monkeypatch):
     refused(capsys, ["run", *w, "--expect", "x"])  # no --cmd: an argparse error, still one line
     refused(capsys, ["paste", "--into", "", "--text", "hi"])
     refused(capsys, ["paste", "--into", "a session", "--text", "a " + EM])
+    refused(capsys, ["git", "save", *w, "--files", "a.txt", "--message", "one\ntwo"])
+    refused(capsys, ["git", "save", *w, "--files", "a.txt", "--message", "fix " + EM + " it"])
+    refused(capsys, ["git", "tag", *m, "--tag", "", "--message", "x"])
+    refused(capsys, ["git", "land", *m])  # target is not the host and no --engine
     monkeypatch.setattr(snip, "HOST_OS", REAL_HOST)
     refused(capsys, ["run", "--cwd", str(tmp_path / "missing"), "--cmd", "ls", "--expect", "x"])
     # control: a good call prints one block on stdout and the switch state on stderr
@@ -144,3 +167,53 @@ def test_refusals(capsys, tmp_path, monkeypatch):
     out, err = capsys.readouterr()
     assert out.startswith(F) and out.rstrip("\n").endswith(F)
     assert err.strip() == "output standards: off"
+
+
+def save(capsys, *extra):
+    code = snip.main(["git", "save", "--os", "mac", "--cwd", MAC_ROOT, *extra])
+    out, err = capsys.readouterr()
+    return code, out, err
+
+
+def test_save_form(capsys):
+    code, out, _ = save(capsys, "--files", "a.txt", "b c.txt", "--message", "fix the login page")
+    assert code == 0
+    lines = block_lines(out)
+    assert lines[3] == "# recipe: git save"
+    assert lines[5] == "git add -- 'a.txt' 'b c.txt'"
+    assert lines[6] == "git commit -m 'fix the login page'"
+    assert lines[7] == "git status --short"
+    code, out, _ = save(capsys, "--files", "a.txt", "--message", "fix it", "--body", "Why: it broke.",
+                        "--co-author", "Demo Person <demo@example.com>")
+    assert code == 0
+    assert block_lines(out)[6] == ("git commit -m 'fix it' -m 'Why: it broke.' "
+                                   "-m 'Co-Authored-By: Demo Person <demo@example.com>'")
+    for bad in (".", "*", "-A", "--all"):
+        code, out, err = save(capsys, "--files", bad, "--message", "fix it")
+        assert code == 2 and out == "" and len(err.strip().splitlines()) == 1, bad
+    assert save(capsys, "--files", "a.txt", "--message", "x" * 73)[0] == 2
+    assert save(capsys, "--files", "a.txt", "--message", "x" * 72)[0] == 0
+    assert save(capsys, "--files", "a.txt", "--message", "fix it.")[0] == 2
+    assert save(capsys, "--files", "/Users/demo/repo/a.txt", "--message", "fix it")[0] == 2
+    assert save(capsys, "--files", "a.txt", "--message", "fix it", "--co-author", "nobody")[0] == 2
+
+
+def test_land_engine_path(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(snip, "HOST_OS", REAL_HOST)
+    code = snip.main(["git", "land", "--cwd", str(tmp_path), "--subject", "Merge the login page"])
+    out, err = capsys.readouterr()
+    assert code == 0, err
+    line = block_lines(out)[5]
+    if REAL_HOST == "win":
+        assert line.startswith("py -3 '")
+        engine = ps_unquote(line[len("py -3 "):line.index(" land --apply")])
+        assert line.endswith(" land --apply --repo " + snip.quote("win", str(tmp_path))
+                             + " --subject 'Merge the login page'")
+    else:
+        parts = shlex.split(line)
+        assert parts[0] == "python3"
+        engine = parts[1]
+        assert parts[2:] == ["land", "--apply", "--repo", str(tmp_path), "--subject",
+                             "Merge the login page"]
+    assert pathlib.Path(engine).is_file()
+    assert pathlib.Path(engine) == HERE.parent / "sync" / "git_flow.py"
