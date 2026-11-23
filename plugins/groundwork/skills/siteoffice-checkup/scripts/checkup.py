@@ -190,7 +190,7 @@ def check_plugins(skills_repo, public_repo):
             versions[f"{label} (marketplace)"] = entry.get("version")
             versions[f"{label} (plugin.json)"] = p.get("version")
             # A plugin that ships hooks, commands, agents or an MCP config instead of skills
-            # (burnmon-cloud, foreman-sprint-pane) never gets a skills folder: not a gap.
+            # (foreman-sprint-pane) never gets a skills folder: not a gap.
             other = ("hooks", "commands", "agents", ".mcp.json")
             if not os.path.isdir(os.path.join(src, "skills")) and not any(
                     os.path.exists(os.path.join(src, o)) for o in other):
