@@ -181,6 +181,12 @@ Starting from an empty folder instead: say "set up my company hub", or copy
 - **A git guard in agent sessions.** `plugins\groundwork\hooks\hooks.json` denies raw mutating git
   (`commit`, `push`, `merge` and the like) from the agent and points it at the `siteoffice-git`
   steps. `git status` and other read-only git still run.
+- **Snippets and a snippet lint, opt-in.** `plugins\groundwork\engine\snip\snip.py` prints a
+  command block in one fixed form (where it runs, the folder, what it needs, what success looks
+  like) for PowerShell or the Mac shell, with five git recipes in one form each.
+  `snippet_lint.py` next to it refuses a hand-written or damaged block in your Markdown files.
+  Both are off until you set `"outputStandards": true` under `settings` in `siteoffice.json`.
+  The lint checks files, not chat replies.
 
 What it costs you: the gates are slower than letting an agent run. That is on purpose. If you
 want a machine that ships without asking you, this is the wrong tool.

@@ -3,6 +3,17 @@
 All notable changes. The version is one clock for the whole repository: `groundwork`,
 `groundwork-mods` and the marketplace move together.
 
+## Unreleased
+
+- **Snippet generator and snippet lint, off by default.** `engine\snip\snip.py` prints every
+  command block and every git block in one fixed form for Windows (PowerShell) and the Mac (sh):
+  where it runs, the folder, what it needs, and what success looks like, with five git recipes
+  (`save`, `share`, `land`, `tag`, `sync`). `engine\snip\snippet_lint.py` refuses a block in a
+  Markdown file that breaks that form, a git block without a recipe, and text damaged by eaten
+  backslashes. A repo turns both on with `"outputStandards": true` in `settings` of its
+  `siteoffice.json`. The lint checks files, not chat replies. No engine change: `engine\foreman`
+  and `engine\sync` are untouched.
+
 ## 0.6.1
 
 - **The Setup Doctor gives the Python fix for your system.** It said `brew install python` on
