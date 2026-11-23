@@ -69,7 +69,7 @@ jobs:
       - name: Engine suite
         run: |
           set -o pipefail
-          cd plugins/groundwork/engine && python -m pytest foreman groundwork -q -rs | tee "$RUNNER_TEMP/engine.txt"
+          cd plugins/groundwork/engine && python -m pytest foreman groundwork snip -q -rs | tee "$RUNNER_TEMP/engine.txt"
 
       - name: Engine floor
         run: python scripts/ci_report.py floor --suite engine --floor 991 --log "$RUNNER_TEMP/engine.txt"
