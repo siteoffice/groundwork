@@ -130,41 +130,49 @@ def test_paste_block():
     assert lines[-1] == "````"
 
 
-def refused(capsys, argv):
+def refused(capsys, argv, reason):
     code = snip.main(argv)
     out, err = capsys.readouterr()
     assert code == 2, (argv, out, err)
     assert out == "", argv
     assert len(err.strip().splitlines()) == 1, (argv, err)
     assert err.startswith("snip: refused: "), err
+    assert reason in err, (reason, err)
     return err
 
 
 def test_refusals(capsys, tmp_path, monkeypatch):
     w = ["--os", "win", "--cwd", WIN_ROOT]
     m = ["--os", "mac", "--cwd", MAC_ROOT]
-    refused(capsys, ["run", *w, "--cmd", "echo a " + EM + " b", "--expect", "x"])
-    refused(capsys, ["run", *w, "--cmd", "dir", "--expect", "done " + EM])
-    refused(capsys, ["run", *w, "--cmd", "", "--expect", "x"])
-    refused(capsys, ["run", *w, "--cmd", "dir", "--expect", ""])
-    refused(capsys, ["run", *w, "--cmd", "dir\ndir", "--expect", "x"])
-    refused(capsys, ["run", *w, "--cmd", "git push", "--expect", "x"])
-    refused(capsys, ["run", *m, "--cmd", "cd /tmp", "--expect", "x"])
-    refused(capsys, ["run", *w, "--cmd", "Set-Location D:\\other", "--expect", "x"])
-    refused(capsys, ["run", "--os", "mac", "--cwd", WIN_ROOT, "--cmd", "ls", "--expect", "x"])
-    refused(capsys, ["run", "--os", "win", "--cwd", MAC_ROOT, "--cmd", "dir", "--expect", "x"])
-    refused(capsys, ["run", "--os", "win", "--cwd", "demo\\repo", "--cmd", "dir", "--expect", "x"])
-    for bad in ('~/demo/"x"', "~/demo/$x", "~/demo/`x`"):
-        refused(capsys, ["run", "--os", "mac", "--cwd", bad, "--cmd", "ls", "--expect", "x"])
-    refused(capsys, ["run", *w, "--expect", "x"])  # no --cmd: an argparse error, still one line
-    refused(capsys, ["paste", "--into", "", "--text", "hi"])
-    refused(capsys, ["paste", "--into", "a session", "--text", "a " + EM])
-    refused(capsys, ["git", "save", *w, "--files", "a.txt", "--message", "one\ntwo"])
-    refused(capsys, ["git", "save", *w, "--files", "a.txt", "--message", "fix " + EM + " it"])
-    refused(capsys, ["git", "tag", *m, "--tag", "", "--message", "x"])
-    refused(capsys, ["git", "land", *m])  # target is not the host and no --engine
+    refused(capsys, ["run", *w, "--cmd", "echo a " + EM + " b", "--expect", "x"], "em dash")
+    refused(capsys, ["run", *w, "--cmd", "dir", "--expect", "done " + EM], "em dash")
+    refused(capsys, ["run", *w, "--cmd", "", "--expect", "x"], "empty")
+    refused(capsys, ["run", *w, "--cmd", "dir", "--expect", ""], "empty")
+    refused(capsys, ["run", *w, "--cmd", "dir\ndir", "--expect", "x"], "line break")
+    refused(capsys, ["run", *w, "--cmd", "git push", "--expect", "x"], "git recipe")
+    refused(capsys, ["run", *m, "--cmd", "cd /tmp", "--expect", "x"], "sets the folder")
+    refused(capsys, ["run", *w, "--cmd", "Set-Location D:\\other", "--expect", "x"], "sets the folder")
+    refused(capsys, ["run", "--os", "mac", "--cwd", WIN_ROOT, "--cmd", "ls", "--expect", "x"],
+            "start with / or ~/")
+    refused(capsys, ["run", "--os", "win", "--cwd", MAC_ROOT, "--cmd", "dir", "--expect", "x"],
+            "Windows path")
+    refused(capsys, ["run", "--os", "win", "--cwd", "demo\\repo", "--cmd", "dir", "--expect", "x"],
+            "Windows path")
+    for bad in ('~/demo/"x"', "~/demo/$x", "~/demo/`x`", "~/demo/a!b"):
+        refused(capsys, ["run", "--os", "mac", "--cwd", bad, "--cmd", "ls", "--expect", "x"],
+                "must not hold")
+    # no --cmd: still one line
+    refused(capsys, ["run", *w, "--expect", "x"], "--cmd is required")
+    refused(capsys, ["paste", "--into", "", "--text", "hi"], "empty")
+    refused(capsys, ["paste", "--into", "a session", "--text", "a " + EM], "em dash")
+    refused(capsys, ["git", "save", *w, "--files", "a.txt", "--message", "one\ntwo"], "line break")
+    refused(capsys, ["git", "save", *w, "--files", "a.txt", "--message", "fix " + EM + " it"],
+            "em dash")
+    refused(capsys, ["git", "tag", *m, "--tag", "", "--message", "x"], "empty")
+    refused(capsys, ["git", "land", *m], "--engine is required")  # not the host, no --engine
     monkeypatch.setattr(snip, "HOST_OS", REAL_HOST)
-    refused(capsys, ["run", "--cwd", str(tmp_path / "missing"), "--cmd", "ls", "--expect", "x"])
+    refused(capsys, ["run", "--cwd", str(tmp_path / "missing"), "--cmd", "ls", "--expect", "x"],
+            "folder not found")
     # control: a good call prints one block on stdout and the switch state on stderr
     assert snip.main(["run", "--cwd", str(tmp_path), "--cmd", "ls", "--expect", "a listing"]) == 0
     out, err = capsys.readouterr()
@@ -191,14 +199,22 @@ def test_save_form(capsys):
     assert code == 0
     assert block_lines(out)[6] == ("git commit -m 'fix it' -m 'Why: it broke.' "
                                    "-m 'Co-Authored-By: Demo Person <demo@example.com>'")
-    for bad in (".", "*", "-A", "--all"):
-        code, out, err = save(capsys, "--files", bad, "--message", "fix it")
-        assert code == 2 and out == "" and len(err.strip().splitlines()) == 1, bad
-    assert save(capsys, "--files", "a.txt", "--message", "x" * 73)[0] == 2
+    def save_refused(reason, *extra):
+        code, out, err = save(capsys, *extra)
+        assert code == 2 and out == "" and len(err.strip().splitlines()) == 1, extra
+        assert reason in err, (reason, err)
+
+    for bad in (".", "*"):
+        save_refused("list each file", "--files", bad, "--message", "fix it")
+    for bad in ("-A", "--all"):  # argparse takes these for flags, so the guard is checked on build
+        with pytest.raises(snip.Refusal, match="list each file"):
+            snip.build("git save", os="mac", cwd=MAC_ROOT, files=[bad], message="fix it")
+        save_refused("expected at least one argument", "--files", bad, "--message", "fix it")
+    save_refused("72", "--files", "a.txt", "--message", "x" * 73)
     assert save(capsys, "--files", "a.txt", "--message", "x" * 72)[0] == 0
-    assert save(capsys, "--files", "a.txt", "--message", "fix it.")[0] == 2
-    assert save(capsys, "--files", "/Users/demo/repo/a.txt", "--message", "fix it")[0] == 2
-    assert save(capsys, "--files", "a.txt", "--message", "fix it", "--co-author", "nobody")[0] == 2
+    save_refused("period", "--files", "a.txt", "--message", "fix it.")
+    save_refused("relative to the cwd", "--files", "/Users/demo/repo/a.txt", "--message", "fix it")
+    save_refused("Name <email>", "--files", "a.txt", "--message", "fix it", "--co-author", "nobody")
 
 
 def test_land_engine_path(tmp_path, monkeypatch, capsys):
@@ -322,6 +338,80 @@ def test_run_refuses_folder_change(cmd):
     """The folder change is caught even without a space after the word."""
     with pytest.raises(snip.Refusal):
         snip.build("run", os="win", cwd=WIN_ROOT, cmd=[cmd], expect="x")
+
+
+def _siteoffice_repo(tmp_path):
+    repo = tmp_path / "repo"
+    deep = repo / "a" / "b"
+    deep.mkdir(parents=True)
+    (repo / "siteoffice.json").write_bytes(
+        json.dumps({"settings": {"outputStandards": True}}).encode("utf-8"))
+    (deep / "x.md").write_bytes(b"hello\n")
+    return repo, deep
+
+
+def test_find_siteoffice_relative_path(tmp_path, monkeypatch, capsys):
+    import snippet_lint
+
+    repo, deep = _siteoffice_repo(tmp_path)
+    monkeypatch.chdir(deep)
+    assert snip.standards_on("x.md") is True
+    assert snip.standards_on(".") is True
+    assert snippet_lint.main(["x.md"]) == 0
+    assert "skipped" not in capsys.readouterr().err
+
+
+def test_find_siteoffice_home_form(tmp_path, monkeypatch):
+    repo, deep = _siteoffice_repo(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    assert snip.standards_on("~/repo/a/b/x.md") is True
+    assert snip.standards_on("~/repo/a/b") is True
+
+
+def test_main_home_cwd_reports_on(tmp_path, monkeypatch, capsys):
+    repo, deep = _siteoffice_repo(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    monkeypatch.setattr(snip, "HOST_OS", "mac")
+    code = snip.main(["run", "--os", "mac", "--cwd", "~/repo/a/b", "--cmd", "ls", "--expect", "x"])
+    out, err = capsys.readouterr()
+    assert code == 0, err
+    assert err.startswith("output standards: on ("), err
+
+
+@pytest.mark.parametrize("argv,reason", [
+    (["run", "--cmd", "echo \x07", "--expect", "x"], "control character"),
+    (["run", "--cmd", "echo \x85", "--expect", "x"], "control character"),
+    (["run", "--cmd", "echo \x1b[0m", "--expect", "x"], "control character"),
+    (["run", "--cmd", "echo " + F, "--expect", "x"], "fence"),
+    (["run", "--cmd", "echo ~~~~", "--expect", "x"], "fence"),
+    (["run", "--cmd", "ls", "--expect", "ok " + F], "fence"),
+])
+def test_unsafe_one_line_values_refused(capsys, argv, reason):
+    refused(capsys, [argv[0], "--os", "win", "--cwd", WIN_ROOT] + argv[1:], reason)
+
+
+def test_unsafe_files_and_paste_refused(capsys):
+    w = ["--os", "win", "--cwd", WIN_ROOT]
+    refused(capsys, ["git", "save", *w, "--files", "a\x08.txt", "--message", "fix it"],
+            "control character")
+    refused(capsys, ["paste", "--into", "a session", "--text", "a\nb\x07c"], "control character")
+    refused(capsys, ["paste", "--into", "a session", "--text", "a\n\x85"], "control character")
+    text = snip.build("run", os="win", cwd=WIN_ROOT, cmd=["echo a\tb"], expect="x")
+    assert "echo a\tb" in text
+    assert "a\tb" in snip.build("paste", into="s", text="a\tb\nc")
+
+
+def test_paste_fence_counts_indented_fence_lines(tmp_path, capsys):
+    import snippet_lint
+
+    text = snip.build("paste", into="a session", text="a\n  " + F + "\nb")
+    assert text.startswith("`" * 4 + "text\n")
+    fences = snippet_lint.parse_fences(text.rstrip("\n").split("\n"))
+    assert len(fences) == 1 and fences[0].close_line == len(text.rstrip("\n").split("\n"))
+    deep = snip.build("paste", into="a session", text="a\n   ~~~\n   " + "`" * 5 + "\nb")
+    assert deep.startswith("`" * 6 + "text\n")
 
 
 @pytest.mark.parametrize("cmd", ["cdk deploy", "cd-tool run", "cd_x", "Set-LocationX"])

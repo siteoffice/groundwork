@@ -85,6 +85,9 @@ def check_command(fence, target, rule):
         idx = len(snip.HEADER_PREFIXES)
         if idx < len(lines) and lines[idx][1].startswith(snip.RECIPE_PREFIX):
             idx += 1
+        for pos in range(idx, len(lines)):
+            if lines[pos][1].startswith(snip.RECIPE_PREFIX):
+                fails.append((lines[pos][0], "%s: recipe line must follow # needs:" % rule))
         cwd_line_no = lines[1][0]
         try:
             snip.check_cwd(target, cwd_value, exists=False)

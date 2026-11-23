@@ -137,6 +137,21 @@ def test_pure_ascii():
         assert "\u2014" not in data.decode("ascii"), name
 
 
+@pytest.mark.parametrize("rule,lines,line_no", [
+    ("L1", [F + "powershell", RUNS_PS, "# cwd: D:\\demo\\repo", "# needs: nothing",
+            "Set-Location -LiteralPath 'D:\\demo\\repo'", "# recipe: git sync", "git status -sb",
+            "# expect: a status", F], 8),
+    ("L2", [F + "sh", RUNS_SH, "# cwd: /Users/demo/repo", "# needs: nothing",
+            "cd -- '/Users/demo/repo'", "# recipe: git sync", "git status -sb",
+            "# expect: a status", F], 8),
+])
+def test_recipe_must_follow_needs(tmp_path, capsys, rule, lines, line_no):
+    path = write(repo(tmp_path) / "late.md", doc(lines))
+    code, out, _ = lint(capsys, path)
+    assert code == 1
+    assert out.startswith("%s:%d: %s: recipe line must follow # needs:" % (path, line_no, rule)), out
+
+
 def test_lint_refuses_backslash_home_cwd(tmp_path, capsys):
     lines = [F + "sh", RUNS_SH, "# cwd: ~/foo\\", "# needs: nothing", 'cd -- "$HOME/foo\\"', "ls",
              "# expect: a listing", F]

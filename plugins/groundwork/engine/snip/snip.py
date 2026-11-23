@@ -43,6 +43,7 @@ DEFAULT_EXPECT = {
 }
 
 _TICKS = "`" * 3
+_FENCE_RUN = re.compile(r"`{3,}|~{3,}")
 _SETS_FOLDER = re.compile(r"^\s*(set-location|cd)(?![A-Za-z0-9_-])", re.IGNORECASE)
 
 
@@ -51,7 +52,7 @@ class Refusal(ValueError):
 
 
 def find_siteoffice(path) -> Optional[pathlib.Path]:
-    p = pathlib.Path(path)
+    p = pathlib.Path(os.path.abspath(os.path.expanduser(str(path))))
     start = p if p.is_dir() else p.parent
     for folder in (start,) + tuple(start.parents):
         candidate = folder / "siteoffice.json"
@@ -86,6 +87,14 @@ def quote(target, value) -> str:
     return "'" + value.replace("'", "'\\''") + "'"
 
 
+def _check_chars(name, value) -> None:
+    """Refuse the control characters and fence runs the lint would flag."""
+    for ch in value:
+        code = ord(ch)
+        if (code < 32 and ch != "\t") or 0x80 <= code <= 0x9F:
+            raise Refusal("%s holds a control character (U+%04X)" % (name, code))
+
+
 def one_line(name, value) -> str:
     if value is None or value.strip() == "":
         raise Refusal("%s is empty" % name)
@@ -93,6 +102,9 @@ def one_line(name, value) -> str:
         raise Refusal("%s holds a line break" % name)
     if EM_DASH in value:
         raise Refusal("%s holds an em dash (U+2014)" % name)
+    _check_chars(name, value)
+    if _FENCE_RUN.search(value):
+        raise Refusal("%s holds three or more backticks or tildes, which could close a fence" % name)
     return value
 
 
@@ -104,8 +116,8 @@ def check_cwd(target, path, exists=None) -> None:
     else:
         if not (path.startswith("/") or path.startswith("~/")):
             raise Refusal("--cwd must start with / or ~/ for --os mac")
-        if path.startswith("~/") and any(c in path for c in ('"', "$", "`", "\\")):
-            raise Refusal("--cwd with ~/ must not hold a double quote, $, a backtick or a backslash")
+        if path.startswith("~/") and any(c in path for c in ('"', "$", "`", "\\", "!")):
+            raise Refusal("--cwd with ~/ must not hold a double quote, $, !, a backtick or a backslash")
     if exists is True or (exists is None and target == HOST_OS):
         real = os.path.expanduser(path) if path.startswith("~/") else path
         if not os.path.isdir(real):
@@ -191,11 +203,13 @@ def _build_paste(args):
     if EM_DASH in text:
         raise Refusal("paste text holds an em dash (U+2014)")
     body = text.replace("\r\n", "\n").split("\n")
+    for line in body:
+        _check_chars("paste text", line)
     longest = 0
     for line in body:
-        m = re.match(r"^`+", line)
+        m = re.match(r"^[ \t]*(`+)", line)
         if m:
-            longest = max(longest, len(m.group(0)))
+            longest = max(longest, len(m.group(1)))
     fence = "`" * max(3, longest + 1)
     return "\n".join([fence + "text", PASTE_PREFIX + into] + body + [fence]) + "\n"
 
@@ -351,7 +365,7 @@ def main(argv=None) -> int:
         block = build(kind, **args)
         target = args.get("os") or HOST_OS
         if kind != "paste" and target == HOST_OS:
-            where = args["cwd"]
+            where = os.path.expanduser(args["cwd"])
         else:
             where = os.getcwd()
     except Refusal as exc:

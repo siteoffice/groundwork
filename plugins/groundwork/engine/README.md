@@ -74,6 +74,8 @@ py -3 -m pytest foreman groundwork snip -q
 # expect: no failures; the last line names the passed and skipped counts
 ```
 
-Expect `1021 passed, 4 skipped` for `foreman groundwork` on engine 0.1.0, plus `30 passed` for
-`snip` (`29 passed, 1 skipped` when `sh` is not on the PATH, because its sh syntax test is
-skipped). macOS is untested.
+Expect `1021 passed, 4 skipped` for `foreman groundwork` on engine 0.1.0, plus `65 passed` for
+`snip` when `sh` and `pwsh` are both on the PATH. Two `snip` tests depend on the host: the sh
+syntax test skips without `sh` on the PATH (a PowerShell window on Windows usually prints
+`64 passed, 1 skipped`), and the `pwsh` parse check inside the curly quote test skips without
+`pwsh`. macOS is untested.
