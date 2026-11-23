@@ -17,6 +17,8 @@ from typing import Optional
 
 HOST_OS = "win" if os.name == "nt" else "mac"
 EM_DASH = "\u2014"
+# PowerShell reads all five of these as a single quote, so each is doubled.
+PS_QUOTES = ("'", "\u2018", "\u2019", "\u201a", "\u201b")
 
 PS_LANGS = ("powershell", "pwsh", "ps1", "ps")
 SH_LANGS = ("sh", "bash", "zsh", "shell")
@@ -41,6 +43,7 @@ DEFAULT_EXPECT = {
 }
 
 _TICKS = "`" * 3
+_SETS_FOLDER = re.compile(r"^\s*(set-location|cd)(?![A-Za-z0-9_-])", re.IGNORECASE)
 
 
 class Refusal(ValueError):
@@ -77,7 +80,9 @@ def standards_on(path) -> bool:
 
 def quote(target, value) -> str:
     if target == "win":
-        return "'" + value.replace("'", "''") + "'"
+        for ch in PS_QUOTES:
+            value = value.replace(ch, ch + ch)
+        return "'" + value + "'"
     return "'" + value.replace("'", "'\\''") + "'"
 
 
@@ -99,8 +104,8 @@ def check_cwd(target, path, exists=None) -> None:
     else:
         if not (path.startswith("/") or path.startswith("~/")):
             raise Refusal("--cwd must start with / or ~/ for --os mac")
-        if path.startswith("~/") and any(c in path for c in ('"', "$", "`")):
-            raise Refusal("--cwd with ~/ must not hold a double quote, $ or a backtick")
+        if path.startswith("~/") and any(c in path for c in ('"', "$", "`", "\\")):
+            raise Refusal("--cwd with ~/ must not hold a double quote, $, a backtick or a backslash")
     if exists is True or (exists is None and target == HOST_OS):
         real = os.path.expanduser(path) if path.startswith("~/") else path
         if not os.path.isdir(real):
@@ -113,6 +118,12 @@ def cwd_command(target, path) -> str:
     if path.startswith("~/"):
         return 'cd -- "$HOME/' + path[2:] + '"'
     return "cd -- " + quote("mac", path)
+
+
+def _expect(args, default):
+    """The default applies only when --expect was not given: an empty value is refused later."""
+    value = args.get("expect")
+    return default if value is None else value
 
 
 def _target(args):
@@ -150,10 +161,9 @@ def _build_run(target, args):
     body = []
     for c in cmds:
         one_line("--cmd", c)
-        word = c.split()[0].lower()
-        if word == "git":
+        if c.split()[0].lower() == "git":
             raise Refusal("--cmd starts with git: use a git recipe")
-        if word in ("set-location", "cd"):
+        if _SETS_FOLDER.match(c):
             raise Refusal("--cmd sets the folder: the header does that")
         body.append(c)
     if args.get("expect") is None:
@@ -223,7 +233,7 @@ def _build_save(target, args):
         commit += " -m " + quote(target, "Co-Authored-By: " + co)
     body = ["git add -- " + " ".join(quote(target, f) for f in files), commit,
             "git status --short"]
-    expect = args.get("expect") or DEFAULT_EXPECT["save"]
+    expect = _expect(args, DEFAULT_EXPECT["save"])
     return _command_block(target, args, "save", body, expect)
 
 
@@ -246,7 +256,7 @@ def _build_land(target, args):
     line += " land --apply --repo " + repo
     if args.get("subject") is not None:
         line += " --subject " + quote(target, one_line("--subject", args["subject"]))
-    expect = args.get("expect") or DEFAULT_EXPECT["land"]
+    expect = _expect(args, DEFAULT_EXPECT["land"])
     return _command_block(target, args, "land", [line], expect)
 
 
@@ -258,7 +268,7 @@ def _build_git(kind, args):
         return _build_save(target, args)
     if name == "land":
         return _build_land(target, args)
-    expect = args.get("expect") or DEFAULT_EXPECT.get(name)
+    expect = _expect(args, DEFAULT_EXPECT.get(name))
     if name == "share":
         body = ["git push -u origin HEAD", "git status -sb"]
     elif name == "tag":
@@ -267,7 +277,7 @@ def _build_git(kind, args):
         body = ["git tag -a " + q(tag) + " -m " + q(args["message"]),
                 "git push origin " + q(tag),
                 "git ls-remote --tags origin " + q(tag)]
-        if not args.get("expect"):
+        if args.get("expect") is None:
             expect = DEFAULT_EXPECT["tag"] % tag
     else:
         body = ["git fetch --prune origin", "git merge --ff-only " + q("@{u}"),

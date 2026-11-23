@@ -135,3 +135,11 @@ def test_pure_ascii():
         high = [i for i, b in enumerate(data) if b > 127]
         assert not high, (name, high[:5])
         assert "\u2014" not in data.decode("ascii"), name
+
+
+def test_lint_refuses_backslash_home_cwd(tmp_path, capsys):
+    lines = [F + "sh", RUNS_SH, "# cwd: ~/foo\\", "# needs: nothing", 'cd -- "$HOME/foo\\"', "ls",
+             "# expect: a listing", F]
+    path = write(repo(tmp_path) / "bs.md", doc(lines))
+    code, out, _ = lint(capsys, path)
+    assert code == 1 and ":5: L2: " in out, out

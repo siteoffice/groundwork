@@ -1,5 +1,6 @@
 """Tests for snip.py: the switch, the header grammar, quoting, the git recipes and refusals."""
 import json
+import os
 import pathlib
 import shlex
 import shutil
@@ -256,3 +257,73 @@ def test_sh_syntax():
         body = "\n".join(block_lines(text)) + "\n"
         result = subprocess.run([sh, "-n"], input=body, text=True, capture_output=True)
         assert result.returncode == 0, (text, result.stderr)
+
+
+def test_quoting_tag_and_land_lines():
+    """Every quoted line of the tag and land blocks splits cleanly for sh."""
+    kinds = dict(kind_args("mac"))
+    tag = block_lines(snip.build("git tag", os="mac", cwd=MAC_ROOT, tag="v1.2.0's", message="it's out"))
+    tag_lines = [ln for ln in tag if ln.startswith("git ")]
+    assert len(tag_lines) == 3
+    assert shlex.split(tag_lines[0]) == ["git", "tag", "-a", "v1.2.0's", "-m", "it's out"]
+    assert shlex.split(tag_lines[1]) == ["git", "push", "origin", "v1.2.0's"]
+    assert shlex.split(tag_lines[2]) == ["git", "ls-remote", "--tags", "origin", "v1.2.0's"]
+    land = block_lines(snip.build("git land", os="mac", cwd=MAC_ROOT, **kinds["git land"]))
+    parts = shlex.split([ln for ln in land if ln.startswith("python3 ")][0])
+    assert parts[:2] == ["python3", kinds["git land"]["engine"]]
+    assert parts[-1] == "Merge the user's page"
+
+
+@pytest.mark.parametrize("kind,extra", [
+    ("git save", {"files": ["a.txt"], "message": "fix it"}),
+    ("git share", {}),
+    ("git land", {"engine": "/Users/demo/groundwork/engine/sync/git_flow.py"}),
+    ("git tag", {"tag": "v1.0.0", "message": "Release"}),
+    ("git sync", {}),
+])
+def test_empty_expect_refused(kind, extra):
+    """An explicit empty or blank --expect is refused, not replaced by the default."""
+    for bad in ("", "   "):
+        with pytest.raises(snip.Refusal):
+            snip.build(kind, os="mac", cwd=MAC_ROOT, expect=bad, **extra)
+    assert snip.build(kind, os="mac", cwd=MAC_ROOT, **extra).count("# expect: ") == 1
+
+
+def test_powershell_curly_quotes_doubled():
+    """PowerShell treats four Unicode quotes as single quotes: each is doubled."""
+    for ch in ("\u2018", "\u2019", "\u201a", "\u201b"):
+        assert snip.quote("win", "a" + ch + "b") == "'a" + ch + ch + "b'"
+    assert snip.quote("win", "it's") == "'it''s'"
+    text = snip.build("run", os="win", cwd="D:\\demo\\it\u2019s", cmd=["dir"], expect="a listing")
+    assert "'D:\\demo\\it\u2019\u2019s'" in text
+    pwsh = shutil.which("pwsh")
+    if pwsh is None:
+        pytest.skip("pwsh not on PATH")
+    line = block_lines(text)[3]
+    script = ("$e=$null;[void][System.Management.Automation.Language.Parser]::ParseInput("
+              "$env:SNIP_LINE,[ref]$null,[ref]$e);$e.Count")
+    env = dict(os.environ, SNIP_LINE=line)
+    done = subprocess.run([pwsh, "-NoProfile", "-Command", script], capture_output=True,
+                          text=True, env=env)
+    assert done.stdout.strip() == "0", done
+
+
+def test_mac_home_backslash_refused():
+    """A backslash in a ~/ path would break the double-quoted cd."""
+    with pytest.raises(snip.Refusal):
+        snip.check_cwd("mac", "~/foo\\", exists=False)
+    with pytest.raises(snip.Refusal):
+        snip.build("run", os="mac", cwd="~/foo\\bar", cmd=["ls"], expect="x")
+
+
+@pytest.mark.parametrize("cmd", ["cd..", "cd\\", "cd;x", "cd ~", "CD /tmp", "Set-Location;dir",
+                                 "  set-location D:\\x", "cd", "Set-Location"])
+def test_run_refuses_folder_change(cmd):
+    """The folder change is caught even without a space after the word."""
+    with pytest.raises(snip.Refusal):
+        snip.build("run", os="win", cwd=WIN_ROOT, cmd=[cmd], expect="x")
+
+
+@pytest.mark.parametrize("cmd", ["cdk deploy", "cd-tool run", "cd_x", "Set-LocationX"])
+def test_run_allows_lookalikes(cmd):
+    assert cmd in snip.build("run", os="win", cwd=WIN_ROOT, cmd=[cmd], expect="x")
