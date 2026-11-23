@@ -110,7 +110,7 @@ python3 -m pip install tzdata
 (cd plugins/groundwork && python3 -m pytest board -q)
 ```
 
-The engine and the board are vendored from Siteoffice by `scripts\sync-engine.ps1`, never edited
+The engine and the board are vendored from SiteOffice by `scripts\sync-engine.ps1`, never edited
 by hand. The payload gate `scripts\check-public-payload.ps1` must exit 0 before any commit.
 
 ## 4. Use
@@ -210,7 +210,7 @@ in [plugins\groundwork-mods\README.md](plugins/groundwork-mods/README.md).
   and `/tower` (the old name of `/fleet`).
 - **The Git lane** (`/git`) draws your change as one lane from changes to merged. The next step is
   one button, with the exact commands shown first. It also has a guard on Claude's risky git, a
-  Test Bench and a PR Desk. In a Siteoffice repo the writes go through the `siteoffice-git` engine.
+  Test Bench and a PR Desk. In a SiteOffice repo the writes go through the `siteoffice-git` engine.
   The lane makes no model calls of its own; its "Ask Claude" buttons send a prompt in your session,
   which is a normal turn on your quota.
 
@@ -293,7 +293,7 @@ What it does not do, or not yet:
 - **Claude Desktop runs on Windows and macOS only.** There is no Desktop app for Linux, so Linux is
   command-line only: use Claude Code from a terminal.
 - **Hooks can be skipped** on a Claude organisation with managed settings ("cc-plugin-sec-default
-  runs first"); the Setup Doctor tells you when. The agent policy pack and the Git guard then do not
+  runs first"); the Setup Doctor tells you when. The agent policy and the Git guard then do not
   run.
 - **Where an organisation manages Claude Code, session-start hooks of plugins you install are
   skipped.** Claude Code says so under `/plugin`, Errors. The Setup Doctor names it as a
@@ -323,7 +323,7 @@ What it does not do, or not yet:
   `plugins\groundwork\engine\sync`.
 - **The Git lane runs git when you press its button.** The agent policy blocks every agent push.
   A push or merge you start from a lane button is your own action, so the policy does not see it.
-- **In a Siteoffice repo the Git lane, the Setup Doctor and the `siteoffice-git` launcher run only
+- **In a SiteOffice repo the Git lane, the Setup Doctor and the `siteoffice-git` launcher run only
   an engine you installed.** They take `SITEOFFICE_SYNC_DIR` first, else the engine the
   `groundwork` plugin ships. A repo can no longer name its own engine: `settings.git.engine` in
   `siteoffice.json` and `<repo>\sync\git_flow.py` are gone. They ignore `SITEOFFICE_SYNC_DIR` when

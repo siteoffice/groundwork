@@ -3,7 +3,14 @@
 All notable changes. The version is one clock for the whole repository: `groundwork`,
 `groundwork-mods` and the marketplace move together.
 
-## Unreleased
+## 0.6.1
+
+- **The Setup Doctor gives the Python fix for your system.** It said `brew install python` on
+  every system that is not Windows, Linux included (issue 15). macOS still gets
+  `brew install python`, Linux now gets `sudo apt install python3`, Windows keeps `winget`. The
+  doctor tells macOS from Linux with `uname -s`. A new mods test pins all three.
+
+## 0.6.0
 
 - **New skill: `sprint`.** Builds one approved step with you present: a task list, its own
   branch (never `main`), the spec's tests, then a blind check by a fresh agent that sees the spec,

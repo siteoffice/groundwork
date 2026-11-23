@@ -27,11 +27,11 @@ or Claude Desktop. The whole picture is in the [repo README](../../README.md).
 - `sprint`: builds one approved step on its own branch, with the spec's tests, a blind check and a report, while you are present.
 - `retro`: a monthly script-only check-up of your Claude Code and Cowork sessions that counts human touches, silent failures and secret exposures.
 - `handover`: ends a long chat with a short handover document so the next chat starts fresh.
-- `siteoffice-setup`: sets up or improves a Siteoffice folder structure for a holding, company, department or project.
-- `siteoffice-checkup`: a weekly read-only check of a Siteoffice tree.
+- `siteoffice-setup`: sets up or improves a SiteOffice folder structure for a holding, company, department or project.
+- `siteoffice-checkup`: a weekly read-only check of a SiteOffice tree.
 - `siteoffice-cleanup`: cleans up a folder tree in three read-first passes, and compacts instruction files without deleting.
 - `siteoffice-migrate`: moves, renames, restructures or adopts a folder tree without breaking tools that store the path.
-- `siteoffice-git`: changes a Siteoffice repo through six git steps (start, save, check, propose, land, abort) instead of raw git. Claude Code only.
+- `siteoffice-git`: changes a SiteOffice repo through six git steps (start, save, check, propose, land, abort) instead of raw git. Claude Code only.
 
 ## 3. Install
 

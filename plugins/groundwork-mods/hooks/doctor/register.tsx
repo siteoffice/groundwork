@@ -35,6 +35,7 @@ async function gather($: EngineInterface): Promise<DoctorFacts> {
   const cwd = await $.session.cwd()
   const home = (await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME')) ?? ''
   const isWindows = /^[a-zA-Z]:/.test(cwd) || (await $.env.get('OS')) === 'Windows_NT'
+  const isMac = !isWindows && (await run($, ['uname', '-s'])).stdout.trim() === 'Darwin'
   const gitOk = (await run($, ['git', '--version'])).exitCode === 0
   const name = gitOk ? (await run($, ['git', 'config', '--global', 'user.name'])).stdout.trim() : ''
   const email = gitOk ? (await run($, ['git', 'config', '--global', 'user.email'])).stdout.trim() : ''
@@ -87,6 +88,7 @@ async function gather($: EngineInterface): Promise<DoctorFacts> {
   const fullscreen = await read($, isFullscreen)
   return {
     isWindows,
+    isMac,
     version: v.version,
     ...(fullscreen === null ? {} : { isFullscreen: fullscreen }),
     git: { ok: gitOk, name, email },
