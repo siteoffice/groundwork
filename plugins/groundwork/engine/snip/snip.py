@@ -8,6 +8,7 @@ Standard library only, Python 3.9 or newer, pure ASCII. Calling it is a choice:
 it reports whether a repo set "outputStandards": true in the settings of its
 siteoffice.json, but it never refuses on that switch.
 """
+import argparse
 import os
 import pathlib
 import re
@@ -189,5 +190,57 @@ def build(kind, **args) -> str:
     raise Refusal("unknown kind: %s" % kind)
 
 
+class _Parser(argparse.ArgumentParser):
+    def error(self, message):
+        sys.stderr.write("snip: refused: %s\n" % message)
+        raise SystemExit(2)
+
+
+def _shared(parser):
+    parser.add_argument("--os", dest="os", choices=("win", "mac"))
+    parser.add_argument("--cwd")
+    parser.add_argument("--runs-in", dest="runs_in")
+    parser.add_argument("--needs")
+    parser.add_argument("--expect")
+
+
+def _make_parser():
+    parser = _Parser(prog="snip.py")
+    sub = parser.add_subparsers(dest="kind", required=True, parser_class=_Parser)
+    run = sub.add_parser("run")
+    _shared(run)
+    run.add_argument("--cmd", action="append")
+    paste = sub.add_parser("paste")
+    paste.add_argument("--into")
+    paste.add_argument("--text")
+    paste.add_argument("--file")
+    return parser
+
+
+def main(argv=None) -> int:
+    try:
+        ns = _make_parser().parse_args(argv)
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 2
+    args = {k: v for k, v in vars(ns).items() if k != "kind"}
+    try:
+        block = build(ns.kind, **args)
+        target = args.get("os") or HOST_OS
+        if ns.kind == "run" and target == HOST_OS:
+            where = args["cwd"]
+        else:
+            where = os.getcwd()
+    except Refusal as exc:
+        sys.stderr.write("snip: refused: %s\n" % exc)
+        return 2
+    cfg = find_siteoffice(where) if standards_on(where) else None
+    sys.stdout.write(block)
+    if cfg is not None:
+        sys.stderr.write("output standards: on (%s)\n" % cfg)
+    else:
+        sys.stderr.write("output standards: off\n")
+    return 0
+
+
 if __name__ == "__main__":
-    sys.exit(0)
+    sys.exit(main())

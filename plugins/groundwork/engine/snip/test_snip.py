@@ -106,3 +106,41 @@ def test_paste_block():
     assert lines[1] == "# paste into: the review session, folder D:\\demo\\repo"
     assert lines[2:5] == ["line one", F, "line three"]
     assert lines[-1] == "````"
+
+
+def refused(capsys, argv):
+    code = snip.main(argv)
+    out, err = capsys.readouterr()
+    assert code == 2, (argv, out, err)
+    assert out == "", argv
+    assert len(err.strip().splitlines()) == 1, (argv, err)
+    assert err.startswith("snip: refused: "), err
+    return err
+
+
+def test_refusals(capsys, tmp_path, monkeypatch):
+    w = ["--os", "win", "--cwd", WIN_ROOT]
+    m = ["--os", "mac", "--cwd", MAC_ROOT]
+    refused(capsys, ["run", *w, "--cmd", "echo a " + EM + " b", "--expect", "x"])
+    refused(capsys, ["run", *w, "--cmd", "dir", "--expect", "done " + EM])
+    refused(capsys, ["run", *w, "--cmd", "", "--expect", "x"])
+    refused(capsys, ["run", *w, "--cmd", "dir", "--expect", ""])
+    refused(capsys, ["run", *w, "--cmd", "dir\ndir", "--expect", "x"])
+    refused(capsys, ["run", *w, "--cmd", "git push", "--expect", "x"])
+    refused(capsys, ["run", *m, "--cmd", "cd /tmp", "--expect", "x"])
+    refused(capsys, ["run", *w, "--cmd", "Set-Location D:\\other", "--expect", "x"])
+    refused(capsys, ["run", "--os", "mac", "--cwd", WIN_ROOT, "--cmd", "ls", "--expect", "x"])
+    refused(capsys, ["run", "--os", "win", "--cwd", MAC_ROOT, "--cmd", "dir", "--expect", "x"])
+    refused(capsys, ["run", "--os", "win", "--cwd", "demo\\repo", "--cmd", "dir", "--expect", "x"])
+    for bad in ('~/demo/"x"', "~/demo/$x", "~/demo/`x`"):
+        refused(capsys, ["run", "--os", "mac", "--cwd", bad, "--cmd", "ls", "--expect", "x"])
+    refused(capsys, ["run", *w, "--expect", "x"])  # no --cmd: an argparse error, still one line
+    refused(capsys, ["paste", "--into", "", "--text", "hi"])
+    refused(capsys, ["paste", "--into", "a session", "--text", "a " + EM])
+    monkeypatch.setattr(snip, "HOST_OS", REAL_HOST)
+    refused(capsys, ["run", "--cwd", str(tmp_path / "missing"), "--cmd", "ls", "--expect", "x"])
+    # control: a good call prints one block on stdout and the switch state on stderr
+    assert snip.main(["run", "--cwd", str(tmp_path), "--cmd", "ls", "--expect", "a listing"]) == 0
+    out, err = capsys.readouterr()
+    assert out.startswith(F) and out.rstrip("\n").endswith(F)
+    assert err.strip() == "output standards: off"
