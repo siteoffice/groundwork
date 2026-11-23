@@ -50,7 +50,7 @@ Run `/setup-doctor` first. Then, with the switches on:
   and `/tower` (the old name of `/fleet`).
 - **The Git lane** (`/git`) draws your change as one lane from changes to merged. The next step is
   one button, with the exact commands shown first. It also has a guard on Claude's risky git, a
-  Test Bench and a PR Desk. In a Siteoffice repo the writes go through the `siteoffice-git` engine.
+  Test Bench and a PR Desk. In a SiteOffice repo the writes go through the `siteoffice-git` engine.
   The lane makes no model calls of its own; its "Ask Claude" buttons send a prompt in your session,
   which is a normal turn on your quota.
 
@@ -101,7 +101,7 @@ tokens a day. Each call adds one line to `~/.burnmon/overhead/<day>.ndjson`.
   with core.fsmonitor off and no hooks path, git diff runs with no external diff, no textconv and
   submodules ignored, git status runs with submodules ignored, and gh gets the same settings
   through environment variables. That also means your own pre-commit and pre-push hooks do not run
-  on the lane's own git calls, in a repo without the siteoffice-git engine. In a Siteoffice repo
+  on the lane's own git calls, in a repo without the siteoffice-git engine. In a SiteOffice repo
   the lane's saves run through the engine, whose git calls are not hardened here (nothing in
   `plugins\groundwork\engine\sync\git_flow.py` overrides hooks), so the repo's own hooks run there.
   Before it runs git, the lane runs the Fleet's trust check on the session folder. In a folder it

@@ -1,6 +1,8 @@
 /** What the Setup Doctor found on this computer, gathered once per check. */
 export type DoctorFacts = {
   isWindows: boolean
+  /** macOS; false on Windows and Linux. */
+  isMac?: boolean
   version: string
   isFullscreen?: boolean
   git: { ok: boolean; name: string; email: string }

@@ -100,7 +100,7 @@ export function buildReport(f: DoctorFacts): Probe[] {
       : f.pythonVersion
         ? 'Found Python ' + f.pythonVersion + '; the engine needs Python ' + MIN_PYTHON + ' or newer.'
         : 'Found Python but could not read its version; the engine needs Python ' + MIN_PYTHON + ' or newer.',
-    fix: win ? 'winget install --id Python.Python.3.12 -e' : 'brew install python',
+    fix: win ? 'winget install --id Python.Python.3.12 -e' : f.isMac ? 'brew install python' : 'sudo apt install python3',
     fixWhere: shell(f),
   })
   if (f.manifest.found) {

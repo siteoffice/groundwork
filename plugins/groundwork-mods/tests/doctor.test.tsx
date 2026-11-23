@@ -61,6 +61,14 @@ describe('checks', () => {
     expect(note(undefined)).toBeUndefined()
   })
 
+  test('the Python fix fits the system: winget on Windows, brew on macOS, apt on Linux', async () => {
+    const fix = (isWindows: boolean, isMac: boolean) =>
+      buildReport({ ...good, isWindows, isMac, python: '' }).find(p => p.id === 'python')?.fix
+    expect(fix(true, false)).toBe('winget install --id Python.Python.3.12 -e')
+    expect(fix(false, true)).toBe('brew install python')
+    expect(fix(false, false)).toBe('sudo apt install python3')
+  })
+
   test('versions compare by number', async () => {
     expect(atLeast('2.1.303', '2.1.287')).toBe(true)
     expect(atLeast('2.1.29', '2.1.287')).toBe(false)
