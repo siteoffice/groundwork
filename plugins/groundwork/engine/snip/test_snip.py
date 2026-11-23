@@ -2,6 +2,8 @@
 import json
 import pathlib
 import shlex
+import shutil
+import subprocess
 import sys
 
 import pytest
@@ -217,3 +219,40 @@ def test_land_engine_path(tmp_path, monkeypatch, capsys):
                              "Merge the login page"]
     assert pathlib.Path(engine).is_file()
     assert pathlib.Path(engine) == HERE.parent / "sync" / "git_flow.py"
+
+
+def test_every_kind_passes_the_lint(tmp_path, capsys, monkeypatch):
+    import snippet_lint
+
+    (tmp_path / "siteoffice.json").write_bytes(
+        json.dumps({"settings": {"outputStandards": True}}).encode("utf-8"))
+    parts = ["# Generated blocks", ""]
+    for target in ("win", "mac"):
+        for kind, args in kind_args(target):
+            parts += [snip.build(kind, os=target, cwd=root_for(target), **args), ""]
+    parts += [snip.build("run", os="mac", cwd="~/demo/repo", cmd=["ls"], expect="a listing"), ""]
+    parts += [snip.build("git land", os="mac", cwd="~/demo/repo",
+                         engine="/Users/demo/groundwork/plugins/groundwork/engine/sync/git_flow.py"), ""]
+    parts += [snip.build("paste", into="the review session, folder D:\\demo\\repo",
+                         text="line one\n" + F + "\nline three"), ""]
+    # the host target: a real folder (tmp_path), land takes the engine path from snip itself
+    monkeypatch.setattr(snip, "HOST_OS", REAL_HOST)
+    for kind, args in kind_args(REAL_HOST):
+        if kind == "git land":
+            args = {"subject": args["subject"]}
+        parts += [snip.build(kind, os=REAL_HOST, cwd=str(tmp_path), **args), ""]
+    path = tmp_path / "blocks.md"
+    path.write_bytes("\n".join(parts).encode("utf-8"))
+    assert snippet_lint.main([str(path)]) == 0
+    assert capsys.readouterr() == ("", "")
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no sh on the PATH")
+def test_sh_syntax():
+    sh = shutil.which("sh")
+    samples = [snip.build(kind, os="mac", cwd=MAC_ROOT, **args) for kind, args in kind_args("mac")]
+    samples.append(snip.build("run", os="mac", cwd="~/demo/repo", cmd=["ls"], expect="a listing"))
+    for text in samples:
+        body = "\n".join(block_lines(text)) + "\n"
+        result = subprocess.run([sh, "-n"], input=body, text=True, capture_output=True)
+        assert result.returncode == 0, (text, result.stderr)

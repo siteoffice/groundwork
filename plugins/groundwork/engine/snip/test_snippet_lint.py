@@ -127,3 +127,11 @@ def test_fence_rules(tmp_path, capsys):
     assert code == 1 and (str(bad) + ":1: L1: ") not in out and (str(bad) + ":2: L1: ") in out
     mixed = "\n".join([F + "powershell", "~~~", "git push", F, ""])  # tildes do not close backticks
     assert len(snippet_lint.parse_fences(mixed.split("\n"))) == 1
+
+
+def test_pure_ascii():
+    for name in ("snip.py", "snippet_lint.py", "test_snip.py", "test_snippet_lint.py"):
+        data = (HERE / name).read_bytes()
+        high = [i for i, b in enumerate(data) if b > 127]
+        assert not high, (name, high[:5])
+        assert "\u2014" not in data.decode("ascii"), name
