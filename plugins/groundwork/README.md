@@ -24,6 +24,7 @@ or Claude Desktop. The whole picture is in the [repo README](../../README.md).
 ### The skills
 
 - `one-loop`: runs one piece of work from idea to close, with two gates where you decide and a local receipt when you accept.
+- `sprint`: builds one approved step on its own branch, with the spec's tests, a blind check and a report, while you are present.
 - `retro`: a monthly script-only check-up of your Claude Code and Cowork sessions that counts human touches, silent failures and secret exposures.
 - `handover`: ends a long chat with a short handover document so the next chat starts fresh.
 - `siteoffice-setup`: sets up or improves a Siteoffice folder structure for a holding, company, department or project.
@@ -64,7 +65,8 @@ key is in the [repo README](../../README.md#5-settings).
 
 ## 6. Limits and known issues
 
-- The work step runs in your session. The engine ships no sprint runner.
+- The work step runs in your session, as plain work or as a sprint. The engine folder also holds a
+  headless launcher, `sprint_runner.py`, that no skill calls and that is not supported in this release.
 - `siteoffice-git` saves, proposes and lands with `git push` and a pull request, and the agent
   policy blocks every push. You run the push or the merge yourself.
 - The git guard needs Windows PowerShell or PowerShell 7, and Git Bash on Windows. With neither,

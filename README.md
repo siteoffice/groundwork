@@ -19,7 +19,7 @@ Groundwork is one part of a small set of tools. Each part does one job.
 
 | Part | Job | Does Groundwork need it? |
 |---|---|---|
-| Foreman | The process: idea, plan, spec, work, review | No. `one-loop` carries the same two gates in a folder you control. |
+| Foreman | The process: idea, plan, spec, work, review | No. `one-loop` carries the two gates in a folder you control, and `sprint` builds one step with a blind check. |
 | BurnMon and BurnMon Dev | Watching: tokens, cost, sessions | No. Only two status lines use it (below). |
 | Control Centre | Steering: your folders and gates in one window | No. |
 | Skills (`plugins\groundwork\skills`) | The tools you call by name | Yes. They are the product. |
@@ -164,6 +164,10 @@ Starting from an empty folder instead: say "set up my company hub", or copy
   `templates\skeleton\` and `templates\molenwerk\` for the layout.
 - **You decide at the gates.** The engine has two: spec and accept. Learnings run without a gate. No step
   moves without your verdict. `plugins\groundwork\skills\one-loop\SKILL.md` is the whole procedure.
+- **A sprint for a larger step.** `plugins\groundwork\skills\sprint\SKILL.md` builds one approved
+  step on its own branch: the spec's tests, then a blind check by a fresh agent, five rounds at
+  most, then a report. It runs only with you present, and the report's Close-out block is written
+  by the skill, not enforced by code.
 - **A receipt when you accept.** Shipping at the accept gate writes a readable page and a JSON file
   (screenshots below). Hold and park write none; `plugins\groundwork\engine\groundwork\test_gw.py`
   shows both cases.
@@ -310,7 +314,9 @@ What it does not do, or not yet:
   your checkout somewhere with no `00_funnel` above it, or the board shows that funnel too.
 - **The agent policy is a guardrail, not a lock.** It cannot see a link that leads out of a
   folder, and in work mode it cannot judge a command it does not know.
-- **The work step runs in your session.** The engine ships no sprint runner.
+- **The work step runs in your session,** as plain work or as a sprint. The engine folder also
+  holds a headless launcher, `sprint_runner.py`, that no skill calls and that is not supported in
+  this release.
 - **`siteoffice-git` and the agent policy disagree on pushing.** The skill saves, proposes and
   lands a change with `git push` and a pull request. The policy blocks every push, in work mode
   too, so you run the push or the merge yourself. The skill's own engine ships in
@@ -346,13 +352,12 @@ Report a bug with the issue template: the command, what it printed, and your sys
 
 ## 7. Next steps and backlog
 
-Next, in 0.5.0: the Fleet shows what waits on you from BurnMon's wait states, the engine fixes from
-issue #105, the Claude Desktop install checked against Claude's new Plugins page, and install
-screenshots from macOS. Then the first run by people who did not build it, a small group of
-developers, with their findings filed as issues. No date is set for 0.5.0.
+Next: the Claude Desktop install checked against Claude's new Plugins page, then the first run by
+people who did not build it, a small group of developers, with their findings filed as issues.
+Later, by what they ask for: a sprint that runs without you, and Slack as a surface.
 
 Not planned here: signing receipts and a verify page (that is a separate product), a hosted
-version, a sprint runner, and Slack as the default. See the
+version, an unattended sprint run in this release, and Slack as the default. See the
 [issue list](https://github.com/siteoffice/groundwork/issues).
 
 ## 8. Feedback, licence, contact

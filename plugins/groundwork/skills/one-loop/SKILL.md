@@ -66,6 +66,7 @@ verdicts it accepts. Run the next command only after you have read it.
    `advance <project>/<slug> --spec <path to the spec>` records the spec and says the work
    step is ready.
 5. **The work.** Do the step, here, with the user watching. Run the checks the spec names.
+   A step that is more than a quick change can run as a sprint with the `sprint` skill.
 6. **The accept gate (gate 2 of 2).** `advance` opens `accept`. Show what changed and what
    the checks said. Ask: ship (accept and merge); hold (send back); park (pause, answer
    later). Only `ship` accepts the change and writes the receipt. Groundwork merges nothing:
