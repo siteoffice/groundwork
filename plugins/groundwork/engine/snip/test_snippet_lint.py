@@ -158,3 +158,23 @@ def test_lint_refuses_backslash_home_cwd(tmp_path, capsys):
     path = write(repo(tmp_path) / "bs.md", doc(lines))
     code, out, _ = lint(capsys, path)
     assert code == 1 and ":5: L2: " in out, out
+
+
+BS = chr(92)
+DAMAGED_PATH = "X:" + BS + "a" + BS + "b(c"
+
+
+def test_switch_string_true_is_off(tmp_path):
+    import snip
+    (tmp_path / "siteoffice.json").write_bytes(b'{"settings": {"outputStandards": "true"}}')
+    assert snip.standards_on(tmp_path) is False
+
+
+def test_l7_skips_fenced_lines():
+    text = "\n".join([F + "text", DAMAGED_PATH, F, ""])
+    assert [f for f in snippet_lint.lint_text(text) if "L7" in f[1]] == []
+
+
+def test_backtick_info_string_is_not_a_fence():
+    text = "\n".join([F + "py`x", DAMAGED_PATH, ""])
+    assert (2, ) == tuple(f[0] for f in snippet_lint.lint_text(text) if "L7" in f[1])
