@@ -74,6 +74,8 @@ RULE_CASES = [
             "git push", "# expect: pushed", F], 7),
     ("L4", [F, "git push", F], 4),
     ("L5", [F + "text", "# paste into:", "hello", F], 4),
+    ("L6", ["Saved in D:\\demo\x08_notes\\a.md"], 3),
+    ("L7", ["Open D:\\demo(_projects\\notes.md today."], 3),
 ]
 
 
@@ -87,9 +89,29 @@ def test_lint_rules(tmp_path, capsys, rule, lines, line_no):
 
 
 def test_lint_rules_pass(tmp_path, capsys):
-    text = doc(GOOD_PS + [""] + GOOD_SH + [""] + GOOD_PASTE)
+    text = doc(GOOD_PS + [""] + GOOD_SH + [""] + GOOD_PASTE + ["", "A quoted example: `D:\\demo(_projects`."])
     path = write(repo(tmp_path) / "good.md", text)
     assert lint(capsys, path) == (0, "", "")
+    crlf = write(tmp_path / "crlf.md", b"line one\r\nline two\r\n")
+    assert lint(capsys, crlf) == (0, "", "")
+
+
+DAMAGE = [
+    ("octal paren", b"Open D:\\demo(_projects\\notes.md\n", "L7"),
+    ("backspace", b"Saved in D:\\demo\x08_notes\\a.md\n", "L6"),
+    ("bell", b"See D:\\demo\\x\x07_report.md\n", "L6"),
+    ("bare carriage return", b"one\rtwo\n", "L6"),
+    ("raw byte 0x82 in a path", b"In D:\\demo\\\x82_notes\\a.md\n", "L6"),
+    ("U+0082 in a path", "In D:\\demo\\\u0082_notes\\a.md\n".encode("utf-8"), "L6"),
+]
+
+
+@pytest.mark.parametrize("name,data,rule", DAMAGE)
+def test_damage_samples(tmp_path, capsys, name, data, rule):
+    path = write(repo(tmp_path) / "damaged.md", data)
+    code, out, _ = lint(capsys, path)
+    assert code == 1, name
+    assert out.startswith("%s:1: %s: " % (path, rule)), (name, out)
 
 
 def test_fence_rules(tmp_path, capsys):

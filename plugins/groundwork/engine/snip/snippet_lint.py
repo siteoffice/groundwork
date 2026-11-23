@@ -124,9 +124,51 @@ def _check_git(fence):
     return fails
 
 
+DRIVE_PAREN = re.compile(r"(?<![A-Za-z])[A-Za-z]:\\[^\s`]*?[A-Za-z0-9_]\(")
+
+
+def strip_inline_code(line):
+    return re.sub(r"(`+)(.+?)\1", lambda m: " " * len(m.group(0)), line)
+
+
+def damaged_chars(text):
+    """One (line_number, message) per line with a damaged character, at its first one."""
+    found = []
+    line_no = 1
+    reported = set()
+    for i, c in enumerate(text):
+        code = ord(c)
+        if c == "\n":
+            line_no += 1
+            continue
+        if line_no in reported:
+            continue
+        if code < 32 and c != "\t" and not (c == "\r" and text[i + 1:i + 2] == "\n"):
+            msg = "L6: damaged text: control character U+%04X" % code
+        elif 0x80 <= code <= 0x9F:
+            msg = "L6: damaged text: control character U+%04X" % code
+        elif 0xDC80 <= code <= 0xDC9F:
+            msg = "L6: damaged text: byte 0x%02X is not UTF-8" % (code - 0xDC00)
+        else:
+            continue
+        reported.add(line_no)
+        found.append((line_no, msg))
+    return found
+
+
 def lint_text(text):
     lines = [ln[:-1] if ln.endswith("\r") else ln for ln in text.split("\n")]
-    fails = []
+    fails = list(damaged_chars(text))
+    fenced = set()
+    for fence in parse_fences(lines):
+        fenced.add(fence.open_line)
+        if fence.close_line:
+            fenced.add(fence.close_line)
+        fenced.update(n for n, _ in fence.lines)
+    for n, line in enumerate(lines, 1):
+        if n not in fenced and DRIVE_PAREN.search(strip_inline_code(line)):
+            fails.append((n, "L7: damaged path: '(' right after a name, "
+                             "a backslash was probably eaten"))
     for fence in parse_fences(lines):
         if fence.lang in snip.PS_LANGS:
             fails.extend(check_command(fence, "win", "L1"))
@@ -143,7 +185,7 @@ def lint_text(text):
             n, first = fence.lines[0]
             if first.startswith("# paste into:") and not first[len("# paste into:"):].strip():
                 fails.append((n, "L5: '# paste into:' needs a value"))
-    return sorted(fails, key=lambda f: f[0])
+    return sorted(fails, key=lambda f: (f[0], f[1][:2]))
 
 
 class _Parser(argparse.ArgumentParser):
