@@ -1,0 +1,180 @@
+"""Tests for snippet_lint.py: the switch, fences, rules L1 to L7, damage samples, pure ASCII."""
+import json
+import pathlib
+import sys
+
+import pytest
+
+HERE = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import snippet_lint  # noqa: E402
+
+F = "`" * 3
+RUNS_PS = "# runs in: PowerShell 7 on Windows, normal window"
+RUNS_SH = "# runs in: Terminal on the Mac (zsh)"
+GOOD_PS = [F + "powershell", RUNS_PS, "# cwd: D:\\demo\\repo", "# needs: nothing",
+           "Set-Location -LiteralPath 'D:\\demo\\repo'", "py -3 -m pytest -q",
+           "# expect: all tests pass", F]
+GOOD_SH = [F + "sh", RUNS_SH, "# cwd: /Users/demo/repo", "# needs: nothing", "# recipe: git sync",
+           "cd -- '/Users/demo/repo'", "git fetch --prune origin", "git merge --ff-only '@{u}'",
+           "git status -sb", "# expect: the branch is level with its upstream", F]
+GOOD_PASTE = [F + "text", "# paste into: the review session", "hello", F]
+BAD = ["# Notes", "", F, "git push", F, ""]  # L4 on line 4
+
+
+def repo(tmp_path, on=True):
+    cfg = {"settings": {"outputStandards": on}}
+    (tmp_path / "siteoffice.json").write_bytes(json.dumps(cfg).encode("utf-8"))
+    return tmp_path
+
+
+def write(path, text):
+    path.write_bytes(text.encode("utf-8") if isinstance(text, str) else text)
+    return path
+
+
+def doc(lines):
+    """Two lines of prose, then the fixture: fixture line i (0-based) is file line i + 3."""
+    return "\n".join(["# Fixture", ""] + lines + [""])
+
+
+def lint(capsys, *argv):
+    code = snippet_lint.main([str(a) for a in argv])
+    out, err = capsys.readouterr()
+    return code, out, err
+
+
+@pytest.mark.parametrize("setting", ["key missing", "false", "no file"])
+def test_switch(tmp_path, capsys, setting):
+    if setting == "key missing":
+        write(tmp_path / "siteoffice.json", json.dumps({"settings": {}}))
+    elif setting == "false":
+        repo(tmp_path, on=False)
+    path = write(tmp_path / "notes.md", "\n".join(BAD))
+    code, out, err = lint(capsys, path)
+    assert (code, out) == (0, "")
+    assert err.strip() == "skipped (output standards off): " + str(path)
+    code, out, err = lint(capsys, path, "--force")
+    assert code == 1 and out.startswith(str(path) + ":4: L4: ")
+    repo(tmp_path, on=True)
+    code, out, err = lint(capsys, path)
+    assert code == 1 and err == "" and out.startswith(str(path) + ":4: L4: ")
+
+
+RULE_CASES = [
+    ("L1", [F + "powershell", RUNS_PS, "# cwd: D:\\demo\\repo", "# needs: nothing",
+            "Set-Location -LiteralPath 'D:\\demo\\other'", "dir", "# expect: a listing", F], 7),
+    ("L2", [F + "sh", RUNS_SH, "# cwd: /Users/demo/repo", "# needs: nothing",
+            "cd -- '/Users/demo/repo'", "ls", F], 8),
+    ("L3", [F + "powershell", RUNS_PS, "# cwd: D:\\demo\\repo", "# needs: nothing",
+            "Set-Location -LiteralPath 'D:\\demo\\repo'", "git status --short",
+            "# expect: a short status", F], 8),
+    ("L3", [F + "powershell", RUNS_PS, "# cwd: D:\\demo\\repo", "# needs: nothing",
+            "# recipe: git push", "Set-Location -LiteralPath 'D:\\demo\\repo'",
+            "git push", "# expect: pushed", F], 7),
+    ("L4", [F, "git push", F], 4),
+    ("L5", [F + "text", "# paste into:", "hello", F], 4),
+    ("L6", ["Saved in D:\\demo\x08_notes\\a.md"], 3),
+    ("L7", ["Open D:\\demo(_projects\\notes.md today."], 3),
+]
+
+
+@pytest.mark.parametrize("rule,lines,line_no", RULE_CASES)
+def test_lint_rules(tmp_path, capsys, rule, lines, line_no):
+    path = write(repo(tmp_path) / "case.md", doc(lines))
+    code, out, _ = lint(capsys, path)
+    assert code == 1
+    assert len(out.splitlines()) == 1, out
+    assert out.startswith("%s:%d: %s: " % (path, line_no, rule)), out
+
+
+def test_lint_rules_pass(tmp_path, capsys):
+    text = doc(GOOD_PS + [""] + GOOD_SH + [""] + GOOD_PASTE + ["", "A quoted example: `D:\\demo(_projects`."])
+    path = write(repo(tmp_path) / "good.md", text)
+    assert lint(capsys, path) == (0, "", "")
+    crlf = write(tmp_path / "crlf.md", b"line one\r\nline two\r\n")
+    assert lint(capsys, crlf) == (0, "", "")
+
+
+DAMAGE = [
+    ("octal paren", b"Open D:\\demo(_projects\\notes.md\n", "L7"),
+    ("backspace", b"Saved in D:\\demo\x08_notes\\a.md\n", "L6"),
+    ("bell", b"See D:\\demo\\x\x07_report.md\n", "L6"),
+    ("bare carriage return", b"one\rtwo\n", "L6"),
+    ("raw byte 0x82 in a path", b"In D:\\demo\\\x82_notes\\a.md\n", "L6"),
+    ("U+0082 in a path", "In D:\\demo\\\u0082_notes\\a.md\n".encode("utf-8"), "L6"),
+]
+
+
+@pytest.mark.parametrize("name,data,rule", DAMAGE)
+def test_damage_samples(tmp_path, capsys, name, data, rule):
+    path = write(repo(tmp_path) / "damaged.md", data)
+    code, out, _ = lint(capsys, path)
+    assert code == 1, name
+    assert out.startswith("%s:1: %s: " % (path, rule)), (name, out)
+
+
+def test_fence_rules(tmp_path, capsys):
+    text = "\n".join(["````markdown", F + "powershell", "git push", F, "````", ""])
+    fences = snippet_lint.parse_fences(text.split("\n"))
+    assert len(fences) == 1 and fences[0].lang == "markdown"
+    assert [t for _, t in fences[0].lines] == [F + "powershell", "git push", F]
+    assert lint(capsys, write(repo(tmp_path) / "four.md", text))[0] == 0
+    tilde = "\n".join(line.replace(F, "~~~") for line in GOOD_PS) + "\n"
+    assert lint(capsys, write(tmp_path / "tilde.md", tilde))[0] == 0
+    bad = write(tmp_path / "tilde_bad.md", "~~~powershell\ngit push\n~~~\n")
+    code, out, _ = lint(capsys, bad)
+    assert code == 1 and (str(bad) + ":1: L1: ") not in out and (str(bad) + ":2: L1: ") in out
+    mixed = "\n".join([F + "powershell", "~~~", "git push", F, ""])  # tildes do not close backticks
+    assert len(snippet_lint.parse_fences(mixed.split("\n"))) == 1
+
+
+def test_pure_ascii():
+    for name in ("snip.py", "snippet_lint.py", "test_snip.py", "test_snippet_lint.py"):
+        data = (HERE / name).read_bytes()
+        high = [i for i, b in enumerate(data) if b > 127]
+        assert not high, (name, high[:5])
+        assert "\u2014" not in data.decode("ascii"), name
+
+
+@pytest.mark.parametrize("rule,lines,line_no", [
+    ("L1", [F + "powershell", RUNS_PS, "# cwd: D:\\demo\\repo", "# needs: nothing",
+            "Set-Location -LiteralPath 'D:\\demo\\repo'", "# recipe: git sync", "git status -sb",
+            "# expect: a status", F], 8),
+    ("L2", [F + "sh", RUNS_SH, "# cwd: /Users/demo/repo", "# needs: nothing",
+            "cd -- '/Users/demo/repo'", "# recipe: git sync", "git status -sb",
+            "# expect: a status", F], 8),
+])
+def test_recipe_must_follow_needs(tmp_path, capsys, rule, lines, line_no):
+    path = write(repo(tmp_path) / "late.md", doc(lines))
+    code, out, _ = lint(capsys, path)
+    assert code == 1
+    assert out.startswith("%s:%d: %s: recipe line must follow # needs:" % (path, line_no, rule)), out
+
+
+def test_lint_refuses_backslash_home_cwd(tmp_path, capsys):
+    lines = [F + "sh", RUNS_SH, "# cwd: ~/foo\\", "# needs: nothing", 'cd -- "$HOME/foo\\"', "ls",
+             "# expect: a listing", F]
+    path = write(repo(tmp_path) / "bs.md", doc(lines))
+    code, out, _ = lint(capsys, path)
+    assert code == 1 and ":5: L2: " in out, out
+
+
+BS = chr(92)
+DAMAGED_PATH = "X:" + BS + "a" + BS + "b(c"
+
+
+def test_switch_string_true_is_off(tmp_path):
+    import snip
+    (tmp_path / "siteoffice.json").write_bytes(b'{"settings": {"outputStandards": "true"}}')
+    assert snip.standards_on(tmp_path) is False
+
+
+def test_l7_skips_fenced_lines():
+    text = "\n".join([F + "text", DAMAGED_PATH, F, ""])
+    assert [f for f in snippet_lint.lint_text(text) if "L7" in f[1]] == []
+
+
+def test_backtick_info_string_is_not_a_fence():
+    text = "\n".join([F + "py`x", DAMAGED_PATH, ""])
+    assert (2, ) == tuple(f[0] for f in snippet_lint.lint_text(text) if "L7" in f[1])

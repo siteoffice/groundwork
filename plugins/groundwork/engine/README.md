@@ -37,14 +37,45 @@ there.
 `python -m pip install tzdata` once, because Windows ships no timezone database. The core
 decision functions never call it.
 
+## Snippets and the snippet lint
+
+Both tools are off by default. A repo turns them on with `"outputStandards": true` inside
+`settings` of its `siteoffice.json` (the nearest one above the file or folder). A missing key,
+`false`, or no `siteoffice.json` means off.
+
+- `snip\snip.py` prints one fenced block in a fixed form: `# runs in:`, `# cwd:`, `# needs:`,
+  for git also `# recipe: git <name>`, then the command that enters the folder, the commands, and
+  `# expect:` as the last line. `--os win` prints PowerShell, `--os mac` prints sh that runs in
+  zsh and bash; the default is the system it runs on. Kinds: `run` (your own command lines),
+  `paste` (text to paste into a named session) and five git recipes, one form each: `save` (add
+  the named files and commit), `share` (push the branch), `land` (merge through the
+  siteoffice-git engine), `tag` (an annotated tag, pushed and checked) and `sync` (fetch and
+  fast-forward). It refuses an empty value, a line break in a one-line value, an em dash, raw
+  `git` or a folder change in `run`, and a path of the other system, with one line and exit code 2.
+- `snip\snippet_lint.py <file>... [--force]` checks Markdown files: the header and its order, git
+  blocks without a recipe, command lines in a fence with no language, an empty paste target,
+  control characters, and paths where a `(` follows a name because a backslash was eaten. Exit 0
+  on a pass, 1 with one line per failure, 2 on a usage error. A file in a repo with the switch off
+  is skipped with one line; `--force` checks it anyway.
+
+The limit: the lint checks files, not chat replies. Nothing calls either tool for you yet.
+
 ## Tests
 
-Run from `plugins\groundwork\engine`, in PowerShell on Windows. `py -3` picks a Python that has
-pytest installed:
+Run from `plugins\groundwork\engine` in your checkout. `py -3` picks a Python that has pytest
+installed. The example uses `C:\src\groundwork` as the checkout; put your own path in both lines:
 
 ```powershell
-# runs in: PowerShell on Windows. cwd: plugins\groundwork\engine in the repo checkout
-py -3 -m pytest foreman groundwork -q
+# runs in: PowerShell 7 on Windows, normal window
+# cwd: C:\src\groundwork\plugins\groundwork\engine
+# needs: Python 3.9 or newer with pytest
+Set-Location -LiteralPath 'C:\src\groundwork\plugins\groundwork\engine'
+py -3 -m pytest foreman groundwork snip -q
+# expect: no failures; the last line names the passed and skipped counts
 ```
 
-Expect `1021 passed, 4 skipped` for engine 0.1.0. macOS is untested.
+Expect `1021 passed, 4 skipped` for `foreman groundwork` on engine 0.1.0, plus `68 passed` for
+`snip` when `sh` and `pwsh` are both on the PATH. Two `snip` tests depend on the host: the sh
+syntax test skips without `sh` on the PATH (a PowerShell window on Windows usually prints
+`67 passed, 1 skipped`), and the `pwsh` parse check inside the curly quote test skips without
+`pwsh`. macOS is untested.
